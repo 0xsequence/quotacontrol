@@ -1,0 +1,68 @@
+webrpc = v1 # TODO, use v2
+
+name = quota-control
+version = v0.1.0
+
+enum Service: uint16
+  - Indexer
+  - NodeGateway
+
+struct ServiceLimit
+  - computeRateLimit: int64
+  - computeMonthlyQuota: int64
+
+struct AccessLimit
+  - dappId: uint64
+    + go.field.name = DappID
+    + go.tag.db = dapp_id
+
+  - config: map<uint16,ServiceLimit>
+    + go.field.type = map[Service]*ServiceLimit
+
+  - active: bool
+    + go.tag.db = active
+
+  - createdAt?: timestamp
+    + json = createdAt
+    + go.tag.json = createdAt,omitempty
+    + go.tag.db = created_at,omitempty
+
+struct AccessToken
+  - dappId: uint64
+    + go.field.name = DappID
+    + go.tag.db = dapp_id
+
+  - displayName: string
+    + go.tag.db = display_name
+
+  - tokenKey: string
+    + go.tag.db = token_key
+
+  - active: bool
+    + go.tag.db = active
+
+  - allowedOrigins: []string
+    + go.tag.db = allowed_origins
+
+  - computeRateLimit: int
+    + go.tag.db = compute_rate_limit
+
+  - createdAt?: timestamp
+    + json = createdAt
+    + go.tag.json = createdAt,omitempty
+    + go.tag.db = created_at,omitempty
+
+struct AccessTokenUsage
+  - validCompute: int64
+    + go.tag.db = valid_compute
+  - limitedCompute: int64
+    + go.tag.db = limited_compute
+
+struct CachedToken
+  - accessToken: AccessToken
+  - accessLimit: AccessLimit
+
+service QuotaControl
+  - PrepareUsage(dappID: uint64, service?: Service, now: timestamp) => (ok: bool)
+  - RetrieveToken(tokenKey: string) => (token: CachedToken)
+  - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessTokenUsage>) => (ok: map<string,bool>)
