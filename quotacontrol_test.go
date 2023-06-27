@@ -2,6 +2,7 @@ package quotacontrol_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -57,44 +58,48 @@ func (m *mockStore) UpdateTokenUsage(ctx context.Context, tokenKey string, time 
 	return nil
 }
 
-func TestMiddleware(t *testing.T) {
-	_DappID := uint64(777)
-	_Service := proto.Service_Indexer
-	_Tokens := []string{"abc", "cde"}
-	now := time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
+var (
+	_Address = "localhost:8080"
+	_DappID  = uint64(777)
+	_Service = proto.Service_Indexer
+	_Tokens  = []string{"abc", "cde"}
+	_Now     = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
+)
 
+func TestMiddlewareUseToken(t *testing.T) {
 	s := miniredis.NewMiniRedis()
 	s.Start()
 	defer s.Close()
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: s.Addr(),
-	})
+	cache := quotacontrol.NewRedisCache(redis.NewClient(&redis.Options{Addr: s.Addr()}), -1)
 	store := &mockStore{
-		limits: map[uint64]*proto.AccessLimit{
-			_DappID: {
-				DappID: _DappID,
-				Config: map[proto.Service]*proto.ServiceLimit{
-					_Service: {ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
-				},
-				Active: true,
-			},
-		},
-		tokens: map[string]*proto.AccessToken{
-			_Tokens[0]: {Active: true, TokenKey: _Tokens[0], DappID: _DappID},
-			_Tokens[1]: {Active: true, TokenKey: _Tokens[1], DappID: _DappID},
-			"mno":      {Active: true, TokenKey: "mno", DappID: _DappID + 1},
-			"xyz":      {Active: true, TokenKey: "xyz", DappID: _DappID + 1},
-		},
-		usage: map[string]*proto.AccessTokenUsage{},
+		limits: map[uint64]*proto.AccessLimit{},
+		tokens: map[string]*proto.AccessToken{},
+		usage:  map[string]*proto.AccessTokenUsage{},
 	}
-	cache := quotacontrol.NewRedisCache(redisClient, -1)
-	q := quotacontrol.NewQuotaControl(cache, store, store)
+	client := proto.NewQuotaControlClient(`http://`+_Address, http.DefaultClient)
+	server := proto.NewQuotaControlServer(quotacontrol.NewQuotaControl(cache, store, store))
+	m := quotacontrol.NewMiddleware(zerolog.New(zerolog.Nop()), &_Service, cache, client)
+	ctx := quotacontrol.WithTime(context.Background(), _Now)
 
-	ctx := quotacontrol.WithTime(context.Background(), now)
-
-	m := quotacontrol.NewMiddleware(zerolog.New(zerolog.Nop()), &_Service, cache, q)
 	go m.Run(ctx, time.Minute)
+	go http.ListenAndServe(_Address, server)
+
+	// populate store
+	store.limits[_DappID] = &proto.AccessLimit{
+		DappID: _DappID,
+		Config: map[proto.Service]*proto.ServiceLimit{
+			_Service: {ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
+		},
+		Active: true,
+	}
+	store.tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], DappID: _DappID}
+	store.tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], DappID: _DappID}
+	store.tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", DappID: _DappID + 1}
+	store.tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", DappID: _DappID + 1}
+
+	time.Sleep(100 * time.Millisecond) // wait http server to start
+
 	for i := 0; i < 10; i++ {
 		ctx := quotacontrol.WithComputeUnits(ctx, 10)
 		ok, err := m.UseToken(ctx, _Tokens[0], "")

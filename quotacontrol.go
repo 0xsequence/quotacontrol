@@ -34,7 +34,7 @@ type quotaControl struct {
 
 func (q quotaControl) PrepareUsage(ctx context.Context, dappID uint64, service *proto.Service, now time.Time) (bool, error) {
 	min := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	max := now.Truncate(time.Hour*24).AddDate(0, 0, 1)
+	max := min.AddDate(0, 1, -1)
 	usage, err := q.usageStore.GetAccountTotalUsage(ctx, dappID, *service, min, max)
 	if err != nil {
 		return false, err
