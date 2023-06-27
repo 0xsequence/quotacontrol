@@ -44,9 +44,6 @@ struct AccessToken
   - allowedOrigins: []string
     + go.tag.db = allowed_origins
 
-  - computeRateLimit: int
-    + go.tag.db = compute_rate_limit
-
   - createdAt?: timestamp
     + json = createdAt
     + go.tag.json = createdAt,omitempty

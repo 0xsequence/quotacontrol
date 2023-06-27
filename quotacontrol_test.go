@@ -70,8 +70,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	s := miniredis.NewMiniRedis()
 	s.Start()
 	defer s.Close()
-
-	cache := quotacontrol.NewRedisCache(redis.NewClient(&redis.Options{Addr: s.Addr()}), -1)
+	redisClient := redis.NewClient(&redis.Options{Addr: s.Addr()})
+	cache := quotacontrol.NewRedisCache(redisClient, -1)
 	store := &mockStore{
 		limits: map[uint64]*proto.AccessLimit{},
 		tokens: map[string]*proto.AccessToken{},
@@ -79,7 +79,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}
 	client := proto.NewQuotaControlClient(`http://`+_Address, http.DefaultClient)
 	server := proto.NewQuotaControlServer(quotacontrol.NewQuotaControl(cache, store, store))
-	m := quotacontrol.NewMiddleware(zerolog.New(zerolog.Nop()), &_Service, cache, client)
+	m := quotacontrol.NewMiddleware(zerolog.New(zerolog.Nop()), &_Service, cache, client, quotacontrol.NewRateLimiter(redisClient))
 	ctx := quotacontrol.WithTime(context.Background(), _Now)
 
 	go m.Run(ctx, time.Minute)
@@ -110,4 +110,11 @@ func TestMiddlewareUseToken(t *testing.T) {
 	assert.ErrorIs(t, err, quotacontrol.ErrLimitExceeded)
 	assert.False(t, ok)
 
+	// Add Quota and try again, it should fail because of rate limit
+	store.limits[_DappID].Config[_Service].ComputeMonthlyQuota += 100
+	cache.DeleteToken(ctx, _Tokens[0])
+
+	ok, err = m.UseToken(ctx, _Tokens[0], "")
+	assert.ErrorIs(t, err, quotacontrol.ErrLimitExceeded)
+	assert.False(t, ok)
 }

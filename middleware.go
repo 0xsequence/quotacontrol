@@ -26,14 +26,15 @@ const (
 	HeaderSequenceComputeUnits = "X-Sequence-Compute-Units"
 )
 
-func NewMiddleware(log zerolog.Logger, service *proto.Service, cache CacheStorage, quotaClient proto.QuotaControl) *Middleware {
+func NewMiddleware(log zerolog.Logger, s *proto.Service, cache CacheStorage, qc proto.QuotaControl, rl RateLimiter) *Middleware {
 	return &Middleware{
-		service: service,
+		service: s,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
 		},
 		cache:       cache,
-		quotaClient: quotaClient,
+		quotaClient: qc,
+		rateLimiter: rl,
 		Log:         log,
 	}
 }
@@ -43,6 +44,7 @@ type Middleware struct {
 	usage       *usageTracker
 	cache       CacheStorage
 	quotaClient proto.QuotaControl
+	rateLimiter RateLimiter
 
 	running int32
 	ticker  *time.Ticker
@@ -85,8 +87,17 @@ func (m *Middleware) UseToken(ctx context.Context, tokenKey, origin string) (boo
 	if err != nil {
 		return false, err
 	}
-	// spend compute units
 	key := m.service.GetQuotaKey(token.AccessToken.DappID, now)
+	// check rate limit
+	result, err := m.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
+	if err != nil {
+		return false, err
+	}
+	if result.Allowed == 0 {
+		fmt.Println("rate limit exceeded", result)
+		return false, ErrLimitExceeded
+	}
+	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
 		resp, err := m.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyQuota)
 		if err != nil {

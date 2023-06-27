@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.10.0 -pkg=. -server -client -out=./proto.gen.go
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.10.0 -pkg=proto -server -client -out=./proto.gen.go
 
 func Ptr[T any](v T) *T {
 	return &v

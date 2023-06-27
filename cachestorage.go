@@ -12,6 +12,7 @@ import (
 type CacheStorage interface {
 	GetToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error)
 	SetToken(ctx context.Context, token *proto.CachedToken) error
+	DeleteToken(ctx context.Context, tokenKey string) error
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (*RedisResponse, error)
 }
@@ -53,6 +54,10 @@ func (s *RedisCache) GetToken(ctx context.Context, tokenKey string) (*proto.Cach
 		return nil, err
 	}
 	return &token, nil
+}
+
+func (s *RedisCache) DeleteToken(ctx context.Context, tokenKey string) error {
+	return s.client.Del(ctx, tokenKey).Err()
 }
 
 func (s *RedisCache) SetToken(ctx context.Context, token *proto.CachedToken) error {
