@@ -69,8 +69,8 @@ service QuotaControl
   - UpdateAccessLimit(dappId: uint64, config: []ServiceLimit, active?: bool) => (account: AccessLimit)
   # Access Token
   - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)
-  - CreateAccessToken(dappId: uint64, displayName: string, allowedOrigins: []string) => (accessToken: AccessToken)
-  - UpdateAccessToken(tokenKey: string, displayName?: string, allowedOrigins?: []string) => (accessToken: AccessToken)
+  - CreateAccessToken(dappId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessToken: AccessToken)
+  - UpdateAccessToken(tokenKey: string, displayName?: string, allowedOrigins?: []string, allowedServices?: []Service) => (accessToken: AccessToken)
   - ListAccessTokens(dappId: uint64) => (accessTokens: []AccessToken)
   - DisableAccessToken(tokenKey: string) => (ok: bool)
   # Usage

@@ -102,11 +102,11 @@ func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*pro
 	return nil, ErrNotImplemented
 }
 
-func (q quotaControl) CreateAccessToken(ctx context.Context, dappID uint64, displayName string, allowedOrigins []string) (*proto.AccessToken, error) {
+func (q quotaControl) CreateAccessToken(ctx context.Context, dappID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
 	return nil, ErrNotImplemented
 }
 
-func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, displayName *string, allowedOrigins []string) (*proto.AccessToken, error) {
+func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
 	return nil, ErrNotImplemented
 }
 
