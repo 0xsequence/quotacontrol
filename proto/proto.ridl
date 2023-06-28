@@ -60,6 +60,17 @@ struct CachedToken
   - accessLimit: AccessLimit
 
 service QuotaControl
+  # Access Limit
+  - GetAccessLimit(dappId: uint64) => (account: AccessLimit)
+  - CreateAccessLimit(dappId: uint64, config: []ServiceLimit) => (account: AccessLimit)
+  - UpdateAccessLimit(dappId: uint64, config: []ServiceLimit, active?: bool) => (account: AccessLimit)
+  # Access Token
+  - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)
+  - CreateAccessToken(dappId: uint64, displayName: string, allowedOrigins: []string) => (accessToken: AccessToken)
+  - UpdateAccessToken(tokenKey: string, displayName?: string, allowedOrigins?: []string) => (accessToken: AccessToken)
+  - ListAccessTokens(dappId: uint64) => (accessTokens: []AccessToken)
+  - DisableAccessToken(tokenKey: string) => (ok: bool)
+  # Usage
   - PrepareUsage(dappID: uint64, service?: Service, now: timestamp) => (ok: bool)
   - RetrieveToken(tokenKey: string) => (token: CachedToken)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessTokenUsage>) => (ok: map<string,bool>)

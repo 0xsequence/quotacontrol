@@ -14,28 +14,32 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type mockStore struct {
-	limits map[uint64]*proto.AccessLimit
+type mockLimits map[uint64]*proto.AccessLimit
+
+func (m mockLimits) FindByDappID(ctx context.Context, dappID uint64) (*proto.AccessLimit, error) {
+	limit, ok := m[dappID]
+	if !ok {
+		return nil, quotacontrol.ErrTokenNotFound
+	}
+	return limit, nil
+}
+
+type mockTokens map[string]*proto.AccessToken
+
+func (m mockTokens) FindByTokenKey(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
+	token, ok := m[tokenKey]
+	if !ok {
+		return nil, quotacontrol.ErrTokenNotFound
+	}
+	return token, nil
+}
+
+type mockUsage struct {
 	tokens map[string]*proto.AccessToken
 	usage  map[string]*proto.AccessTokenUsage
 }
 
-func (m *mockStore) RetrieveToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error) {
-	token, ok := m.tokens[tokenKey]
-	if !ok {
-		return nil, quotacontrol.ErrTokenNotFound
-	}
-	limit, ok := m.limits[token.DappID]
-	if !ok {
-		return nil, quotacontrol.ErrTokenNotFound
-	}
-	return &proto.CachedToken{
-		AccessToken: token,
-		AccessLimit: limit,
-	}, nil
-}
-
-func (m *mockStore) GetAccountTotalUsage(ctx context.Context, dappID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
+func (m mockUsage) GetAccountTotalUsage(ctx context.Context, dappID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
 	usage := proto.AccessTokenUsage{}
 	for _, v := range m.tokens {
 		if v.DappID == dappID {
@@ -49,7 +53,7 @@ func (m *mockStore) GetAccountTotalUsage(ctx context.Context, dappID uint64, ser
 	return usage, nil
 }
 
-func (m *mockStore) UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error {
+func (m mockUsage) UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error {
 	if _, ok := m.usage[tokenKey]; !ok {
 		m.usage[tokenKey] = &usage
 		return nil
@@ -71,14 +75,16 @@ func TestMiddlewareUseToken(t *testing.T) {
 	s.Start()
 	defer s.Close()
 	redisClient := redis.NewClient(&redis.Options{Addr: s.Addr()})
-	cache := quotacontrol.NewRedisCache(redisClient, -1)
-	store := &mockStore{
-		limits: map[uint64]*proto.AccessLimit{},
-		tokens: map[string]*proto.AccessToken{},
+	cache := quotacontrol.NewRedisCache(redisClient, time.Minute)
+
+	limits := mockLimits{}
+	tokens := mockTokens{}
+	usage := mockUsage{
 		usage:  map[string]*proto.AccessTokenUsage{},
+		tokens: tokens,
 	}
 	client := proto.NewQuotaControlClient(`http://`+_Address, http.DefaultClient)
-	server := proto.NewQuotaControlServer(quotacontrol.NewQuotaControl(cache, store, store))
+	server := proto.NewQuotaControlServer(quotacontrol.NewQuotaControl(cache, limits, tokens, usage))
 	m := quotacontrol.NewMiddleware(zerolog.New(zerolog.Nop()), &_Service, cache, client, quotacontrol.NewRateLimiter(redisClient))
 	ctx := quotacontrol.WithTime(context.Background(), _Now)
 
@@ -86,17 +92,17 @@ func TestMiddlewareUseToken(t *testing.T) {
 	go http.ListenAndServe(_Address, server)
 
 	// populate store
-	store.limits[_DappID] = &proto.AccessLimit{
+	limits[_DappID] = &proto.AccessLimit{
 		DappID: _DappID,
 		Config: []*proto.ServiceLimit{
 			{Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
 		},
 		Active: true,
 	}
-	store.tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], DappID: _DappID}
-	store.tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], DappID: _DappID}
-	store.tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", DappID: _DappID + 1}
-	store.tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", DappID: _DappID + 1}
+	tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], DappID: _DappID}
+	tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], DappID: _DappID}
+	tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", DappID: _DappID + 1}
+	tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", DappID: _DappID + 1}
 
 	time.Sleep(100 * time.Millisecond) // wait http server to start
 
@@ -111,7 +117,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	assert.False(t, ok)
 
 	// Add Quota and try again, it should fail because of rate limit
-	store.limits[_DappID].Config[_Service].ComputeMonthlyQuota += 100
+	limits[_DappID].Config[_Service].ComputeMonthlyQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
 	ok, err = m.UseToken(ctx, _Tokens[0], "")
