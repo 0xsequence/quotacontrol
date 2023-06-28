@@ -94,7 +94,6 @@ func (m *Middleware) UseToken(ctx context.Context, tokenKey, origin string) (boo
 		return false, err
 	}
 	if result.Allowed == 0 {
-		fmt.Println("rate limit exceeded", result)
 		return false, ErrLimitExceeded
 	}
 	// spend compute units

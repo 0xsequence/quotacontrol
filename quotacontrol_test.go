@@ -49,7 +49,7 @@ func (m *mockStore) GetAccountTotalUsage(ctx context.Context, dappID uint64, ser
 	return usage, nil
 }
 
-func (m *mockStore) UpdateTokenUsage(ctx context.Context, tokenKey string, time time.Time, usage proto.AccessTokenUsage) error {
+func (m *mockStore) UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error {
 	if _, ok := m.usage[tokenKey]; !ok {
 		m.usage[tokenKey] = &usage
 		return nil

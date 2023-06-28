@@ -15,7 +15,7 @@ type TokenStore interface {
 
 type UsageStore interface {
 	GetAccountTotalUsage(ctx context.Context, dappID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error)
-	UpdateTokenUsage(ctx context.Context, tokenKey string, time time.Time, usage proto.AccessTokenUsage) error
+	UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error
 }
 
 func NewQuotaControl(cache CacheStorage, token TokenStore, usage UsageStore) proto.QuotaControl {
@@ -58,7 +58,7 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for tokenKey, tokenUsage := range usage {
-		err := q.usageStore.UpdateTokenUsage(ctx, tokenKey, time.Now(), *tokenUsage)
+		err := q.usageStore.UpdateTokenUsage(ctx, tokenKey, *service, time.Now(), *tokenUsage)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", tokenKey, err))
 		}
