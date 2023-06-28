@@ -8,6 +8,7 @@ enum Service: uint16
   - NodeGateway
 
 struct ServiceLimit
+  - service: Service
   - computeRateLimit: int64
   - computeMonthlyQuota: int64
 
@@ -16,8 +17,7 @@ struct AccessLimit
     + go.field.name = DappID
     + go.tag.db = dapp_id
 
-  - config: map<uint16,ServiceLimit>
-    + go.field.type = map[Service]*ServiceLimit
+  - config: []ServiceLimit
 
   - active: bool
     + go.tag.db = active

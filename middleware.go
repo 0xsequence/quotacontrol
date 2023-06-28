@@ -134,11 +134,12 @@ func (m *Middleware) validateToken(token *proto.CachedToken, origin string) (cfg
 			return nil, ErrInvalidOrigin
 		}
 	}
-	cfg, ok := token.AccessLimit.Config[*m.service]
-	if !ok {
-		return nil, ErrInvalidService
+	for _, cfg = range token.AccessLimit.Config {
+		if *cfg.Service == *m.service {
+			return cfg, nil
+		}
 	}
-	return cfg, nil
+	return nil, ErrInvalidService
 }
 
 func (m *Middleware) Run(ctx context.Context, updateFreq time.Duration) error {

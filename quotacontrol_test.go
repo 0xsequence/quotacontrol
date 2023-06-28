@@ -88,8 +88,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	// populate store
 	store.limits[_DappID] = &proto.AccessLimit{
 		DappID: _DappID,
-		Config: map[proto.Service]*proto.ServiceLimit{
-			_Service: {ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
+		Config: []*proto.ServiceLimit{
+			{Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
 		},
 		Active: true,
 	}
