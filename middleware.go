@@ -129,10 +129,11 @@ func (m *Middleware) validateToken(token *proto.CachedToken, origin string) (cfg
 	if !token.AccessLimit.Active || !token.AccessToken.Active {
 		return nil, ErrTokenNotFound
 	}
-	if len(token.AccessToken.AllowedOrigins) > 0 {
-		if !token.AccessToken.ValidateOrigin(origin) {
-			return nil, ErrInvalidOrigin
-		}
+	if !token.AccessToken.ValidateOrigin(origin) {
+		return nil, ErrInvalidOrigin
+	}
+	if !token.AccessToken.ValidateService(m.service) {
+		return nil, ErrInvalidOrigin
 	}
 	for _, cfg = range token.AccessLimit.Config {
 		if *cfg.Service == *m.service {

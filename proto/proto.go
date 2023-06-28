@@ -27,6 +27,17 @@ func (t *AccessToken) ValidateOrigin(origin string) bool {
 	}
 	return false
 }
+func (t *AccessToken) ValidateService(service *Service) bool {
+	if len(t.AllowedServices) == 0 {
+		return true
+	}
+	for _, s := range t.AllowedServices {
+		if *service == *s {
+			return true
+		}
+	}
+	return false
+}
 
 func (s *Service) GetQuotaKey(dappId uint64, now time.Time) string {
 	return fmt.Sprintf("%v_%v_%s", s, dappId, now.Format("2006-01"))
