@@ -44,7 +44,7 @@ func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, serv
 		delete(u.Usage, k)
 	}
 	u.Unlock()
-	for now, usages := range u.Usage {
+	for now, usages := range tokenUsage {
 		result, err := updater.UpdateUsage(ctx, service, now, usages)
 		// check if any update failed and add it back to the counter
 		for tokenKey, v := range result {

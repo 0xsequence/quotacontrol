@@ -2,6 +2,7 @@ package quotacontrol_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type mockLimits map[uint64]*proto.AccessLimit
@@ -63,7 +65,7 @@ func (m mockUsage) UpdateTokenUsage(ctx context.Context, tokenKey string, servic
 }
 
 var (
-	_Address = "localhost:8080"
+	_Port    = ":8080"
 	_DappID  = uint64(777)
 	_Service = proto.Service_Indexer
 	_Tokens  = []string{"abc", "cde"}
@@ -83,13 +85,17 @@ func TestMiddlewareUseToken(t *testing.T) {
 		usage:  map[string]*proto.AccessTokenUsage{},
 		tokens: tokens,
 	}
-	client := proto.NewQuotaControlClient(`http://`+_Address, http.DefaultClient)
-	server := proto.NewQuotaControlServer(quotacontrol.NewQuotaControl(cache, limits, tokens, usage))
-	m := quotacontrol.NewMiddleware(zerolog.New(zerolog.Nop()), &_Service, cache, client, quotacontrol.NewRateLimiter(redisClient))
-	ctx := quotacontrol.WithTime(context.Background(), _Now)
+	serviceClient := proto.NewQuotaControlClient(`http://localhost`+_Port, http.DefaultClient)
+	middlewareClient := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), &_Service, cache, serviceClient, quotacontrol.NewRateLimiter(redisClient))
 
-	go m.Run(ctx, time.Minute)
-	go http.ListenAndServe(_Address, server)
+	go middlewareClient.Run(context.Background(), time.Minute)
+	l, err := net.Listen("tcp", _Port)
+	require.NoError(t, err)
+	go func() {
+		serviceServer := quotacontrol.NewQuotaControl(cache, limits, tokens, usage)
+		err = http.Serve(l, proto.NewQuotaControlServer(serviceServer))
+		require.NoError(t, err)
+	}()
 
 	// populate store
 	limits[_DappID] = &proto.AccessLimit{
@@ -104,15 +110,14 @@ func TestMiddlewareUseToken(t *testing.T) {
 	tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", DappID: _DappID + 1}
 	tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", DappID: _DappID + 1}
 
-	time.Sleep(100 * time.Millisecond) // wait http server to start
-
+	ctx := quotacontrol.WithTime(context.Background(), _Now)
 	for i := 0; i < 10; i++ {
 		ctx := quotacontrol.WithComputeUnits(ctx, 10)
-		ok, err := m.UseToken(ctx, _Tokens[0], "")
+		ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	}
-	ok, err := m.UseToken(ctx, _Tokens[0], "")
+	ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
 	assert.ErrorIs(t, err, quotacontrol.ErrLimitExceeded)
 	assert.False(t, ok)
 
@@ -120,7 +125,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	limits[_DappID].Config[_Service].ComputeMonthlyQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
-	ok, err = m.UseToken(ctx, _Tokens[0], "")
+	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")
 	assert.ErrorIs(t, err, quotacontrol.ErrLimitExceeded)
 	assert.False(t, ok)
 }

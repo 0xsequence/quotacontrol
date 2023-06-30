@@ -22,12 +22,12 @@ var (
 )
 
 const (
-	HeaderSequenceTokenKey     = "X-Sequence-Token-Key"
-	HeaderSequenceComputeUnits = "X-Sequence-Compute-Units"
+	HeaderSequenceTokenKey = "X-Sequence-Token-Key"
+	HeaderOrigin           = "Origin"
 )
 
-func NewMiddleware(log zerolog.Logger, s *proto.Service, cache CacheStorage, qc proto.QuotaControl, rl RateLimiter) *Middleware {
-	return &Middleware{
+func NewClient(log zerolog.Logger, s *proto.Service, cache CacheStorage, qc proto.QuotaControl, rl RateLimiter) *Client {
+	return &Client{
 		service: s,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
@@ -39,7 +39,7 @@ func NewMiddleware(log zerolog.Logger, s *proto.Service, cache CacheStorage, qc 
 	}
 }
 
-type Middleware struct {
+type Client struct {
 	service     *proto.Service
 	usage       *usageTracker
 	cache       CacheStorage
@@ -51,45 +51,53 @@ type Middleware struct {
 	Log     zerolog.Logger
 }
 
-func (m *Middleware) Wrap(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ok, err := m.UseToken(r.Context(), r.Header.Get("X-Sequence-Token-Key"), r.Header.Get("Origin"))
-		if err != nil {
-			proto.RespondWithError(w, err)
-			return
-		}
-		if !ok {
-			proto.RespondWithError(w, ErrLimitExceeded)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+func NewMiddleware(c *Client, onSuccess func(context.Context) context.Context) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenKey := r.Header.Get(HeaderSequenceTokenKey)
+			if tokenKey == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			ctx := r.Context()
+			ok, err := c.UseToken(ctx, tokenKey, r.Header.Get(HeaderOrigin))
+			if err != nil {
+				proto.RespondWithError(w, err)
+				return
+			}
+			if !ok {
+				proto.RespondWithError(w, ErrLimitExceeded)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(onSuccess(ctx)))
+		})
+	}
 }
 
-func (m *Middleware) UseToken(ctx context.Context, tokenKey, origin string) (bool, error) {
+func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, error) {
 	now := GetTime(ctx)
 	computeUnits := int64(1)
 	if v, ok := ctx.Value(ctxKeyComputeUnits).(int64); ok {
 		computeUnits = int64(v)
 	}
 	// fetch token
-	token, err := m.cache.GetToken(ctx, tokenKey)
+	token, err := c.cache.GetToken(ctx, tokenKey)
 	if err != nil {
 		if !errors.Is(err, ErrTokenNotFound) {
 			return false, err
 		}
-		if token, err = m.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
+		if token, err = c.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
 			return false, err
 		}
 	}
 	// validate token
-	cfg, err := m.validateToken(token, origin)
+	cfg, err := c.validateToken(token, origin)
 	if err != nil {
 		return false, err
 	}
-	key := m.service.GetQuotaKey(token.AccessToken.DappID, now)
+	key := c.service.GetQuotaKey(token.AccessToken.DappID, now)
 	// check rate limit
-	result, err := m.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
+	result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
 	if err != nil {
 		return false, err
 	}
@@ -98,19 +106,19 @@ func (m *Middleware) UseToken(ctx context.Context, tokenKey, origin string) (boo
 	}
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
-		resp, err := m.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyQuota)
+		resp, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyQuota)
 		if err != nil {
 			return false, err
 		}
 		switch *resp {
 		case ALLOWED:
-			m.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
+			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
 		case LIMITED:
-			m.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
+			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 			return false, ErrLimitExceeded
 		case PING_BUILDER:
-			ok, err := m.quotaClient.PrepareUsage(ctx, token.AccessToken.DappID, m.service, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.DappID, c.service, now)
 			if err != nil {
 				return false, err
 			}
@@ -125,68 +133,68 @@ func (m *Middleware) UseToken(ctx context.Context, tokenKey, origin string) (boo
 	return false, ErrTimeout
 }
 
-func (m *Middleware) validateToken(token *proto.CachedToken, origin string) (cfg *proto.ServiceLimit, err error) {
+func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *proto.ServiceLimit, err error) {
 	if !token.AccessLimit.Active || !token.AccessToken.Active {
 		return nil, ErrTokenNotFound
 	}
 	if !token.AccessToken.ValidateOrigin(origin) {
 		return nil, ErrInvalidOrigin
 	}
-	if !token.AccessToken.ValidateService(m.service) {
+	if !token.AccessToken.ValidateService(c.service) {
 		return nil, ErrInvalidOrigin
 	}
 	for _, cfg = range token.AccessLimit.Config {
-		if *cfg.Service == *m.service {
+		if *cfg.Service == *c.service {
 			return cfg, nil
 		}
 	}
 	return nil, ErrInvalidService
 }
 
-func (m *Middleware) Run(ctx context.Context, updateFreq time.Duration) error {
-	if m.IsRunning() {
+func (c *Client) Run(ctx context.Context, updateFreq time.Duration) error {
+	if c.IsRunning() {
 		return fmt.Errorf("quota control: already running")
 	}
 
-	m.Log.Info().Str("op", "run").Msg("-> quota control: running")
+	c.Log.Info().Str("op", "run").Msg("-> quota control: running")
 
-	atomic.StoreInt32(&m.running, 1)
-	m.ticker = time.NewTicker(updateFreq)
-	defer atomic.StoreInt32(&m.running, 0)
+	atomic.StoreInt32(&c.running, 1)
+	c.ticker = time.NewTicker(updateFreq)
+	defer atomic.StoreInt32(&c.running, 0)
 
 	// Handle stop signal to ensure clean shutdown
 	go func() {
 		<-ctx.Done()
-		m.Stop(context.Background())
+		c.Stop(context.Background())
 	}()
 
 	// Start the http server and serve!
-	for range m.ticker.C {
-		if err := m.usage.SyncUsage(ctx, m.quotaClient, m.service); err != nil {
-			m.Log.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+	for range c.ticker.C {
+		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
+			c.Log.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 		}
 	}
 	return nil
 }
 
-func (m *Middleware) Stop(timeoutCtx context.Context) {
-	if !m.IsRunning() || m.IsStopping() {
+func (c *Client) Stop(timeoutCtx context.Context) {
+	if !c.IsRunning() || c.IsStopping() {
 		return
 	}
-	atomic.StoreInt32(&m.running, 2)
+	atomic.StoreInt32(&c.running, 2)
 
-	m.Log.Info().Str("op", "stop").Msg("-> quota control: stopping..")
-	m.ticker.Stop()
-	if err := m.usage.SyncUsage(timeoutCtx, m.quotaClient, m.service); err != nil {
-		m.Log.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+	c.Log.Info().Str("op", "stop").Msg("-> quota control: stopping..")
+	c.ticker.Stop()
+	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
+		c.Log.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 	}
-	m.Log.Info().Str("op", "stop").Msg("-> quota control: stopped.")
+	c.Log.Info().Str("op", "stop").Msg("-> quota control: stopped.")
 }
 
-func (s *Middleware) IsRunning() bool {
-	return atomic.LoadInt32(&s.running) == 1
+func (c *Client) IsRunning() bool {
+	return atomic.LoadInt32(&c.running) == 1
 }
 
-func (s *Middleware) IsStopping() bool {
-	return atomic.LoadInt32(&s.running) == 2
+func (c *Client) IsStopping() bool {
+	return atomic.LoadInt32(&c.running) == 2
 }
