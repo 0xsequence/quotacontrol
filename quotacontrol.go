@@ -12,7 +12,7 @@ import (
 var ErrNotImplemented = proto.Errorf(proto.ErrUnimplemented, "not implemented")
 
 type LimitStore interface {
-	FindByDappID(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error)
+	GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error)
 }
 
 type TokenStore interface {
@@ -58,7 +58,7 @@ func (q quotaControl) RetrieveToken(ctx context.Context, tokenKey string) (*prot
 	if err != nil {
 		return nil, err
 	}
-	limit, err := q.limitStore.FindByDappID(ctx, token.DappID)
+	limit, err := q.limitStore.GetAccessLimit(ctx, token.DappID)
 	if err != nil {
 		return nil, err
 	}

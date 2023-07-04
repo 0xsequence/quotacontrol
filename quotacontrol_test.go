@@ -18,7 +18,7 @@ import (
 
 type mockLimits map[uint64][]*proto.ServiceLimit
 
-func (m mockLimits) FindByDappID(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
+func (m mockLimits) GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
 	limit, ok := m[dappID]
 	if !ok {
 		return nil, quotacontrol.ErrTokenNotFound
