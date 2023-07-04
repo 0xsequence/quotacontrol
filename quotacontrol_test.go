@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockLimits map[uint64]*proto.AccessLimit
+type mockLimits map[uint64][]*proto.ServiceLimit
 
-func (m mockLimits) FindByDappID(ctx context.Context, dappID uint64) (*proto.AccessLimit, error) {
+func (m mockLimits) FindByDappID(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
 	limit, ok := m[dappID]
 	if !ok {
 		return nil, quotacontrol.ErrTokenNotFound
@@ -98,12 +98,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}()
 
 	// populate store
-	limits[_DappID] = &proto.AccessLimit{
-		DappID: _DappID,
-		Config: []*proto.ServiceLimit{
-			{Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
-		},
-		Active: true,
+	limits[_DappID] = []*proto.ServiceLimit{
+		{Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
 	}
 	tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], DappID: _DappID}
 	tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], DappID: _DappID}
@@ -122,7 +118,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	assert.False(t, ok)
 
 	// Add Quota and try again, it should fail because of rate limit
-	limits[_DappID].Config[_Service].ComputeMonthlyQuota += 100
+	limits[_DappID][_Service].ComputeMonthlyQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
 	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")

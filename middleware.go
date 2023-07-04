@@ -134,7 +134,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 }
 
 func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *proto.ServiceLimit, err error) {
-	if !token.AccessLimit.Active || !token.AccessToken.Active {
+	if !token.AccessToken.Active {
 		return nil, ErrTokenNotFound
 	}
 	if !token.AccessToken.ValidateOrigin(origin) {
@@ -143,7 +143,7 @@ func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *pr
 	if !token.AccessToken.ValidateService(c.service) {
 		return nil, ErrInvalidOrigin
 	}
-	for _, cfg = range token.AccessLimit.Config {
+	for _, cfg = range token.Config {
 		if *cfg.Service == *c.service {
 			return cfg, nil
 		}

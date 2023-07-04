@@ -12,21 +12,6 @@ struct ServiceLimit
   - computeRateLimit: int64
   - computeMonthlyQuota: int64
 
-struct AccessLimit
-  - dappId: uint64
-    + go.field.name = DappID
-    + go.tag.db = dapp_id
-
-  - config: []ServiceLimit
-
-  - active: bool
-    + go.tag.db = active
-
-  - createdAt?: timestamp
-    + json = createdAt
-    + go.tag.json = createdAt,omitempty
-    + go.tag.db = created_at,omitempty
-
 struct AccessToken
   - dappId: uint64
     + go.field.name = DappID
@@ -59,14 +44,13 @@ struct AccessTokenUsage
     + go.tag.db = limited_compute
 
 struct CachedToken
+  - config: []ServiceLimit
   - accessToken: AccessToken
-  - accessLimit: AccessLimit
 
 service QuotaControl
   # Access Limit
-  - GetAccessLimit(dappId: uint64) => (account: AccessLimit)
-  - CreateAccessLimit(dappId: uint64, config: []ServiceLimit) => (account: AccessLimit)
-  - UpdateAccessLimit(dappId: uint64, config: []ServiceLimit, active?: bool) => (account: AccessLimit)
+  - GetAccessLimit(dappId: uint64) => (config: []ServiceLimit)
+  - SetAccessLimit(dappId: uint64, config: []ServiceLimit) => (ok: bool)
   # Access Token
   - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)
   - CreateAccessToken(dappId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessToken: AccessToken)

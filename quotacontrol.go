@@ -12,7 +12,7 @@ import (
 var ErrNotImplemented = proto.Errorf(proto.ErrUnimplemented, "not implemented")
 
 type LimitStore interface {
-	FindByDappID(ctx context.Context, dappID uint64) (*proto.AccessLimit, error)
+	FindByDappID(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error)
 }
 
 type TokenStore interface {
@@ -63,8 +63,8 @@ func (q quotaControl) RetrieveToken(ctx context.Context, tokenKey string) (*prot
 		return nil, err
 	}
 	record := proto.CachedToken{
+		Config:      limit,
 		AccessToken: token,
-		AccessLimit: limit,
 	}
 	go q.cache.SetToken(ctx, &record)
 	return &record, nil
@@ -86,16 +86,12 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 	return m, nil
 }
 
-func (q quotaControl) GetAccessLimit(ctx context.Context, dappID uint64) (*proto.AccessLimit, error) {
+func (q quotaControl) GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
 	return nil, ErrNotImplemented
 }
 
-func (q quotaControl) CreateAccessLimit(ctx context.Context, dappId uint64, config []*proto.ServiceLimit) (*proto.AccessLimit, error) {
-	return nil, ErrNotImplemented
-}
-
-func (q quotaControl) UpdateAccessLimit(ctx context.Context, dappID uint64, config []*proto.ServiceLimit, active *bool) (*proto.AccessLimit, error) {
-	return nil, ErrNotImplemented
+func (q quotaControl) SetAccessLimit(ctx context.Context, dappId uint64, config []*proto.ServiceLimit) (bool, error) {
+	return false, ErrNotImplemented
 }
 
 func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
