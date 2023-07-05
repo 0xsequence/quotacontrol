@@ -1,6 +1,6 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.20
+go 1.18
 
 require (
 	github.com/alicebob/miniredis/v2 v2.30.3
