@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/goware/cachestore/redis"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
@@ -27,14 +26,6 @@ const (
 	HeaderSequenceTokenKey = "X-Sequence-Token-Key"
 	HeaderOrigin           = "Origin"
 )
-
-type Config struct {
-	Enabled    bool          `toml:"enabled"`
-	URL        string        `toml:"quotacontrol_url"`
-	Token      string        `toml:"quotacontrol_token"`
-	UpdateFreq time.Duration `toml:"quotacontrol_update_freq"`
-	Redis      redis.Config  `toml:"redis"`
-}
 
 func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client, error) {
 	if !cfg.Enabled {
@@ -56,7 +47,7 @@ func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client,
 		cache:       cache,
 		quotaClient: quotaClient,
 		rateLimiter: NewRateLimiter(redisClient),
-		ticker:      time.NewTicker(cfg.UpdateFreq),
+		ticker:      time.NewTicker(cfg.UpdateFreq.Duration),
 		Log:         log,
 	}, nil
 }

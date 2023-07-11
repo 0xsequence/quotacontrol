@@ -89,7 +89,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	cfg := quotacontrol.Config{
 		Enabled:    true,
 		URL:        `http://localhost` + _Port,
-		UpdateFreq: time.Minute,
+		UpdateFreq: quotacontrol.Duration{time.Minute},
 		Redis: redis.Config{
 			Host: s.Host(),
 			Port: uint16(s.Server().Addr().Port),
