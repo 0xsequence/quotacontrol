@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/goware/cachestore/redis"
+	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -26,17 +28,36 @@ const (
 	HeaderOrigin           = "Origin"
 )
 
-func NewClient(log zerolog.Logger, s *proto.Service, cache CacheStorage, qc proto.QuotaControl, rl RateLimiter) *Client {
+type Config struct {
+	Enabled    bool          `toml:"enabled"`
+	URL        string        `toml:"quotacontrol_url"`
+	Token      string        `toml:"quotacontrol_token"`
+	UpdateFreq time.Duration `toml:"quotacontrol_update_freq"`
+	Redis      redis.Config  `toml:"redis"`
+}
+
+func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client, error) {
+	if !cfg.Enabled {
+		return nil, errors.New("0xsequence/quotacontrol: attempting to create client while config.Enabled is false")
+	}
+	redisClient := redisclient.NewClient(&redisclient.Options{
+		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+	})
+	cache := NewRedisCache(redisClient, time.Minute)
+	quotaClient := proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
+		client:      http.DefaultClient,
+		bearerToken: cfg.Token,
+	})
 	return &Client{
-		service: s,
+		service: service,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
 		},
 		cache:       cache,
-		quotaClient: qc,
-		rateLimiter: rl,
+		quotaClient: quotaClient,
+		rateLimiter: NewRateLimiter(redisClient),
 		Log:         log,
-	}
+	}, nil
 }
 
 type Client struct {
@@ -197,4 +218,14 @@ func (c *Client) IsRunning() bool {
 
 func (c *Client) IsStopping() bool {
 	return atomic.LoadInt32(&c.running) == 2
+}
+
+type authorizedClient struct {
+	client      *http.Client
+	bearerToken string
+}
+
+func (c *authorizedClient) Do(req *http.Request) (*http.Response, error) {
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
+	return c.client.Do(req)
 }

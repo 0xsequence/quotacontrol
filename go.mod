@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/alicebob/miniredis/v2 v2.30.3
 	github.com/go-redis/redis_rate/v10 v10.0.1
+	github.com/goware/cachestore v0.7.0
 	github.com/redis/go-redis/v9 v9.0.5
 	github.com/rs/zerolog v1.29.1
 	github.com/stretchr/testify v1.8.4

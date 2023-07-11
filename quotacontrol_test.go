@@ -10,7 +10,8 @@ import (
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
+	"github.com/goware/cachestore/redis"
+	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,7 +77,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	s := miniredis.NewMiniRedis()
 	s.Start()
 	defer s.Close()
-	redisClient := redis.NewClient(&redis.Options{Addr: s.Addr()})
+	redisClient := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
 	cache := quotacontrol.NewRedisCache(redisClient, time.Minute)
 
 	limits := mockLimits{}
@@ -85,8 +86,17 @@ func TestMiddlewareUseToken(t *testing.T) {
 		usage:  map[string]*proto.AccessTokenUsage{},
 		tokens: tokens,
 	}
-	serviceClient := proto.NewQuotaControlClient(`http://localhost`+_Port, http.DefaultClient)
-	middlewareClient := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), &_Service, cache, serviceClient, quotacontrol.NewRateLimiter(redisClient))
+	cfg := quotacontrol.Config{
+		Enabled:    true,
+		URL:        `http://localhost` + _Port,
+		UpdateFreq: time.Minute * 2,
+		Redis: redis.Config{
+			Host: s.Host(),
+			Port: uint16(s.Server().Addr().Port),
+		},
+	}
+	middlewareClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), &_Service, cfg)
+	require.NoError(t, err)
 
 	go middlewareClient.Run(context.Background(), time.Minute)
 	l, err := net.Listen("tcp", _Port)
