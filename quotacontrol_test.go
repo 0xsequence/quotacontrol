@@ -89,7 +89,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	cfg := quotacontrol.Config{
 		Enabled:    true,
 		URL:        `http://localhost` + _Port,
-		UpdateFreq: time.Minute * 2,
+		UpdateFreq: time.Minute,
 		Redis: redis.Config{
 			Host: s.Host(),
 			Port: uint16(s.Server().Addr().Port),
@@ -98,7 +98,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	middlewareClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), &_Service, cfg)
 	require.NoError(t, err)
 
-	go middlewareClient.Run(context.Background(), time.Minute)
+	go middlewareClient.Run(context.Background())
 	l, err := net.Listen("tcp", _Port)
 	require.NoError(t, err)
 	go func() {

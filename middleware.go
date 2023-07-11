@@ -56,6 +56,7 @@ func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client,
 		cache:       cache,
 		quotaClient: quotaClient,
 		rateLimiter: NewRateLimiter(redisClient),
+		ticker:      time.NewTicker(cfg.UpdateFreq),
 		Log:         log,
 	}, nil
 }
@@ -172,7 +173,7 @@ func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *pr
 	return nil, ErrInvalidService
 }
 
-func (c *Client) Run(ctx context.Context, updateFreq time.Duration) error {
+func (c *Client) Run(ctx context.Context) error {
 	if c.IsRunning() {
 		return fmt.Errorf("quota control: already running")
 	}
@@ -180,7 +181,6 @@ func (c *Client) Run(ctx context.Context, updateFreq time.Duration) error {
 	c.Log.Info().Str("op", "run").Msg("-> quota control: running")
 
 	atomic.StoreInt32(&c.running, 1)
-	c.ticker = time.NewTicker(updateFreq)
 	defer atomic.StoreInt32(&c.running, 0)
 
 	// Handle stop signal to ensure clean shutdown
