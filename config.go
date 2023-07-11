@@ -18,8 +18,8 @@ func (d *Duration) UnmarshalText(text []byte) error {
 
 type Config struct {
 	Enabled    bool         `toml:"enabled"`
-	URL        string       `toml:"quotacontrol_url"`
-	Token      string       `toml:"quotacontrol_token"`
-	UpdateFreq Duration     `toml:"quotacontrol_update_freq"`
+	URL        string       `toml:"url"`
+	Token      string       `toml:"token"`
+	UpdateFreq Duration     `toml:"update_freq"`
 	Redis      redis.Config `toml:"redis"`
 }
