@@ -8,7 +8,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
-// UsageUptader is an interface that allows to update the usage of a service
+// UsageUpdater is an interface that allows to update the usage of a service
 type UsageUpdater interface {
 	UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessTokenUsage) (map[string]bool, error)
 }

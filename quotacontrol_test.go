@@ -22,7 +22,7 @@ type mockLimits map[uint64][]*proto.ServiceLimit
 func (m mockLimits) GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
 	limit, ok := m[dappID]
 	if !ok {
-		return nil, quotacontrol.ErrTokenNotFound
+		return nil, proto.ErrTokenNotFound
 	}
 	return limit, nil
 }
@@ -32,7 +32,7 @@ type mockTokens map[string]*proto.AccessToken
 func (m mockTokens) FindByTokenKey(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
 	token, ok := m[tokenKey]
 	if !ok {
-		return nil, quotacontrol.ErrTokenNotFound
+		return nil, proto.ErrTokenNotFound
 	}
 	return token, nil
 }
@@ -124,7 +124,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 		assert.True(t, ok)
 	}
 	ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
-	assert.ErrorIs(t, err, quotacontrol.ErrLimitExceeded)
+	assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 	assert.False(t, ok)
 
 	// Add Quota and try again, it should fail because of rate limit
@@ -132,6 +132,6 @@ func TestMiddlewareUseToken(t *testing.T) {
 	cache.DeleteToken(ctx, _Tokens[0])
 
 	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")
-	assert.ErrorIs(t, err, quotacontrol.ErrLimitExceeded)
+	assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 	assert.False(t, ok)
 }

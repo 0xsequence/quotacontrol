@@ -8,22 +8,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/proto"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
-
-	"github.com/0xsequence/quotacontrol/proto"
-)
-
-var (
-	ErrTokenNotFound  = proto.Errorf(proto.ErrNotFound, "token not found")
-	ErrInvalidOrigin  = proto.Errorf(proto.ErrPermissionDenied, "invalid origin")
-	ErrInvalidService = proto.Errorf(proto.ErrPermissionDenied, "invalid service")
-	ErrLimitExceeded  = proto.Errorf(proto.ErrResourceExhausted, "limit exceeded")
-	ErrTimeout        = proto.Errorf(proto.ErrDeadlineExceeded, "timeout")
 )
 
 const (
-	HeaderSequenceTokenKey = "X-Sequence-Token-Key"
+	HeaderSequenceTokenKey = "X-Sequence-Token-Key" // TODO: should we use this header or "Authorization" ? lets discuss
 	HeaderOrigin           = "Origin"
 )
 
@@ -31,14 +22,20 @@ func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client,
 	if !cfg.Enabled {
 		return nil, errors.New("0xsequence/quotacontrol: attempting to create client while config.Enabled is false")
 	}
+
 	redisClient := redisclient.NewClient(&redisclient.Options{
 		Addr: fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+		DB:   cfg.Redis.DBIndex,
+		// TODO: set other options too...
 	})
+
 	cache := NewRedisCache(redisClient, time.Minute)
+
 	quotaClient := proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 		client:      http.DefaultClient,
 		bearerToken: cfg.Token,
 	})
+
 	return &Client{
 		service: service,
 		usage: &usageTracker{
@@ -79,7 +76,7 @@ func NewMiddleware(c *Client, onSuccess func(context.Context) context.Context) f
 				return
 			}
 			if !ok {
-				proto.RespondWithError(w, ErrLimitExceeded)
+				proto.RespondWithError(w, proto.ErrLimitExceeded)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(onSuccess(ctx)))
@@ -93,75 +90,86 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 	if v, ok := ctx.Value(ctxKeyComputeUnits).(int64); ok {
 		computeUnits = int64(v)
 	}
+
 	// fetch token
 	token, err := c.cache.GetToken(ctx, tokenKey)
 	if err != nil {
-		if !errors.Is(err, ErrTokenNotFound) {
+		if !errors.Is(err, proto.ErrTokenNotFound) {
 			return false, err
 		}
 		if token, err = c.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
 			return false, err
 		}
 	}
+
 	// validate token
 	cfg, err := c.validateToken(token, origin)
 	if err != nil {
 		return false, err
 	}
 	key := c.service.GetQuotaKey(token.AccessToken.DappID, now)
+
 	// check rate limit
 	result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
 	if err != nil {
 		return false, err
 	}
 	if result.Allowed == 0 {
-		return false, ErrLimitExceeded
+		return false, proto.ErrLimitExceeded
 	}
+
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
 		resp, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyQuota)
 		if err != nil {
 			return false, err
 		}
-		switch *resp {
-		case ALLOWED:
+
+		switch resp {
+
+		case CACHE_ALLOWED:
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
-		case LIMITED:
+
+		case CACHE_LIMITED:
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
-			return false, ErrLimitExceeded
-		case PING_BUILDER:
+			return false, proto.ErrLimitExceeded
+
+		case CACHE_PING:
 			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.DappID, c.service, now)
 			if err != nil {
 				return false, err
 			}
 			if !ok {
-				return false, ErrTimeout
+				return false, proto.ErrTimeout
 			}
 			fallthrough
-		case WAIT_AND_RETRY:
+
+		case CACHE_WAIT_AND_RETRY:
 			time.Sleep(time.Millisecond * 100 * (i + 1))
+
 		}
 	}
-	return false, ErrTimeout
+
+	return false, proto.ErrTimeout
 }
 
 func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *proto.ServiceLimit, err error) {
 	if !token.AccessToken.Active {
-		return nil, ErrTokenNotFound
+		return nil, proto.ErrTokenNotFound
 	}
 	if !token.AccessToken.ValidateOrigin(origin) {
-		return nil, ErrInvalidOrigin
+		return nil, proto.ErrInvalidOrigin
 	}
 	if !token.AccessToken.ValidateService(c.service) {
-		return nil, ErrInvalidOrigin
+		return nil, proto.ErrInvalidOrigin
 	}
 	for _, cfg = range token.Config {
 		if *cfg.Service == *c.service {
 			return cfg, nil
 		}
 	}
-	return nil, ErrInvalidService
+	return nil, proto.ErrInvalidService
 }
 
 func (c *Client) Run(ctx context.Context) error {
@@ -217,6 +225,6 @@ type authorizedClient struct {
 }
 
 func (c *authorizedClient) Do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", c.bearerToken))
+	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", c.bearerToken))
 	return c.client.Do(req)
 }

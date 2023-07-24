@@ -14,8 +14,8 @@ type RateLimit struct {
 	Period time.Duration
 }
 
-// Result is the result of a rate limit.
-type Result struct {
+// RateLimitResult is the result of a rate limit.
+type RateLimitResult struct {
 	Limit      RateLimit
 	Allowed    int64
 	Remaining  int64
@@ -25,7 +25,7 @@ type Result struct {
 
 // RateLimiter leaves to the client how to define the key.
 type RateLimiter interface {
-	RateLimit(ctx context.Context, key string, computeUnits int, limit RateLimit) (*Result, error)
+	RateLimit(ctx context.Context, key string, computeUnits int, limit RateLimit) (*RateLimitResult, error)
 }
 
 // NewRateLimiter returns a new redis backed rate limiter.
@@ -37,12 +37,12 @@ type redisRateLimit struct {
 	client *redis_rate.Limiter
 }
 
-func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits int, l RateLimit) (*Result, error) {
+func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits int, l RateLimit) (*RateLimitResult, error) {
 	res, err := r.client.AllowN(ctx, key, redis_rate.Limit{Rate: int(l.Rate), Period: l.Period, Burst: int(l.Rate)}, computeUnits)
 	if err != nil {
 		return nil, err
 	}
-	return &Result{
+	return &RateLimitResult{
 		Limit: RateLimit{
 			Rate:   int64(res.Limit.Rate),
 			Period: res.Limit.Period,
