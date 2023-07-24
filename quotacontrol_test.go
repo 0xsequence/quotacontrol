@@ -99,8 +99,10 @@ func TestMiddlewareUseToken(t *testing.T) {
 	require.NoError(t, err)
 
 	go middlewareClient.Run(context.Background())
+
 	l, err := net.Listen("tcp", _Port)
 	require.NoError(t, err)
+
 	go func() {
 		serviceServer := quotacontrol.NewQuotaControl(cache, limits, tokens, usage)
 		err = http.Serve(l, proto.NewQuotaControlServer(serviceServer))
@@ -128,7 +130,10 @@ func TestMiddlewareUseToken(t *testing.T) {
 	assert.False(t, ok)
 
 	// Add Quota and try again, it should fail because of rate limit
-	limits[_DappID][_Service].ComputeMonthlyQuota += 100
+	// NOTE/TODO: the limits[_DappID][_Service] assumes limits[_DappID] is a map of service enum
+	// but its not, its an array.
+	// limits[_DappID][_Service].ComputeMonthlyQuota += 100
+	limits[_DappID][0].ComputeMonthlyQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
 	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")

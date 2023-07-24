@@ -4,8 +4,8 @@ name = quota-control
 version = v0.1.0
 
 enum Service: uint16
-  - Indexer
   - NodeGateway
+  - Indexer
 
 struct ServiceLimit
   - service: Service
