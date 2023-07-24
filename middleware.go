@@ -86,10 +86,6 @@ func NewMiddleware(c *Client, onSuccess func(context.Context) context.Context) f
 
 func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, error) {
 	now := GetTime(ctx)
-	computeUnits := int64(1)
-	if v, ok := ctx.Value(ctxKeyComputeUnits).(int64); ok {
-		computeUnits = int64(v)
-	}
 
 	// fetch token
 	token, err := c.cache.GetToken(ctx, tokenKey)
@@ -109,13 +105,20 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 	}
 	key := c.service.GetQuotaKey(token.AccessToken.DappID, now)
 
-	// check rate limit
-	result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
-	if err != nil {
-		return false, err
+	computeUnits := GetComputeUnits(ctx)
+	if computeUnits == 0 {
+		return true, nil
 	}
-	if result.Allowed == 0 {
-		return false, proto.ErrLimitExceeded
+
+	// check rate limit
+	if ctx.Value(ctxKeyRateLimitSkip) == nil {
+		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
+		if err != nil {
+			return false, err
+		}
+		if result.Allowed == 0 {
+			return false, proto.ErrLimitExceeded
+		}
 	}
 
 	// spend compute units
@@ -150,7 +153,6 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 
 		}
 	}
-
 	return false, proto.ErrTimeout
 }
 

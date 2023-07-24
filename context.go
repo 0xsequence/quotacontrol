@@ -14,9 +14,14 @@ func (k *contextKey) String() string {
 }
 
 var (
-	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
-	ctxKeyTime         = &contextKey{"Time"}
+	ctxKeyComputeUnits  = &contextKey{"ComputeUnits"}
+	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
+	ctxKeyTime          = &contextKey{"Time"}
 )
+
+func SkipRateLimit(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeyRateLimitSkip, struct{}{})
+}
 
 func WithComputeUnits(ctx context.Context, cu int64) context.Context {
 	return context.WithValue(ctx, ctxKeyComputeUnits, cu)
