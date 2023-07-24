@@ -56,7 +56,7 @@ func (q quotaControl) RetrieveToken(ctx context.Context, tokenKey string) (*prot
 	if err != nil {
 		return nil, err
 	}
-	limit, err := q.limitStore.GetAccessLimit(ctx, token.DappID)
+	limit, err := q.limitStore.GetAccessLimit(ctx, token.ProjectID)
 	if err != nil {
 		return nil, err
 	}

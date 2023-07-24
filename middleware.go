@@ -103,7 +103,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	key := c.service.GetQuotaKey(token.AccessToken.DappID, now)
+	key := c.service.GetQuotaKey(token.AccessToken.ProjectID, now)
 
 	computeUnits := GetComputeUnits(ctx)
 	if computeUnits == 0 {
@@ -139,7 +139,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			return false, proto.ErrLimitExceeded
 
 		case CACHE_PING:
-			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.DappID, c.service, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, c.service, now)
 			if err != nil {
 				return false, err
 			}

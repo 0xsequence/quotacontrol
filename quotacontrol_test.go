@@ -19,8 +19,8 @@ import (
 
 type mockLimits map[uint64][]*proto.ServiceLimit
 
-func (m mockLimits) GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
-	limit, ok := m[dappID]
+func (m mockLimits) GetAccessLimit(ctx context.Context, projectID uint64) ([]*proto.ServiceLimit, error) {
+	limit, ok := m[projectID]
 	if !ok {
 		return nil, proto.ErrTokenNotFound
 	}
@@ -42,10 +42,10 @@ type mockUsage struct {
 	usage  map[string]*proto.AccessTokenUsage
 }
 
-func (m mockUsage) GetAccountTotalUsage(ctx context.Context, dappID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
+func (m mockUsage) GetAccountTotalUsage(ctx context.Context, projectID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
 	usage := proto.AccessTokenUsage{}
 	for _, v := range m.tokens {
-		if v.DappID == dappID {
+		if v.ProjectID == projectID {
 			u, ok := m.usage[v.TokenKey]
 			if !ok {
 				continue
@@ -66,11 +66,11 @@ func (m mockUsage) UpdateTokenUsage(ctx context.Context, tokenKey string, servic
 }
 
 var (
-	_Port    = ":8080"
-	_DappID  = uint64(777)
-	_Service = proto.Service_Indexer
-	_Tokens  = []string{"abc", "cde"}
-	_Now     = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
+	_Port      = ":8080"
+	_ProjectID = uint64(777)
+	_Service   = proto.Service_Indexer
+	_Tokens    = []string{"abc", "cde"}
+	_Now       = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 )
 
 func TestMiddlewareUseToken(t *testing.T) {
@@ -110,13 +110,13 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}()
 
 	// populate store
-	limits[_DappID] = []*proto.ServiceLimit{
+	limits[_ProjectID] = []*proto.ServiceLimit{
 		{Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 100},
 	}
-	tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], DappID: _DappID}
-	tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], DappID: _DappID}
-	tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", DappID: _DappID + 1}
-	tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", DappID: _DappID + 1}
+	tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], ProjectID: _ProjectID}
+	tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], ProjectID: _ProjectID}
+	tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", ProjectID: _ProjectID + 1}
+	tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", ProjectID: _ProjectID + 1}
 
 	ctx := quotacontrol.WithTime(context.Background(), _Now)
 	for i := 0; i < 10; i++ {
@@ -130,10 +130,10 @@ func TestMiddlewareUseToken(t *testing.T) {
 	assert.False(t, ok)
 
 	// Add Quota and try again, it should fail because of rate limit
-	// NOTE/TODO: the limits[_DappID][_Service] assumes limits[_DappID] is a map of service enum
+	// NOTE/TODO: the limits[_ProjectID][_Service] assumes limits[_ProjectID] is a map of service enum
 	// but its not, its an array.
-	// limits[_DappID][_Service].ComputeMonthlyQuota += 100
-	limits[_DappID][0].ComputeMonthlyQuota += 100
+	// limits[_ProjectID][_Service].ComputeMonthlyQuota += 100
+	limits[_ProjectID][0].ComputeMonthlyQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
 	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")

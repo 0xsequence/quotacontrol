@@ -8,7 +8,8 @@ The last entity is `AccessTokenUsage` which represent the usage of a token for a
 
 # Service
 
-The implementation of the `QuotaControlService` it's incomplete. The methods that are used to save/load in a permanent storage the 3 entities are not implemented.
+The implementation of the `QuotaControlService` it's intentionally incomplete. 
+The methods that are used to save/load in a permanent storage the 3 entities are not implemented.
 The requests are measure in compute units, if a compute unit is not specified it is assumed that the value it's 1.
 A client can specify the amount of compute units by manipulatig the request context using the `WithComputeUnits` function.
 

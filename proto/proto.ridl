@@ -13,9 +13,9 @@ struct ServiceLimit
   - computeMonthlyQuota: int64
 
 struct AccessToken
-  - dappId: uint64
-    + go.field.name = DappID
-    + go.tag.db = dapp_id
+  - projectId: uint64
+    + go.field.name = ProjectID
+    + go.tag.db = project_id
 
   - displayName: string
     + go.tag.db = display_name
@@ -58,17 +58,17 @@ error 1005 TokenNotFound    "Token not found" HTTP 404
 
 service QuotaControl
   # Access Limit
-  - GetAccessLimit(dappId: uint64) => (config: []ServiceLimit)
-  - SetAccessLimit(dappId: uint64, config: []ServiceLimit) => (ok: bool)
+  - GetAccessLimit(projectId: uint64) => (config: []ServiceLimit)
+  - SetAccessLimit(projectId: uint64, config: []ServiceLimit) => (ok: bool)
 
   # Access Token
   - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)
-  - CreateAccessToken(dappId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessToken: AccessToken)
+  - CreateAccessToken(projectId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessToken: AccessToken)
   - UpdateAccessToken(tokenKey: string, displayName?: string, allowedOrigins?: []string, allowedServices?: []Service) => (accessToken: AccessToken)
-  - ListAccessTokens(dappId: uint64) => (accessTokens: []AccessToken)
+  - ListAccessTokens(projectId: uint64) => (accessTokens: []AccessToken)
   - DisableAccessToken(tokenKey: string) => (ok: bool)
 
   # Usage
-  - PrepareUsage(dappID: uint64, service?: Service, now: timestamp) => (ok: bool)
+  - PrepareUsage(projectID: uint64, service?: Service, now: timestamp) => (ok: bool)
   - RetrieveToken(tokenKey: string) => (token: CachedToken)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessTokenUsage>) => (ok: map<string,bool>)
