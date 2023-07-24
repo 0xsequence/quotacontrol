@@ -45,7 +45,7 @@ func (s *RedisCache) GetToken(ctx context.Context, tokenKey string) (*proto.Cach
 	raw, err := s.client.Get(ctx, tokenKey).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, ErrTokenNotFound
+			return nil, proto.ErrTokenNotFound
 		}
 		return nil, err
 	}

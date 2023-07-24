@@ -8,18 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/proto"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
-
-	"github.com/0xsequence/quotacontrol/proto"
-)
-
-var (
-	ErrTokenNotFound  = proto.Errorf(proto.ErrNotFound, "token not found")
-	ErrInvalidOrigin  = proto.Errorf(proto.ErrPermissionDenied, "invalid origin")
-	ErrInvalidService = proto.Errorf(proto.ErrPermissionDenied, "invalid service")
-	ErrLimitExceeded  = proto.Errorf(proto.ErrResourceExhausted, "limit exceeded")
-	ErrTimeout        = proto.Errorf(proto.ErrDeadlineExceeded, "timeout")
 )
 
 const (
@@ -79,7 +70,7 @@ func NewMiddleware(c *Client, onSuccess func(context.Context) context.Context) f
 				return
 			}
 			if !ok {
-				proto.RespondWithError(w, ErrLimitExceeded)
+				proto.RespondWithError(w, proto.ErrLimitExceeded)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(onSuccess(ctx)))
@@ -96,7 +87,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 	// fetch token
 	token, err := c.cache.GetToken(ctx, tokenKey)
 	if err != nil {
-		if !errors.Is(err, ErrTokenNotFound) {
+		if !errors.Is(err, proto.ErrTokenNotFound) {
 			return false, err
 		}
 		if token, err = c.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
@@ -115,7 +106,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 		return false, err
 	}
 	if result.Allowed == 0 {
-		return false, ErrLimitExceeded
+		return false, proto.ErrLimitExceeded
 	}
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
@@ -129,39 +120,39 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			return true, nil
 		case LIMITED:
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
-			return false, ErrLimitExceeded
+			return false, proto.ErrLimitExceeded
 		case PING_BUILDER:
 			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.DappID, c.service, now)
 			if err != nil {
 				return false, err
 			}
 			if !ok {
-				return false, ErrTimeout
+				return false, proto.ErrTimeout
 			}
 			fallthrough
 		case WAIT_AND_RETRY:
 			time.Sleep(time.Millisecond * 100 * (i + 1))
 		}
 	}
-	return false, ErrTimeout
+	return false, proto.ErrTimeout
 }
 
 func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *proto.ServiceLimit, err error) {
 	if !token.AccessToken.Active {
-		return nil, ErrTokenNotFound
+		return nil, proto.ErrTokenNotFound
 	}
 	if !token.AccessToken.ValidateOrigin(origin) {
-		return nil, ErrInvalidOrigin
+		return nil, proto.ErrInvalidOrigin
 	}
 	if !token.AccessToken.ValidateService(c.service) {
-		return nil, ErrInvalidOrigin
+		return nil, proto.ErrInvalidOrigin
 	}
 	for _, cfg = range token.Config {
 		if *cfg.Service == *c.service {
 			return cfg, nil
 		}
 	}
-	return nil, ErrInvalidService
+	return nil, proto.ErrInvalidService
 }
 
 func (c *Client) Run(ctx context.Context) error {

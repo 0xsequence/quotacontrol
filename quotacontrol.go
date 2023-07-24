@@ -9,8 +9,6 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
-var ErrNotImplemented = proto.Errorf(proto.ErrUnimplemented, "not implemented")
-
 type LimitStore interface {
 	GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error)
 }
@@ -87,29 +85,29 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 }
 
 func (q quotaControl) GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
-	return nil, ErrNotImplemented
+	return nil, proto.ErrNotImplemented
 }
 
 func (q quotaControl) SetAccessLimit(ctx context.Context, dappId uint64, config []*proto.ServiceLimit) (bool, error) {
-	return false, ErrNotImplemented
+	return false, proto.ErrNotImplemented
 }
 
 func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
-	return nil, ErrNotImplemented
+	return nil, proto.ErrNotImplemented
 }
 
 func (q quotaControl) CreateAccessToken(ctx context.Context, dappID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	return nil, ErrNotImplemented
+	return nil, proto.ErrNotImplemented
 }
 
 func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	return nil, ErrNotImplemented
+	return nil, proto.ErrNotImplemented
 }
 
 func (q quotaControl) ListAccessTokens(ctx context.Context, dappID uint64) ([]*proto.AccessToken, error) {
-	return nil, ErrNotImplemented
+	return nil, proto.ErrNotImplemented
 }
 
 func (q quotaControl) DisableAccessToken(ctx context.Context, tokenKey string) (bool, error) {
-	return false, ErrNotImplemented
+	return false, proto.ErrNotImplemented
 }
