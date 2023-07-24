@@ -14,17 +14,17 @@ type CacheStorage interface {
 	SetToken(ctx context.Context, token *proto.CachedToken) error
 	DeleteToken(ctx context.Context, tokenKey string) error
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
-	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (*RedisResponse, error)
+	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (CacheResponse, error)
 }
 
-type RedisResponse uint8
+type CacheResponse uint8
 
-// Redis
 const (
-	PING_BUILDER RedisResponse = iota
-	WAIT_AND_RETRY
-	ALLOWED
-	LIMITED
+	CACHE_NOOP CacheResponse = iota
+	CACHE_PING
+	CACHE_WAIT_AND_RETRY
+	CACHE_ALLOWED
+	CACHE_LIMITED
 )
 
 var _ CacheStorage = (*RedisCache)(nil)
@@ -72,32 +72,32 @@ func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amoun
 	return s.client.Set(ctx, redisKey, amount, s.ttl).Err()
 }
 
-func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (*RedisResponse, error) {
+func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (CacheResponse, error) {
 	const SpecialValue = -1
 	v, err := s.client.Get(ctx, redisKey).Int()
 	if err != nil {
 		if err != redis.Nil {
-			return nil, err
+			return CACHE_NOOP, err
 		}
 		ok, err := s.client.SetNX(ctx, redisKey, SpecialValue, time.Second*2).Result()
 		if err != nil {
-			return nil, err
+			return CACHE_NOOP, err
 		}
 		if !ok {
-			return proto.Ptr(WAIT_AND_RETRY), nil
+			return CACHE_WAIT_AND_RETRY, nil
 		}
-		return proto.Ptr(PING_BUILDER), nil
+		return CACHE_PING, nil
 	}
 
 	if v == SpecialValue {
-		return proto.Ptr(WAIT_AND_RETRY), nil
+		return CACHE_WAIT_AND_RETRY, nil
 	}
 	value, err := s.client.IncrBy(ctx, redisKey, int64(amount)).Result()
 	if err != nil {
-		return nil, err
+		return CACHE_NOOP, err
 	}
 	if value > int64(limit) {
-		return proto.Ptr(LIMITED), nil
+		return CACHE_LIMITED, nil
 	}
-	return proto.Ptr(ALLOWED), nil
+	return CACHE_ALLOWED, nil
 }
