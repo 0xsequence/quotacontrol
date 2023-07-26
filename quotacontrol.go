@@ -45,7 +45,7 @@ func (q quotaControl) PrepareUsage(ctx context.Context, dappID uint64, service *
 	if err != nil {
 		return false, err
 	}
-	if err := q.cache.SetComputeUnits(ctx, service.GetQuotaKey(dappID, now), usage.LimitedCompute+usage.ValidCompute); err != nil {
+	if err := q.cache.SetComputeUnits(ctx, service.GetQuotaKey(dappID, now), usage.GeTotal()); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -72,7 +72,7 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for tokenKey, tokenUsage := range usage {
-		err := q.usageStore.UpdateTokenUsage(ctx, tokenKey, *service, time.Now(), *tokenUsage)
+		err := q.usageStore.UpdateTokenUsage(ctx, tokenKey, *service, now, *tokenUsage)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", tokenKey, err))
 		}

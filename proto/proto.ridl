@@ -11,6 +11,7 @@ struct ServiceLimit
   - service: Service
   - computeRateLimit: int64
   - computeMonthlyQuota: int64
+  - computeMonthlyHardQuota: int64
 
 struct AccessToken
   - projectId: uint64
@@ -40,6 +41,8 @@ struct AccessToken
 struct AccessTokenUsage
   - validCompute: int64
     + go.tag.db = valid_compute
+  - overCompute: int64
+    + go.tag.db = over_compute
   - limitedCompute: int64
     + go.tag.db = limited_compute
 

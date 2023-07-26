@@ -3,6 +3,7 @@ package quotacontrol
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -14,17 +15,14 @@ type CacheStorage interface {
 	SetToken(ctx context.Context, token *proto.CachedToken) error
 	DeleteToken(ctx context.Context, tokenKey string) error
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
-	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (CacheResponse, error)
+	SpendComputeUnits(ctx context.Context, redisKey string, amount int64) (int64, error)
 }
 
 type CacheResponse uint8
 
-const (
-	CACHE_NOOP CacheResponse = iota
-	CACHE_PING
-	CACHE_WAIT_AND_RETRY
-	CACHE_ALLOWED
-	CACHE_LIMITED
+var (
+	ErrCachePing = errors.New("cache ping")
+	ErrCacheWait = errors.New("cache wait")
 )
 
 var _ CacheStorage = (*RedisCache)(nil)
@@ -72,32 +70,29 @@ func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amoun
 	return s.client.Set(ctx, redisKey, amount, s.ttl).Err()
 }
 
-func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (CacheResponse, error) {
+func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount int64) (int64, error) {
 	const SpecialValue = -1
 	v, err := s.client.Get(ctx, redisKey).Int()
 	if err != nil {
 		if err != redis.Nil {
-			return CACHE_NOOP, err
+			return 0, err
 		}
 		ok, err := s.client.SetNX(ctx, redisKey, SpecialValue, time.Second*2).Result()
 		if err != nil {
-			return CACHE_NOOP, err
+			return 0, err
 		}
 		if !ok {
-			return CACHE_WAIT_AND_RETRY, nil
+			return 0, ErrCacheWait
 		}
-		return CACHE_PING, nil
+		return 0, ErrCachePing
 	}
 
 	if v == SpecialValue {
-		return CACHE_WAIT_AND_RETRY, nil
+		return 0, ErrCacheWait
 	}
 	value, err := s.client.IncrBy(ctx, redisKey, int64(amount)).Result()
 	if err != nil {
-		return CACHE_NOOP, err
+		return 0, err
 	}
-	if value > int64(limit) {
-		return CACHE_LIMITED, nil
-	}
-	return CACHE_ALLOWED, nil
+	return value, nil
 }

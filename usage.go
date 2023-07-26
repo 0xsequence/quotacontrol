@@ -2,6 +2,8 @@ package quotacontrol
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -15,14 +17,18 @@ type UsageUpdater interface {
 
 // UsageChanges keeps track of the usage of a service
 type usageTracker struct {
-	sync.Mutex
+	// Mutex used for usage data
+	DataMutex sync.Mutex
+	// Mutext used for sync (calling Stop while another sync is running will wait for the sync to finish)
+	SyncMutex sync.Mutex
+
 	Usage map[time.Time]map[string]*proto.AccessTokenUsage
 }
 
 // AddUsage adds the usage of a token.
 func (u *usageTracker) AddUsage(tokenKey string, now time.Time, usage proto.AccessTokenUsage) {
-	u.Lock()
-	defer u.Unlock()
+	u.DataMutex.Lock()
+	defer u.DataMutex.Unlock()
 	if _, ok := u.Usage[now]; !ok {
 		u.Usage[now] = make(map[string]*proto.AccessTokenUsage)
 	}
@@ -32,30 +38,41 @@ func (u *usageTracker) AddUsage(tokenKey string, now time.Time, usage proto.Acce
 	u.Usage[now][tokenKey].Add(usage)
 }
 
-// sync
-func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, service *proto.Service) error {
-	u.Lock()
-	tokenUsage := make(map[time.Time]map[string]*proto.AccessTokenUsage, len(u.Usage))
+// GetUpdates returns the usage of a service and clears the usage
+func (u *usageTracker) GetUpdates() map[time.Time]map[string]*proto.AccessTokenUsage {
+	u.DataMutex.Lock()
+	defer u.DataMutex.Unlock()
+	result := make(map[time.Time]map[string]*proto.AccessTokenUsage, len(u.Usage))
 	for k, v := range u.Usage {
-		tokenUsage[k] = make(map[string]*proto.AccessTokenUsage, len(v))
+		result[k] = make(map[string]*proto.AccessTokenUsage, len(v))
 		for k1, v1 := range v {
-			tokenUsage[k][k1] = v1
+			result[k][k1] = v1
 		}
 		delete(u.Usage, k)
 	}
-	u.Unlock()
-	for now, usages := range tokenUsage {
+	return result
+}
+
+// SyncUsage syncs the usage of a service with the UsageUpdater
+func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, service *proto.Service) error {
+	u.SyncMutex.Lock()
+	defer u.SyncMutex.Unlock()
+	var errList []error
+	for now, usages := range u.GetUpdates() {
+		for k, v := range usages {
+			fmt.Println("sync usage", k, now, v)
+		}
 		result, err := updater.UpdateUsage(ctx, service, now, usages)
-		// check if any update failed and add it back to the counter
+		if err != nil {
+			errList = append(errList, err)
+		}
+		// add back to the counter failed updates
 		for tokenKey, v := range result {
 			if v {
 				continue
 			}
 			u.AddUsage(tokenKey, now, *usages[tokenKey])
 		}
-		if err != nil {
-			return err
-		}
 	}
-	return nil
+	return errors.Join(errList...)
 }

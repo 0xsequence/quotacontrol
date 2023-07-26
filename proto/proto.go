@@ -13,6 +13,11 @@ func Ptr[T any](v T) *T {
 func (u *AccessTokenUsage) Add(usage AccessTokenUsage) {
 	u.LimitedCompute += usage.LimitedCompute
 	u.ValidCompute += usage.ValidCompute
+	u.OverCompute += usage.OverCompute
+}
+
+func (u *AccessTokenUsage) GeTotal() int64 {
+	return u.LimitedCompute + u.ValidCompute + u.OverCompute
 }
 
 func (t *AccessToken) ValidateOrigin(origin string) bool {

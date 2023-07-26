@@ -117,28 +117,27 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			return false, err
 		}
 		if result.Allowed == 0 {
+			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 			return false, proto.ErrLimitExceeded
 		}
 	}
 
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
-		resp, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyQuota)
-		if err != nil {
-			return false, err
-		}
-
-		switch resp {
-
-		case CACHE_ALLOWED:
+		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits)
+		switch err {
+		case nil:
+			if total > cfg.ComputeMonthlyHardQuota {
+				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
+				return false, proto.ErrLimitExceeded
+			}
+			if total > cfg.ComputeMonthlyQuota {
+				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
+				return true, nil
+			}
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
-
-		case CACHE_LIMITED:
-			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
-			return false, proto.ErrLimitExceeded
-
-		case CACHE_PING:
+		case ErrCachePing:
 			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, c.service, now)
 			if err != nil {
 				return false, err
@@ -148,9 +147,10 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			}
 			fallthrough
 
-		case CACHE_WAIT_AND_RETRY:
+		case ErrCacheWait:
 			time.Sleep(time.Millisecond * 100 * (i + 1))
-
+		default:
+			return false, err
 		}
 	}
 	return false, proto.ErrTimeout
