@@ -123,7 +123,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
-		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits)
+		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyHardQuota)
 		switch err {
 		case nil:
 			if total > cfg.ComputeMonthlyHardQuota {

@@ -45,7 +45,7 @@ func (q quotaControl) PrepareUsage(ctx context.Context, dappID uint64, service *
 	if err != nil {
 		return false, err
 	}
-	if err := q.cache.SetComputeUnits(ctx, service.GetQuotaKey(dappID, now), usage.GeTotal()); err != nil {
+	if err := q.cache.SetComputeUnits(ctx, service.GetQuotaKey(dappID, now), usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -15,14 +15,14 @@ type CacheStorage interface {
 	SetToken(ctx context.Context, token *proto.CachedToken) error
 	DeleteToken(ctx context.Context, tokenKey string) error
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
-	SpendComputeUnits(ctx context.Context, redisKey string, amount int64) (int64, error)
+	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
 }
 
 type CacheResponse uint8
 
 var (
-	ErrCachePing = errors.New("cache ping")
-	ErrCacheWait = errors.New("cache wait")
+	ErrCachePing = errors.New("quotacontrol: cache ping")
+	ErrCacheWait = errors.New("quotacontrol: cache wait")
 )
 
 var _ CacheStorage = (*RedisCache)(nil)
@@ -70,11 +70,11 @@ func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amoun
 	return s.client.Set(ctx, redisKey, amount, s.ttl).Err()
 }
 
-func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount int64) (int64, error) {
+func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
 	const SpecialValue = -1
-	v, err := s.client.Get(ctx, redisKey).Int()
+	v, err := s.client.Get(ctx, redisKey).Int64()
 	if err != nil {
-		if err != redis.Nil {
+		if !errors.Is(err, redis.Nil) {
 			return 0, err
 		}
 		ok, err := s.client.SetNX(ctx, redisKey, SpecialValue, time.Second*2).Result()
@@ -90,7 +90,10 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	if v == SpecialValue {
 		return 0, ErrCacheWait
 	}
-	value, err := s.client.IncrBy(ctx, redisKey, int64(amount)).Result()
+	if v > limit {
+		return v, proto.ErrLimitExceeded
+	}
+	value, err := s.client.IncrBy(ctx, redisKey, amount).Result()
 	if err != nil {
 		return 0, err
 	}

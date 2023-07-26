@@ -16,8 +16,8 @@ func (u *AccessTokenUsage) Add(usage AccessTokenUsage) {
 	u.OverCompute += usage.OverCompute
 }
 
-func (u *AccessTokenUsage) GeTotal() int64 {
-	return u.LimitedCompute + u.ValidCompute + u.OverCompute
+func (u *AccessTokenUsage) GetTotalUsage() int64 {
+	return u.ValidCompute + u.OverCompute
 }
 
 func (t *AccessToken) ValidateOrigin(origin string) bool {
