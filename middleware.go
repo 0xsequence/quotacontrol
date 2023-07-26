@@ -117,7 +117,6 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			return false, err
 		}
 		if result.Allowed == 0 {
-			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 			return false, proto.ErrLimitExceeded
 		}
 	}
