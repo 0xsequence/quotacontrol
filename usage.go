@@ -3,7 +3,6 @@ package quotacontrol
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -59,9 +58,6 @@ func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, serv
 	defer u.SyncMutex.Unlock()
 	var errList []error
 	for now, usages := range u.GetUpdates() {
-		for k, v := range usages {
-			fmt.Println("sync usage", k, now, v)
-		}
 		result, err := updater.UpdateUsage(ctx, service, now, usages)
 		if err != nil {
 			errList = append(errList, err)

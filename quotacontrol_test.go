@@ -138,10 +138,14 @@ func TestMiddlewareUseToken(t *testing.T) {
 	limits[_ProjectID][_Service].ComputeMonthlyHardQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
+	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")
+	assert.ErrorIs(t, err, proto.ErrLimitExceeded)
+	assert.False(t, ok)
+
 	ok, err = middlewareClient.UseToken(quotacontrol.SkipRateLimit(ctx), _Tokens[0], "")
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
 	middlewareClient.Stop(ctx)
-	assert.Equal(t, &proto.AccessTokenUsage{ValidCompute: 50, OverCompute: 60, LimitedCompute: 10}, usage.usage[_Tokens[0]])
+	assert.Equal(t, &proto.AccessTokenUsage{ValidCompute: 50, OverCompute: 60, LimitedCompute: 0}, usage.usage[_Tokens[0]])
 }

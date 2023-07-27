@@ -46,3 +46,22 @@ func (t *AccessToken) ValidateService(service *Service) bool {
 func (s *Service) GetQuotaKey(dappId uint64, now time.Time) string {
 	return fmt.Sprintf("%v_%v_%s", s, dappId, now.Format("2006-01"))
 }
+
+func (s *ServiceLimit) Validate() error {
+	if s.Service == nil {
+		return fmt.Errorf("service must be set")
+	}
+	if s.ComputeRateLimit <= 0 {
+		return fmt.Errorf("computeRateLimit must be >= 0")
+	}
+	if s.ComputeMonthlyQuota <= 0 {
+		return fmt.Errorf("computeMonthlyQuota must be >= 0")
+	}
+	if s.ComputeMonthlyHardQuota <= 0 {
+		return fmt.Errorf("computeMonthlyHardQuota must be >= 0")
+	}
+	if s.ComputeMonthlyQuota > s.ComputeMonthlyHardQuota {
+		return fmt.Errorf("computeMonthlyQuota must be <= computeMonthlyHardQuota")
+	}
+	return nil
+}
