@@ -136,6 +136,9 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			}
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
+		case proto.ErrLimitExceeded:
+			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
+			return false, nil
 		case ErrCachePing:
 			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, c.service, now)
 			if err != nil {
@@ -145,7 +148,6 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 				return false, proto.ErrTimeout
 			}
 			fallthrough
-
 		case ErrCacheWait:
 			time.Sleep(time.Millisecond * 100 * (i + 1))
 		default:
