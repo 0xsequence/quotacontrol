@@ -112,7 +112,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 
 	// check rate limit
 	if ctx.Value(ctxKeyRateLimitSkip) == nil {
-		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Hour})
+		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Minute})
 		if err != nil {
 			return false, err
 		}
