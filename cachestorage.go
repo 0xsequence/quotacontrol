@@ -90,7 +90,7 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	if v == SpecialValue {
 		return 0, ErrCacheWait
 	}
-	if v > limit {
+	if v+amount > limit {
 		return v, proto.ErrLimitExceeded
 	}
 	value, err := s.client.IncrBy(ctx, redisKey, amount).Result()

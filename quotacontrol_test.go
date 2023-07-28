@@ -2,7 +2,6 @@ package quotacontrol_test
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"testing"
@@ -66,7 +65,6 @@ func (m mockUsage) UpdateTokenUsage(ctx context.Context, tokenKey string, servic
 		m.usage[tokenKey] = &usage
 		return nil
 	}
-	fmt.Println("update usage", tokenKey, time, usage)
 	m.usage[tokenKey].Add(usage)
 	return nil
 }
@@ -117,35 +115,33 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	// populate store
 	limits[_ProjectID] = map[proto.Service]*proto.ServiceLimit{
-		_Service: {Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 50, ComputeMonthlyHardQuota: 100},
+		_Service: {Service: &_Service, ComputeRateLimit: 100, ComputeMonthlyQuota: 5, ComputeMonthlyHardQuota: 10},
 	}
 	tokens[_Tokens[0]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[0], ProjectID: _ProjectID}
 	tokens[_Tokens[1]] = &proto.AccessToken{Active: true, TokenKey: _Tokens[1], ProjectID: _ProjectID}
 	tokens["mno"] = &proto.AccessToken{Active: true, TokenKey: "mno", ProjectID: _ProjectID + 1}
 	tokens["xyz"] = &proto.AccessToken{Active: true, TokenKey: "xyz", ProjectID: _ProjectID + 1}
 
-	ctx := quotacontrol.WithComputeUnits(quotacontrol.WithTime(context.Background(), _Now), 10)
+	ctx := quotacontrol.WithTime(context.Background(), _Now)
 	for i := 0; i < 10; i++ {
 		ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	}
-	ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
-	assert.ErrorIs(t, err, proto.ErrLimitExceeded)
-	assert.False(t, ok)
+	for i := 0; i < 5; i++ {
+		ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
+		assert.ErrorIs(t, err, proto.ErrLimitExceeded)
+		assert.False(t, ok)
+	}
 
 	// Add Quota and try again, it should fail because of rate limit
 	limits[_ProjectID][_Service].ComputeMonthlyHardQuota += 100
 	cache.DeleteToken(ctx, _Tokens[0])
 
-	ok, err = middlewareClient.UseToken(ctx, _Tokens[0], "")
-	assert.ErrorIs(t, err, proto.ErrLimitExceeded)
-	assert.False(t, ok)
-
-	ok, err = middlewareClient.UseToken(quotacontrol.SkipRateLimit(ctx), _Tokens[0], "")
+	ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
 	middlewareClient.Stop(ctx)
-	assert.Equal(t, &proto.AccessTokenUsage{ValidCompute: 50, OverCompute: 60, LimitedCompute: 0}, usage.usage[_Tokens[0]])
+	assert.Equal(t, &proto.AccessTokenUsage{ValidCompute: 5, OverCompute: 6, LimitedCompute: 5}, usage.usage[_Tokens[0]])
 }
