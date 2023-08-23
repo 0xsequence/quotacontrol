@@ -61,7 +61,11 @@ type Client struct {
 	Log     zerolog.Logger
 }
 
-func NewMiddleware(c *Client, onSuccess func(context.Context) context.Context) func(http.Handler) http.Handler {
+type ContextFunc func(context.Context) context.Context
+
+func NoAction(ctx context.Context) context.Context { return ctx }
+
+func NewMiddleware(c *Client, onSuccess ContextFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenKey := r.Header.Get(HeaderSequenceTokenKey)
