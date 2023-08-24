@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -41,7 +42,13 @@ func TestMiddlewareUseToken(t *testing.T) {
 			Host: s.Host(),
 			Port: uint16(s.Server().Addr().Port),
 		},
+		RateLimiter: quotacontrol.RateLimiterConfig{
+			Enabled:                 true,
+			PublicRequestsPerMinute: 10,
+		},
 	}
+
+	rateLimiter := quotacontrol.NewPublicRateLimiter(cfg)
 	middlewareClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), &_Service, cfg)
 	require.NoError(t, err)
 
@@ -70,14 +77,17 @@ func TestMiddlewareUseToken(t *testing.T) {
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "mno", ProjectID: _ProjectID + 1})
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "xyz", ProjectID: _ProjectID + 1})
 
+	middleware := quotacontrol.NewMiddleware(middlewareClient, rateLimiter, quotacontrol.NoAction)
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
 	ctx = quotacontrol.WithTime(ctx, _Now)
 	for i := 0; i < 10; i++ {
-		ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
+		ok, err := executeRequest(ctx, handler, _Tokens[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	}
 	for i := 0; i < 5; i++ {
-		ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
+		ok, err := executeRequest(ctx, handler, _Tokens[0], "")
 		assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 		assert.False(t, ok)
 	}
@@ -91,11 +101,42 @@ func TestMiddlewareUseToken(t *testing.T) {
 	})
 	cache.DeleteToken(ctx, _Tokens[0])
 
-	ok, err := middlewareClient.UseToken(ctx, _Tokens[0], "")
+	ok, err := executeRequest(ctx, handler, _Tokens[0], "")
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
+	for i, max := 0, cfg.RateLimiter.PublicRequestsPerMinute*2; i < max; i++ {
+		ok, err := executeRequest(ctx, handler, "", "")
+		if i < cfg.RateLimiter.PublicRequestsPerMinute {
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		} else {
+			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
+			assert.False(t, ok)
+		}
+	}
+
 	middlewareClient.Stop(ctx)
-	usage, _ := store.GetAccountTotalUsage(ctx, _ProjectID, _Service, _Now.Add(-time.Hour), _Now.Add(time.Hour))
+	usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, _Service, _Now.Add(-time.Hour), _Now.Add(time.Hour))
+	assert.NoError(t, err)
 	assert.Equal(t, &proto.AccessTokenUsage{ValidCompute: 5, OverCompute: 6, LimitedCompute: 5}, &usage)
+
+}
+
+func executeRequest(ctx context.Context, handler http.Handler, token, origin string) (bool, error) {
+	req, err := http.NewRequest("POST", "/", nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("X-Real-IP", "127.0.0.1")
+	if token != "" {
+		req.Header.Set(quotacontrol.HeaderSequenceTokenKey, token)
+	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req.WithContext(ctx))
+	status := rr.Result().StatusCode
+	if status < http.StatusOK || status >= http.StatusBadRequest {
+		return false, proto.ErrLimitExceeded
+	}
+	return true, nil
 }

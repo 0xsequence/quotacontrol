@@ -10,7 +10,7 @@ import (
 )
 
 type LimitStore interface {
-	GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error)
+	GetAccessLimit(ctx context.Context, projectID uint64) ([]*proto.ServiceLimit, error)
 }
 
 type TokenStore interface {
@@ -18,7 +18,7 @@ type TokenStore interface {
 }
 
 type UsageStore interface {
-	GetAccountTotalUsage(ctx context.Context, dappID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error)
+	GetAccountTotalUsage(ctx context.Context, projectID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error)
 	UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error
 }
 
@@ -38,22 +38,22 @@ type quotaControl struct {
 	usageStore UsageStore
 }
 
-func (q quotaControl) GetUsage(ctx context.Context, dappID uint64, service *proto.Service, now time.Time) (*proto.AccessTokenUsage, error) {
+func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (*proto.AccessTokenUsage, error) {
 	min := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	max := min.AddDate(0, 1, -1)
-	usage, err := q.usageStore.GetAccountTotalUsage(ctx, dappID, *service, min, max)
+	usage, err := q.usageStore.GetAccountTotalUsage(ctx, projectID, *service, min, max)
 	if err != nil {
 		return nil, err
 	}
 	return &usage, nil
 }
 
-func (q quotaControl) PrepareUsage(ctx context.Context, dappID uint64, service *proto.Service, now time.Time) (bool, error) {
-	usage, err := q.GetUsage(ctx, dappID, service, now)
+func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (bool, error) {
+	usage, err := q.GetUsage(ctx, projectID, service, now)
 	if err != nil {
 		return false, err
 	}
-	if err := q.cache.SetComputeUnits(ctx, service.GetQuotaKey(dappID, now), usage.GetTotalUsage()); err != nil {
+	if err := q.cache.SetComputeUnits(ctx, service.GetQuotaKey(projectID, now), usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -92,11 +92,11 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 	return m, nil
 }
 
-func (q quotaControl) GetAccessLimit(ctx context.Context, dappID uint64) ([]*proto.ServiceLimit, error) {
+func (q quotaControl) GetAccessLimit(ctx context.Context, projectID uint64) ([]*proto.ServiceLimit, error) {
 	return nil, proto.ErrNotImplemented
 }
 
-func (q quotaControl) SetAccessLimit(ctx context.Context, dappId uint64, config []*proto.ServiceLimit) (bool, error) {
+func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, config []*proto.ServiceLimit) (bool, error) {
 	return false, proto.ErrNotImplemented
 }
 
@@ -104,7 +104,7 @@ func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*pro
 	return nil, proto.ErrNotImplemented
 }
 
-func (q quotaControl) CreateAccessToken(ctx context.Context, dappID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
+func (q quotaControl) CreateAccessToken(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
 	return nil, proto.ErrNotImplemented
 }
 
@@ -112,7 +112,7 @@ func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, di
 	return nil, proto.ErrNotImplemented
 }
 
-func (q quotaControl) ListAccessTokens(ctx context.Context, dappID uint64) ([]*proto.AccessToken, error) {
+func (q quotaControl) ListAccessTokens(ctx context.Context, projectID uint64) ([]*proto.AccessToken, error) {
 	return nil, proto.ErrNotImplemented
 }
 

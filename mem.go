@@ -78,3 +78,8 @@ func (m MemoryStore) UpdateTokenUsage(ctx context.Context, tokenKey string, serv
 	m.usage[tokenKey].Add(usage)
 	return nil
 }
+
+func (m MemoryStore) ResetUsage(ctx context.Context, tokenKey string, service proto.Service) error {
+	m.usage[tokenKey] = &proto.AccessTokenUsage{}
+	return nil
+}

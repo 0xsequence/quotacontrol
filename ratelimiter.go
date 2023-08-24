@@ -2,8 +2,13 @@ package quotacontrol
 
 import (
 	"context"
+	"net/http"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/proto"
+
+	"github.com/go-chi/httprate"
+	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/go-redis/redis_rate/v10"
 	"github.com/redis/go-redis/v9"
 )
@@ -51,4 +56,33 @@ func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits
 		Remaining:  int64(res.Remaining),
 		RetryAfter: res.RetryAfter,
 	}, nil
+}
+
+const defaultRPM = 120
+
+func NewPublicRateLimiter(cfg Config) Middleware {
+	if !cfg.RateLimiter.Enabled {
+		return nil
+	}
+
+	limitCounter, _ := httprateredis.NewRedisLimitCounter(&httprateredis.Config{
+		Host:      cfg.Redis.Host,
+		Port:      cfg.Redis.Port,
+		MaxIdle:   cfg.Redis.MaxIdle,
+		MaxActive: cfg.Redis.MaxActive,
+		DBIndex:   cfg.Redis.DBIndex,
+	})
+
+	rpm := defaultRPM
+	if cfg.RateLimiter.PublicRequestsPerMinute > 0 {
+		rpm = cfg.RateLimiter.PublicRequestsPerMinute
+	}
+	options := []httprate.Option{
+		httprate.WithKeyFuncs(httprate.KeyByRealIP),
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			proto.RespondWithError(w, proto.ErrLimitExceeded)
+		}),
+		httprate.WithLimitCounter(limitCounter),
+	}
+	return httprate.Limit(rpm, time.Minute, options...)
 }

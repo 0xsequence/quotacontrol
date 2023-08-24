@@ -4,6 +4,8 @@ go 1.18
 
 require (
 	github.com/alicebob/miniredis/v2 v2.30.3
+	github.com/go-chi/httprate v0.7.4
+	github.com/go-chi/httprate-redis v0.2.1
 	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/goware/cachestore v0.8.1
 	github.com/redis/go-redis/v9 v9.1.0
@@ -21,6 +23,7 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

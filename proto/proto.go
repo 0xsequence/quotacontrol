@@ -45,8 +45,8 @@ func (t *AccessToken) ValidateService(service *Service) bool {
 	return false
 }
 
-func (s *Service) GetQuotaKey(dappId uint64, now time.Time) string {
-	return fmt.Sprintf("%v_%v_%s", s, dappId, now.Format("2006-01"))
+func (s *Service) GetQuotaKey(projectID uint64, now time.Time) string {
+	return fmt.Sprintf("%v_%v_%s", s, projectID, now.Format("2006-01"))
 }
 
 func (s *ServiceLimit) Validate() error {
