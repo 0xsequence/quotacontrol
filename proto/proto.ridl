@@ -62,7 +62,7 @@ error 1005 TokenNotFound    "Token not found" HTTP 404
 service QuotaControl
   # Access Limit
   - GetAccessLimit(projectId: uint64) => (config: []ServiceLimit)
-  - SetAccessLimit(projectId: uint64, config: []ServiceLimit) => (ok: bool)
+  - SetAccessLimit(projectId: uint64, config: []ServiceLimit) => (config: []ServiceLimit)
 
   # Access Token
   - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)

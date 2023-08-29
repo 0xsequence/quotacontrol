@@ -96,8 +96,8 @@ func (q quotaControl) GetAccessLimit(ctx context.Context, projectID uint64) ([]*
 	return nil, proto.ErrNotImplemented
 }
 
-func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, config []*proto.ServiceLimit) (bool, error) {
-	return false, proto.ErrNotImplemented
+func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, config []*proto.ServiceLimit) ([]*proto.ServiceLimit, error) {
+	return nil, proto.ErrNotImplemented
 }
 
 func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
