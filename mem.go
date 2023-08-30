@@ -10,7 +10,7 @@ import (
 // NewMemoryStore returns a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		limits: map[uint64]map[proto.Service]*proto.ServiceLimit{},
+		limits: map[uint64]*proto.Limit{},
 		tokens: map[string]*proto.AccessToken{},
 		usage:  map[string]*proto.AccessTokenUsage{},
 	}
@@ -18,29 +18,22 @@ func NewMemoryStore() *MemoryStore {
 
 // MemoryStore is an in-memory store, used for testing and prototype.
 type MemoryStore struct {
-	limits map[uint64]map[proto.Service]*proto.ServiceLimit
+	limits map[uint64]*proto.Limit
 	tokens map[string]*proto.AccessToken
 	usage  map[string]*proto.AccessTokenUsage
 }
 
-func (m MemoryStore) InsertAccessLimit(ctx context.Context, projectID uint64, limit *proto.ServiceLimit) error {
-	if _, ok := m.limits[projectID]; !ok {
-		m.limits[projectID] = map[proto.Service]*proto.ServiceLimit{}
-	}
-	m.limits[projectID][*limit.Service] = limit
+func (m MemoryStore) InsertAccessLimit(ctx context.Context, projectID uint64, limit *proto.Limit) error {
+	m.limits[projectID] = limit
 	return nil
 }
 
-func (m MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64) ([]*proto.ServiceLimit, error) {
+func (m MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
 	limit, ok := m.limits[projectID]
 	if !ok {
 		return nil, proto.ErrTokenNotFound
 	}
-	var result []*proto.ServiceLimit
-	for _, v := range limit {
-		result = append(result, v)
-	}
-	return result, nil
+	return limit, nil
 }
 
 func (m MemoryStore) InsertToken(ctx context.Context, token *proto.AccessToken) error {
@@ -56,7 +49,7 @@ func (m MemoryStore) FindByTokenKey(ctx context.Context, tokenKey string) (*prot
 	return token, nil
 }
 
-func (m MemoryStore) GetAccountTotalUsage(ctx context.Context, projectID uint64, service proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
+func (m MemoryStore) GetAccountTotalUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
 	usage := proto.AccessTokenUsage{}
 	for _, v := range m.tokens {
 		if v.ProjectID == projectID {

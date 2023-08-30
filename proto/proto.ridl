@@ -7,9 +7,8 @@ enum Service: uint16
   - NodeGateway
   - Indexer
 
-struct ServiceLimit
-  - service: Service
-  - computeRateLimit: int64
+struct Limit
+  - rateLimit: int64
   - computeMonthlyQuota: int64
   - computeMonthlyHardQuota: int64
 
@@ -47,7 +46,7 @@ struct AccessTokenUsage
     + go.tag.db = limited_compute
 
 struct CachedToken
-  - config: []ServiceLimit
+  - limit: Limit
   - accessToken: AccessToken
 
 
@@ -61,8 +60,8 @@ error 1005 TokenNotFound    "Token not found" HTTP 404
 
 service QuotaControl
   # Access Limit
-  - GetAccessLimit(projectId: uint64) => (config: []ServiceLimit)
-  - SetAccessLimit(projectId: uint64, config: []ServiceLimit) => (config: []ServiceLimit)
+  - GetAccessLimit(projectId: uint64) => (limit: Limit)
+  - SetAccessLimit(projectId: uint64, limit: Limit) => (ok: bool)
 
   # Access Token
   - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)
@@ -73,6 +72,6 @@ service QuotaControl
 
   # Usage
   - GetUsage(projectID: uint64, service?: Service, now: timestamp) => (usage: AccessTokenUsage)
-  - PrepareUsage(projectID: uint64, service?: Service, now: timestamp) => (ok: bool)
+  - PrepareUsage(projectID: uint64, now: timestamp) => (ok: bool)
   - RetrieveToken(tokenKey: string) => (token: CachedToken)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessTokenUsage>) => (ok: map<string,bool>)

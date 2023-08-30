@@ -30,6 +30,7 @@ func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client,
 		service: service,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
+			Log:   log,
 		},
 		cache: NewRedisCache(redisClient, time.Minute),
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
@@ -67,13 +68,13 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			return false, err
 		}
 	}
+	cfg := token.Limit
 
 	// validate token
-	cfg, err := c.validateToken(token, origin)
-	if err != nil {
+	if err := c.validateToken(token.AccessToken, origin); err != nil {
 		return false, err
 	}
-	key := c.service.GetQuotaKey(token.AccessToken.ProjectID, now)
+	key := GetQuotaKey(token.AccessToken.ProjectID, now)
 
 	computeUnits := GetComputeUnits(ctx)
 	if computeUnits == 0 {
@@ -82,7 +83,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 
 	// check rate limit
 	if ctx.Value(ctxKeyRateLimitSkip) == nil {
-		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.ComputeRateLimit, Period: time.Minute})
+		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
 		if err != nil {
 			return false, err
 		}
@@ -90,27 +91,30 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 			return false, proto.ErrLimitExceeded
 		}
 	}
-
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
 		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyHardQuota)
 		switch err {
 		case nil:
 			if total > cfg.ComputeMonthlyHardQuota {
+				fmt.Println("adding limited")
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 				return false, proto.ErrLimitExceeded
 			}
 			if total > cfg.ComputeMonthlyQuota {
+				fmt.Println("adding over")
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
 				return true, nil
 			}
+			fmt.Println("adding valid")
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
 		case proto.ErrLimitExceeded:
+			fmt.Println("adding limited with err")
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 			return false, err
 		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, c.service, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, now)
 			if err != nil {
 				return false, err
 			}
@@ -127,22 +131,17 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 	return false, proto.ErrTimeout
 }
 
-func (c *Client) validateToken(token *proto.CachedToken, origin string) (cfg *proto.ServiceLimit, err error) {
-	if !token.AccessToken.Active {
-		return nil, proto.ErrTokenNotFound
+func (c *Client) validateToken(token *proto.AccessToken, origin string) (err error) {
+	if !token.Active {
+		return proto.ErrTokenNotFound
 	}
-	if !token.AccessToken.ValidateOrigin(origin) {
-		return nil, proto.ErrInvalidOrigin
+	if !token.ValidateOrigin(origin) {
+		return proto.ErrInvalidOrigin
 	}
-	if !token.AccessToken.ValidateService(c.service) {
-		return nil, proto.ErrInvalidOrigin
+	if !token.ValidateService(c.service) {
+		return proto.ErrInvalidService
 	}
-	for _, cfg = range token.Config {
-		if *cfg.Service == *c.service {
-			return cfg, nil
-		}
-	}
-	return nil, proto.ErrInvalidService
+	return nil
 }
 
 func (c *Client) Run(ctx context.Context) error {
@@ -200,4 +199,8 @@ type authorizedClient struct {
 func (c *authorizedClient) Do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", c.bearerToken))
 	return c.client.Do(req)
+}
+
+func GetQuotaKey(projectID uint64, now time.Time) string {
+	return fmt.Sprintf("project:%v:%s", projectID, now.Format("2006-01"))
 }

@@ -5,7 +5,6 @@ package proto
 
 import (
 	"fmt"
-	"time"
 )
 
 func Ptr[T any](v T) *T {
@@ -45,24 +44,17 @@ func (t *AccessToken) ValidateService(service *Service) bool {
 	return false
 }
 
-func (s *Service) GetQuotaKey(projectID uint64, now time.Time) string {
-	return fmt.Sprintf("%v_%v_%s", s, projectID, now.Format("2006-01"))
-}
-
-func (s *ServiceLimit) Validate() error {
-	if s.Service == nil {
-		return fmt.Errorf("service must be set")
-	}
-	if s.ComputeRateLimit <= 0 {
+func (l *Limit) Validate() error {
+	if l.RateLimit <= 0 {
 		return fmt.Errorf("computeRateLimit must be >= 0")
 	}
-	if s.ComputeMonthlyQuota <= 0 {
+	if l.ComputeMonthlyQuota <= 0 {
 		return fmt.Errorf("computeMonthlyQuota must be >= 0")
 	}
-	if s.ComputeMonthlyHardQuota <= 0 {
+	if l.ComputeMonthlyHardQuota <= 0 {
 		return fmt.Errorf("computeMonthlyHardQuota must be >= 0")
 	}
-	if s.ComputeMonthlyQuota > s.ComputeMonthlyHardQuota {
+	if l.ComputeMonthlyQuota > l.ComputeMonthlyHardQuota {
 		return fmt.Errorf("computeMonthlyQuota must be <= computeMonthlyHardQuota")
 	}
 	return nil

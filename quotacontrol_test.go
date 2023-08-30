@@ -21,7 +21,6 @@ import (
 var (
 	_Port      = ":8080"
 	_ProjectID = uint64(777)
-	_Service   = proto.Service_Indexer
 	_Tokens    = []string{"abc", "cde"}
 	_Now       = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 )
@@ -49,12 +48,12 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}
 
 	rateLimiter := quotacontrol.NewPublicRateLimiter(cfg)
-	middlewareClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), &_Service, cfg)
+	quotaClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), proto.Ptr(proto.Service_Indexer), cfg)
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	go middlewareClient.Run(ctx)
+	go quotaClient.Run(ctx)
 
 	l, err := net.Listen("tcp", _Port)
 	require.NoError(t, err)
@@ -66,9 +65,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}()
 
 	// populate store
-	store.InsertAccessLimit(ctx, _ProjectID, &proto.ServiceLimit{
-		Service:                 &_Service,
-		ComputeRateLimit:        100,
+	store.InsertAccessLimit(ctx, _ProjectID, &proto.Limit{
+		RateLimit:               100,
 		ComputeMonthlyQuota:     5,
 		ComputeMonthlyHardQuota: 10,
 	})
@@ -77,7 +75,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "mno", ProjectID: _ProjectID + 1})
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "xyz", ProjectID: _ProjectID + 1})
 
-	middleware := quotacontrol.NewMiddleware(middlewareClient, rateLimiter, quotacontrol.NoAction)
+	middleware := quotacontrol.NewMiddleware(quotaClient, rateLimiter, quotacontrol.NoAction)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	ctx = quotacontrol.WithTime(ctx, _Now)
@@ -93,9 +91,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}
 
 	// Add Quota and try again, it should fail because of rate limit
-	store.InsertAccessLimit(ctx, _ProjectID, &proto.ServiceLimit{
-		Service:                 &_Service,
-		ComputeRateLimit:        100,
+	store.InsertAccessLimit(ctx, _ProjectID, &proto.Limit{
+		RateLimit:               100,
 		ComputeMonthlyQuota:     5,
 		ComputeMonthlyHardQuota: 110,
 	})
@@ -116,8 +113,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 		}
 	}
 
-	middlewareClient.Stop(ctx)
-	usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, _Service, _Now.Add(-time.Hour), _Now.Add(time.Hour))
+	quotaClient.Stop(ctx)
+	usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 	assert.NoError(t, err)
 	assert.Equal(t, &proto.AccessTokenUsage{ValidCompute: 5, OverCompute: 6, LimitedCompute: 5}, &usage)
 

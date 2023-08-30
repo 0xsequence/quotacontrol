@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/rs/zerolog"
 )
 
 // UsageUpdater is an interface that allows to update the usage of a service
@@ -22,12 +23,13 @@ type usageTracker struct {
 	SyncMutex sync.Mutex
 
 	Usage map[time.Time]map[string]*proto.AccessTokenUsage
+
+	Log zerolog.Logger
 }
 
 // AddUsage adds the usage of a token.
 func (u *usageTracker) AddUsage(tokenKey string, now time.Time, usage proto.AccessTokenUsage) {
 	u.DataMutex.Lock()
-	defer u.DataMutex.Unlock()
 	if _, ok := u.Usage[now]; !ok {
 		u.Usage[now] = make(map[string]*proto.AccessTokenUsage)
 	}
@@ -35,20 +37,15 @@ func (u *usageTracker) AddUsage(tokenKey string, now time.Time, usage proto.Acce
 		u.Usage[now][tokenKey] = &proto.AccessTokenUsage{}
 	}
 	u.Usage[now][tokenKey].Add(usage)
+	u.DataMutex.Unlock()
 }
 
 // GetUpdates returns the usage of a service and clears the usage
 func (u *usageTracker) GetUpdates() map[time.Time]map[string]*proto.AccessTokenUsage {
 	u.DataMutex.Lock()
-	defer u.DataMutex.Unlock()
-	result := make(map[time.Time]map[string]*proto.AccessTokenUsage, len(u.Usage))
-	for k, v := range u.Usage {
-		result[k] = make(map[string]*proto.AccessTokenUsage, len(v))
-		for k1, v1 := range v {
-			result[k][k1] = v1
-		}
-		delete(u.Usage, k)
-	}
+	result := u.Usage
+	u.Usage = make(map[time.Time]map[string]*proto.AccessTokenUsage)
+	u.DataMutex.Unlock()
 	return result
 }
 
