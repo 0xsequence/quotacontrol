@@ -30,7 +30,6 @@ func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client,
 		service: service,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
-			Log:   log,
 		},
 		cache: NewRedisCache(redisClient, time.Minute),
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
@@ -97,20 +96,16 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 		switch err {
 		case nil:
 			if total > cfg.ComputeMonthlyHardQuota {
-				fmt.Println("adding limited")
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 				return false, proto.ErrLimitExceeded
 			}
 			if total > cfg.ComputeMonthlyQuota {
-				fmt.Println("adding over")
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
 				return true, nil
 			}
-			fmt.Println("adding valid")
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
 		case proto.ErrLimitExceeded:
-			fmt.Println("adding limited with err")
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 			return false, err
 		case ErrCachePing:

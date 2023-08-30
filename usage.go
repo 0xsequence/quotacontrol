@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/rs/zerolog"
 )
 
 // UsageUpdater is an interface that allows to update the usage of a service
@@ -23,8 +22,6 @@ type usageTracker struct {
 	SyncMutex sync.Mutex
 
 	Usage map[time.Time]map[string]*proto.AccessTokenUsage
-
-	Log zerolog.Logger
 }
 
 // AddUsage adds the usage of a token.
