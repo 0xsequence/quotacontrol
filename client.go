@@ -14,7 +14,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client, error) {
+type Notifier interface {
+	Notify(token *proto.AccessToken) error
+}
+
+func NewClient(log zerolog.Logger, service *proto.Service, notifer Notifier, cfg Config) (*Client, error) {
 	if !cfg.Enabled {
 		return nil, errors.New("0xsequence/quotacontrol: attempting to create client while config.Enabled is false")
 	}
@@ -31,7 +35,8 @@ func NewClient(log zerolog.Logger, service *proto.Service, cfg Config) (*Client,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
 		},
-		cache: NewRedisCache(redisClient, time.Minute),
+		cache:    NewRedisCache(redisClient, time.Minute),
+		notifier: notifer,
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.Token,
@@ -46,6 +51,7 @@ type Client struct {
 	service     *proto.Service
 	usage       *usageTracker
 	cache       CacheStorage
+	notifier    Notifier
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
 
@@ -92,17 +98,25 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 	}
 	// spend compute units
 	for i := time.Duration(0); i < 3; i++ {
-		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.ComputeMonthlyHardQuota)
+		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
 		case nil:
-			if total > cfg.ComputeMonthlyHardQuota {
+			if total > cfg.HardQuota {
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 				return false, proto.ErrLimitExceeded
 			}
-			if total > cfg.ComputeMonthlyQuota {
+			if total > cfg.FreeCU {
+				if total-computeUnits <= cfg.SoftQuota && total > cfg.SoftQuota {
+					if c.notifier != nil {
+						if err := c.notifier.Notify(token.AccessToken); err != nil {
+							c.Log.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
+						}
+					}
+				}
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
 				return true, nil
 			}
+
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 			return true, nil
 		case proto.ErrLimitExceeded:

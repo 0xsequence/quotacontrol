@@ -25,6 +25,13 @@ var (
 	_Now       = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 )
 
+type notifier map[string]struct{}
+
+func (n notifier) Notify(token *proto.AccessToken) error {
+	n[token.TokenKey] = struct{}{}
+	return nil
+}
+
 func TestMiddlewareUseToken(t *testing.T) {
 	s := miniredis.NewMiniRedis()
 	s.Start()
@@ -48,7 +55,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}
 
 	rateLimiter := quotacontrol.NewPublicRateLimiter(cfg)
-	quotaClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), proto.Ptr(proto.Service_Indexer), cfg)
+	notifier := notifier{}
+	quotaClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), proto.Ptr(proto.Service_Indexer), notifier, cfg)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -65,11 +73,13 @@ func TestMiddlewareUseToken(t *testing.T) {
 	}()
 
 	// populate store
-	store.InsertAccessLimit(ctx, _ProjectID, &proto.Limit{
-		RateLimit:               100,
-		ComputeMonthlyQuota:     5,
-		ComputeMonthlyHardQuota: 10,
-	})
+	limit := proto.Limit{
+		FreeCU:    5,
+		RateLimit: 100,
+		SoftQuota: 7,
+		HardQuota: 10,
+	}
+	store.InsertAccessLimit(ctx, _ProjectID, &limit)
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: _Tokens[0], ProjectID: _ProjectID})
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: _Tokens[1], ProjectID: _ProjectID})
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "mno", ProjectID: _ProjectID + 1})
@@ -83,6 +93,9 @@ func TestMiddlewareUseToken(t *testing.T) {
 		ok, err := executeRequest(ctx, handler, _Tokens[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
+
+		_, ok = notifier[_Tokens[0]]
+		assert.Equal(t, i >= int(limit.SoftQuota), ok, i)
 	}
 	for i := 0; i < 5; i++ {
 		ok, err := executeRequest(ctx, handler, _Tokens[0], "")
@@ -92,9 +105,9 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	// Add Quota and try again, it should fail because of rate limit
 	store.InsertAccessLimit(ctx, _ProjectID, &proto.Limit{
-		RateLimit:               100,
-		ComputeMonthlyQuota:     5,
-		ComputeMonthlyHardQuota: 110,
+		RateLimit: 100,
+		SoftQuota: 5,
+		HardQuota: 110,
 	})
 	cache.DeleteToken(ctx, _Tokens[0])
 

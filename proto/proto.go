@@ -46,16 +46,16 @@ func (t *AccessToken) ValidateService(service *Service) bool {
 
 func (l *Limit) Validate() error {
 	if l.RateLimit <= 0 {
-		return fmt.Errorf("computeRateLimit must be >= 0")
+		return fmt.Errorf("rateLimit must be >= 0")
 	}
-	if l.ComputeMonthlyQuota <= 0 {
-		return fmt.Errorf("computeMonthlyQuota must be >= 0")
+	if l.SoftQuota <= 0 {
+		return fmt.Errorf("softQuota must be >= 0")
 	}
-	if l.ComputeMonthlyHardQuota <= 0 {
-		return fmt.Errorf("computeMonthlyHardQuota must be >= 0")
+	if l.HardQuota <= 0 {
+		return fmt.Errorf("hardQuota must be >= 0")
 	}
-	if l.ComputeMonthlyQuota > l.ComputeMonthlyHardQuota {
-		return fmt.Errorf("computeMonthlyQuota must be <= computeMonthlyHardQuota")
+	if l.SoftQuota > l.HardQuota {
+		return fmt.Errorf("softQuota must be <= hardQuota")
 	}
 	return nil
 }

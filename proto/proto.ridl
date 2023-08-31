@@ -9,8 +9,9 @@ enum Service: uint16
 
 struct Limit
   - rateLimit: int64
-  - computeMonthlyQuota: int64
-  - computeMonthlyHardQuota: int64
+  - freeCU: int64
+  - softQuota: int64
+  - hardQuota: int64
 
 struct AccessToken
   - projectId: uint64
