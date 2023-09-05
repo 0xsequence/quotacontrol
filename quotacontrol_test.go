@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/goware/cachestore/redis"
@@ -84,7 +85,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "mno", ProjectID: _ProjectID + 1})
 	store.InsertToken(ctx, &proto.AccessToken{Active: true, TokenKey: "xyz", ProjectID: _ProjectID + 1})
 
-	middleware := quotacontrol.NewMiddleware(quotaClient, rateLimiter, quotacontrol.NoAction)
+	middleware := middleware.UseToken(quotaClient, rateLimiter, middleware.NoAction)
 	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	ctx = quotacontrol.WithTime(ctx, _Now)
@@ -139,7 +140,7 @@ func executeRequest(ctx context.Context, handler http.Handler, token, origin str
 	}
 	req.Header.Set("X-Real-IP", "127.0.0.1")
 	if token != "" {
-		req.Header.Set(quotacontrol.HeaderSequenceTokenKey, token)
+		req.Header.Set(middleware.HeaderSequenceTokenKey, token)
 	}
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req.WithContext(ctx))

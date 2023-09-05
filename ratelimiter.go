@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 
 	"github.com/go-chi/httprate"
@@ -58,9 +59,9 @@ func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits
 	}, nil
 }
 
-const defaultRPM = 120
+func NewPublicRateLimiter(cfg Config) middleware.Middleware {
+	const _DefaultRPM = 120
 
-func NewPublicRateLimiter(cfg Config) Middleware {
 	if !cfg.RateLimiter.Enabled {
 		return nil
 	}
@@ -73,7 +74,7 @@ func NewPublicRateLimiter(cfg Config) Middleware {
 		DBIndex:   cfg.Redis.DBIndex,
 	})
 
-	rpm := defaultRPM
+	rpm := _DefaultRPM
 	if cfg.RateLimiter.PublicRequestsPerMinute > 0 {
 		rpm = cfg.RateLimiter.PublicRequestsPerMinute
 	}

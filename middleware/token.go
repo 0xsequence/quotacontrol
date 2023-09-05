@@ -1,4 +1,4 @@
-package quotacontrol
+package middleware
 
 import (
 	"context"
@@ -12,13 +12,18 @@ const (
 	HeaderOrigin           = "Origin"
 )
 
+type QuotaClient interface {
+	FetchToken(ctx context.Context, tokenKey, origin string) (*proto.CachedToken, error)
+	UseToken(ctx context.Context, tokenKey, origin string) (bool, error)
+}
+
 type ContextFunc func(context.Context) context.Context
 
 func NoAction(ctx context.Context) context.Context { return ctx }
 
 type Middleware func(http.Handler) http.Handler
 
-func NewMiddleware(client *Client, noToken Middleware, onSuccess ContextFunc) Middleware {
+func UseToken(client QuotaClient, noToken Middleware, onSuccess ContextFunc) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenKey := r.Header.Get(HeaderSequenceTokenKey)
@@ -41,6 +46,23 @@ func NewMiddleware(client *Client, noToken Middleware, onSuccess ContextFunc) Mi
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(onSuccess(ctx)))
+		})
+	}
+}
+
+func CheckToken(client QuotaClient) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenKey := r.Header.Get(HeaderSequenceTokenKey)
+			if tokenKey == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if _, err := client.FetchToken(r.Context(), tokenKey, r.Header.Get(HeaderOrigin)); err != nil {
+				proto.RespondWithError(w, err)
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
