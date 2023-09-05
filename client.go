@@ -18,9 +18,9 @@ type Notifier interface {
 	Notify(token *proto.AccessToken) error
 }
 
-func NewClient(log zerolog.Logger, service *proto.Service, notifer Notifier, cfg Config) (*Client, error) {
+func NewClient(logger zerolog.Logger, service *proto.Service, notifer Notifier, cfg Config) *Client {
 	if !cfg.Enabled {
-		return nil, errors.New("0xsequence/quotacontrol: attempting to create client while config.Enabled is false")
+		logger.Error().Str("op", "new_client").Msg("-> quota control: disabled")
 	}
 
 	// TODO: set other options too...
@@ -43,8 +43,8 @@ func NewClient(log zerolog.Logger, service *proto.Service, notifer Notifier, cfg
 		}),
 		rateLimiter: NewRateLimiter(redisClient),
 		ticker:      time.NewTicker(cfg.UpdateFreq.Duration),
-		Log:         log,
-	}, nil
+		logger:      logger,
+	}
 }
 
 type Client struct {
@@ -57,34 +57,43 @@ type Client struct {
 
 	running int32
 	ticker  *time.Ticker
-	Log     zerolog.Logger
+	logger  zerolog.Logger
+}
+
+func (c *Client) FetchToken(ctx context.Context, tokenKey, origin string) (*proto.CachedToken, error) {
+	// fetch token
+	token, err := c.cache.GetToken(ctx, tokenKey)
+	if err != nil {
+		if !errors.Is(err, proto.ErrTokenNotFound) {
+			return nil, err
+		}
+		if token, err = c.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
+			return nil, err
+		}
+	}
+	// validate token
+	if err := c.validateToken(token.AccessToken, origin); err != nil {
+		return token, err
+	}
+	return token, nil
 }
 
 func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, error) {
 	now := GetTime(ctx)
 
-	// fetch token
-	token, err := c.cache.GetToken(ctx, tokenKey)
+	token, err := c.FetchToken(ctx, tokenKey, origin)
 	if err != nil {
-		if !errors.Is(err, proto.ErrTokenNotFound) {
-			return false, err
-		}
-		if token, err = c.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
-			return false, err
-		}
-	}
-	cfg := token.Limit
-
-	// validate token
-	if err := c.validateToken(token.AccessToken, origin); err != nil {
 		return false, err
 	}
+
 	key := GetQuotaKey(token.AccessToken.ProjectID, now)
 
 	computeUnits := GetComputeUnits(ctx)
 	if computeUnits == 0 {
 		return true, nil
 	}
+
+	cfg := token.Limit
 
 	// check rate limit
 	if ctx.Value(ctxKeyRateLimitSkip) == nil {
@@ -109,7 +118,7 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 				if total-computeUnits <= cfg.SoftQuota && total > cfg.SoftQuota {
 					if c.notifier != nil {
 						if err := c.notifier.Notify(token.AccessToken); err != nil {
-							c.Log.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
+							c.logger.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
 						}
 					}
 				}
@@ -158,7 +167,7 @@ func (c *Client) Run(ctx context.Context) error {
 		return fmt.Errorf("quota control: already running")
 	}
 
-	c.Log.Info().Str("op", "run").Msg("-> quota control: running")
+	c.logger.Info().Str("op", "run").Msg("-> quota control: running")
 
 	atomic.StoreInt32(&c.running, 1)
 	defer atomic.StoreInt32(&c.running, 0)
@@ -172,7 +181,7 @@ func (c *Client) Run(ctx context.Context) error {
 	// Start the http server and serve!
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
-			c.Log.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+			c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 		}
 	}
 	return nil
@@ -184,12 +193,12 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	}
 	atomic.StoreInt32(&c.running, 2)
 
-	c.Log.Info().Str("op", "stop").Msg("-> quota control: stopping..")
+	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopping..")
 	c.ticker.Stop()
 	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
-		c.Log.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+		c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 	}
-	c.Log.Info().Str("op", "stop").Msg("-> quota control: stopped.")
+	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopped.")
 }
 
 func (c *Client) isRunning() bool {

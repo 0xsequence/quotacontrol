@@ -56,8 +56,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	rateLimiter := quotacontrol.NewPublicRateLimiter(cfg)
 	notifier := notifier{}
-	quotaClient, err := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), proto.Ptr(proto.Service_Indexer), notifier, cfg)
-	require.NoError(t, err)
+	quotaClient := quotacontrol.NewClient(zerolog.New(zerolog.Nop()), proto.Ptr(proto.Service_Indexer), notifier, cfg)
 
 	ctx := context.Background()
 
