@@ -51,7 +51,6 @@ struct CachedToken
   - accessToken: AccessToken
 
 
-error 1000 NotImplemented   "Endpoint not implemented" HTTP 501
 error 1001 Timeout          "Request timed out" HTTP 408
 error 1002 LimitExceeded    "Request limit exceeded" HTTP 429
 error 1003 InvalidOrigin    "Invalid origin" HTTP 403

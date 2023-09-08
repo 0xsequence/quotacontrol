@@ -10,11 +10,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type CacheStorage interface {
+type Cache interface {
 	GetToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error)
 	SetToken(ctx context.Context, token *proto.CachedToken) error
 	DeleteToken(ctx context.Context, tokenKey string) error
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
+	PeekComputeUnits(ctx context.Context, redisKey string) (int64, error)
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
 }
 
@@ -25,9 +26,9 @@ var (
 	ErrCacheWait = errors.New("quotacontrol: cache wait")
 )
 
-var _ CacheStorage = (*RedisCache)(nil)
+var _ Cache = (*RedisCache)(nil)
 
-func NewRedisCache(redisClient *redis.Client, ttl time.Duration) CacheStorage {
+func NewRedisCache(redisClient *redis.Client, ttl time.Duration) Cache {
 	return &RedisCache{
 		client: redisClient,
 		ttl:    ttl,
@@ -70,25 +71,32 @@ func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amoun
 	return s.client.Set(ctx, redisKey, amount, s.ttl).Err()
 }
 
-func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
+func (s *RedisCache) PeekComputeUnits(ctx context.Context, redisKey string) (int64, error) {
 	const SpecialValue = -1
 	v, err := s.client.Get(ctx, redisKey).Int64()
-	if err != nil {
-		if !errors.Is(err, redis.Nil) {
-			return 0, err
-		}
-		ok, err := s.client.SetNX(ctx, redisKey, SpecialValue, time.Second*2).Result()
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
+	if err == nil {
+		if v == SpecialValue {
 			return 0, ErrCacheWait
 		}
-		return 0, ErrCachePing
+		return v, nil
 	}
-
-	if v == SpecialValue {
+	if !errors.Is(err, redis.Nil) {
+		return 0, err
+	}
+	ok, err := s.client.SetNX(ctx, redisKey, SpecialValue, time.Second*2).Result()
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
 		return 0, ErrCacheWait
+	}
+	return 0, ErrCachePing
+}
+
+func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
+	v, err := s.PeekComputeUnits(ctx, redisKey)
+	if err != nil {
+		return 0, err
 	}
 	if v+amount > limit {
 		return v + amount, proto.ErrLimitExceeded

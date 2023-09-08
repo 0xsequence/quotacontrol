@@ -59,11 +59,13 @@ func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits
 	}, nil
 }
 
-func NewPublicRateLimiter(cfg Config) middleware.Middleware {
+func NewPublicRateLimiter(cfg Config) func(next http.Handler) http.Handler {
 	const _DefaultRPM = 120
 
 	if !cfg.RateLimiter.Enabled {
-		return nil
+		return func(h http.Handler) http.Handler {
+			return h
+		}
 	}
 
 	limitCounter, _ := httprateredis.NewRedisLimitCounter(&httprateredis.Config{
@@ -85,5 +87,14 @@ func NewPublicRateLimiter(cfg Config) middleware.Middleware {
 		}),
 		httprate.WithLimitCounter(limitCounter),
 	}
-	return httprate.Limit(rpm, time.Minute, options...)
+	return func(h http.Handler) http.Handler {
+		rl := httprate.Limit(rpm, time.Minute, options...)(h)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if middleware.GetToken(r.Context()) == nil {
+				rl.ServeHTTP(w, r)
+				return
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
 }

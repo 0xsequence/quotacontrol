@@ -19,10 +19,6 @@ type Notifier interface {
 }
 
 func NewClient(logger zerolog.Logger, service *proto.Service, notifer Notifier, cfg Config) *Client {
-	if !cfg.Enabled {
-		logger.Error().Str("op", "new_client").Msg("-> quota control: disabled")
-	}
-
 	// TODO: set other options too...
 	redisClient := redisclient.NewClient(&redisclient.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -50,7 +46,7 @@ func NewClient(logger zerolog.Logger, service *proto.Service, notifer Notifier, 
 type Client struct {
 	service     *proto.Service
 	usage       *usageTracker
-	cache       CacheStorage
+	cache       Cache
 	notifier    Notifier
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
@@ -60,6 +56,7 @@ type Client struct {
 	logger  zerolog.Logger
 }
 
+// FetchToken fetches and validates the token from cache or from the quota server.
 func (c *Client) FetchToken(ctx context.Context, tokenKey, origin string) (*proto.CachedToken, error) {
 	// fetch token
 	token, err := c.cache.GetToken(ctx, tokenKey)
@@ -78,34 +75,37 @@ func (c *Client) FetchToken(ctx context.Context, tokenKey, origin string) (*prot
 	return token, nil
 }
 
-func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, error) {
-	now := GetTime(ctx)
-
-	token, err := c.FetchToken(ctx, tokenKey, origin)
-	if err != nil {
-		return false, err
+// GetUsage returns the current usage of the token.
+func (c *Client) GetUsage(ctx context.Context, token *proto.CachedToken, now time.Time) (int64, error) {
+	key := getQuotaKey(token.AccessToken.ProjectID, now)
+	for i := time.Duration(0); i < 3; i++ {
+		usage, err := c.cache.PeekComputeUnits(ctx, key)
+		switch err {
+		case nil:
+			return usage, nil
+		case ErrCachePing:
+			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, now)
+			if err != nil {
+				return 0, err
+			}
+			if !ok {
+				return 0, proto.ErrTimeout
+			}
+			fallthrough
+		case ErrCacheWait:
+			time.Sleep(time.Millisecond * 100 * (i + 1))
+		default:
+			return 0, err
+		}
 	}
+	return 0, proto.ErrTimeout
+}
 
-	key := GetQuotaKey(token.AccessToken.ProjectID, now)
-
-	computeUnits := GetComputeUnits(ctx)
-	if computeUnits == 0 {
-		return true, nil
-	}
-
+func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, computeUnits int64, now time.Time) (bool, error) {
+	tokenKey := token.AccessToken.TokenKey
 	cfg := token.Limit
-
-	// check rate limit
-	if ctx.Value(ctxKeyRateLimitSkip) == nil {
-		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
-		if err != nil {
-			return false, err
-		}
-		if result.Allowed == 0 {
-			return false, proto.ErrLimitExceeded
-		}
-	}
 	// spend compute units
+	key := getQuotaKey(token.AccessToken.ProjectID, now)
 	for i := time.Duration(0); i < 3; i++ {
 		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
@@ -114,19 +114,18 @@ func (c *Client) UseToken(ctx context.Context, tokenKey, origin string) (bool, e
 				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
 				return false, proto.ErrLimitExceeded
 			}
-			if total > cfg.FreeCU {
-				if total-computeUnits <= cfg.SoftQuota && total > cfg.SoftQuota {
-					if c.notifier != nil {
-						if err := c.notifier.Notify(token.AccessToken); err != nil {
-							c.logger.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
-						}
-					}
-				}
-				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
+			if total <= cfg.FreeCU {
+				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
 				return true, nil
 			}
-
-			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
+			if total-computeUnits <= cfg.SoftQuota && total > cfg.SoftQuota {
+				if c.notifier != nil {
+					if err := c.notifier.Notify(token.AccessToken); err != nil {
+						c.logger.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
+					}
+				}
+			}
+			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
 			return true, nil
 		case proto.ErrLimitExceeded:
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
@@ -182,7 +181,9 @@ func (c *Client) Run(ctx context.Context) error {
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
 			c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+			continue
 		}
+		c.logger.Info().Str("op", "run").Msg("-> quota control: synced usage")
 	}
 	return nil
 }
@@ -219,6 +220,6 @@ func (c *authorizedClient) Do(req *http.Request) (*http.Response, error) {
 	return c.client.Do(req)
 }
 
-func GetQuotaKey(projectID uint64, now time.Time) string {
+func getQuotaKey(projectID uint64, now time.Time) string {
 	return fmt.Sprintf("project:%v:%s", projectID, now.Format("2006-01"))
 }

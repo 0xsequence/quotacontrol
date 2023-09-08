@@ -2,19 +2,27 @@ package quotacontrol
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/jxskiss/base62"
 )
 
 type LimitStore interface {
 	GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error)
+	SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error
 }
 
 type TokenStore interface {
+	ListByProjectID(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error)
 	FindByTokenKey(ctx context.Context, tokenKey string) (*proto.AccessToken, error)
+	InsertToken(ctx context.Context, token *proto.AccessToken) error
+	UpdateToken(ctx context.Context, token *proto.AccessToken) (*proto.AccessToken, error)
 }
 
 type UsageStore interface {
@@ -22,20 +30,22 @@ type UsageStore interface {
 	UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error
 }
 
-func NewQuotaControl(cache CacheStorage, limit LimitStore, token TokenStore, usage UsageStore) proto.QuotaControl {
+func NewQuotaControl(cache Cache, limit LimitStore, token TokenStore, usage UsageStore) proto.QuotaControl {
 	return &quotaControl{
 		cache:      cache,
 		limitStore: limit,
 		tokenStore: token,
 		usageStore: usage,
+		tokenGen:   DefaultTokenKey,
 	}
 }
 
 type quotaControl struct {
-	cache      CacheStorage
+	cache      Cache
 	limitStore LimitStore
 	tokenStore TokenStore
 	usageStore UsageStore
+	tokenGen   func(projectID uint64) string
 }
 
 func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (*proto.AccessTokenUsage, error) {
@@ -53,7 +63,7 @@ func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now ti
 	if err != nil {
 		return false, err
 	}
-	if err := q.cache.SetComputeUnits(ctx, GetQuotaKey(projectID, now), usage.GetTotalUsage()); err != nil {
+	if err := q.cache.SetComputeUnits(ctx, getQuotaKey(projectID, now), usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -93,29 +103,86 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 }
 
 func (q quotaControl) GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
-	return nil, proto.ErrNotImplemented
+	return q.limitStore.GetAccessLimit(ctx, projectID)
 }
 
 func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) (bool, error) {
-	return false, proto.ErrNotImplemented
+	if err := config.Validate(); err != nil {
+		return false, proto.WebRPCError{HTTPStatus: http.StatusBadRequest, Message: err.Error()}
+	}
+	err := q.limitStore.SetAccessLimit(ctx, projectID, config)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
-	return nil, proto.ErrNotImplemented
+	return q.tokenStore.FindByTokenKey(ctx, tokenKey)
 }
 
 func (q quotaControl) CreateAccessToken(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	return nil, proto.ErrNotImplemented
+	token := proto.AccessToken{
+		ProjectID:       projectID,
+		DisplayName:     displayName,
+		TokenKey:        q.tokenGen(projectID),
+		Active:          true,
+		AllowedOrigins:  allowedOrigins,
+		AllowedServices: allowedServices,
+	}
+	if err := q.tokenStore.InsertToken(ctx, &token); err != nil {
+		return nil, err
+	}
+	return &token, nil
 }
 
 func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	return nil, proto.ErrNotImplemented
+	token, err := q.tokenStore.FindByTokenKey(ctx, tokenKey)
+	if err != nil {
+		return nil, err
+	}
+	if displayName != nil {
+		token.DisplayName = *displayName
+	}
+	if allowedOrigins != nil {
+		token.AllowedOrigins = allowedOrigins
+	}
+	if allowedServices != nil {
+		token.AllowedServices = allowedServices
+	}
+	if token, err = q.tokenStore.UpdateToken(ctx, token); err != nil {
+		return nil, err
+	}
+	return token, nil
 }
 
 func (q quotaControl) ListAccessTokens(ctx context.Context, projectID uint64) ([]*proto.AccessToken, error) {
-	return nil, proto.ErrNotImplemented
+	return q.tokenStore.ListByProjectID(ctx, projectID, nil)
 }
 
 func (q quotaControl) DisableAccessToken(ctx context.Context, tokenKey string) (bool, error) {
-	return false, proto.ErrNotImplemented
+	token, err := q.tokenStore.FindByTokenKey(ctx, tokenKey)
+	if err != nil {
+		return false, err
+	}
+	token.Active = false
+	if _, err := q.tokenStore.UpdateToken(ctx, token); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func DefaultTokenKey(projectID uint64) string {
+	buf := make([]byte, 24)
+	binary.BigEndian.PutUint64(buf, projectID)
+	rand.Read(buf[8:])
+	return base62.EncodeToString(buf)
+}
+
+func GetProjectID(tokenKey string) (uint64, error) {
+	buf, err := base62.DecodeString(tokenKey)
+	if err != nil || len(buf) < 8 {
+		return 0, proto.ErrTokenNotFound
+	}
+	return binary.BigEndian.Uint64(buf[:8]), nil
 }

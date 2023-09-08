@@ -23,8 +23,8 @@ type MemoryStore struct {
 	usage  map[string]*proto.AccessTokenUsage
 }
 
-func (m MemoryStore) InsertAccessLimit(ctx context.Context, projectID uint64, limit *proto.Limit) error {
-	m.limits[projectID] = limit
+func (m MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error {
+	m.limits[projectID] = config
 	return nil
 }
 
@@ -41,12 +41,27 @@ func (m MemoryStore) InsertToken(ctx context.Context, token *proto.AccessToken) 
 	return nil
 }
 
+func (m MemoryStore) UpdateToken(ctx context.Context, token *proto.AccessToken) (*proto.AccessToken, error) {
+	m.tokens[token.TokenKey] = token
+	return token, nil
+}
+
 func (m MemoryStore) FindByTokenKey(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
 	token, ok := m.tokens[tokenKey]
 	if !ok {
 		return nil, proto.ErrTokenNotFound
 	}
 	return token, nil
+}
+
+func (m MemoryStore) ListByProjectID(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error) {
+	tokens := []*proto.AccessToken{}
+	for i, v := range m.tokens {
+		if v.ProjectID == projectID {
+			tokens = append(tokens, m.tokens[i])
+		}
+	}
+	return tokens, nil
 }
 
 func (m MemoryStore) GetAccountTotalUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessTokenUsage, error) {
