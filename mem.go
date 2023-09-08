@@ -46,7 +46,7 @@ func (m MemoryStore) UpdateToken(ctx context.Context, token *proto.AccessToken) 
 	return token, nil
 }
 
-func (m MemoryStore) FindByTokenKey(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
+func (m MemoryStore) FindToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
 	token, ok := m.tokens[tokenKey]
 	if !ok {
 		return nil, proto.ErrTokenNotFound
@@ -54,7 +54,7 @@ func (m MemoryStore) FindByTokenKey(ctx context.Context, tokenKey string) (*prot
 	return token, nil
 }
 
-func (m MemoryStore) ListByProjectID(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error) {
+func (m MemoryStore) ListTokens(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error) {
 	tokens := []*proto.AccessToken{}
 	for i, v := range m.tokens {
 		if v.ProjectID == projectID {

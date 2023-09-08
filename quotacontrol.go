@@ -19,8 +19,8 @@ type LimitStore interface {
 }
 
 type TokenStore interface {
-	ListByProjectID(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error)
-	FindByTokenKey(ctx context.Context, tokenKey string) (*proto.AccessToken, error)
+	ListTokens(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error)
+	FindToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error)
 	InsertToken(ctx context.Context, token *proto.AccessToken) error
 	UpdateToken(ctx context.Context, token *proto.AccessToken) (*proto.AccessToken, error)
 }
@@ -70,7 +70,7 @@ func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now ti
 }
 
 func (q quotaControl) RetrieveToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error) {
-	token, err := q.tokenStore.FindByTokenKey(ctx, tokenKey)
+	token, err := q.tokenStore.FindToken(ctx, tokenKey)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, conf
 }
 
 func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
-	return q.tokenStore.FindByTokenKey(ctx, tokenKey)
+	return q.tokenStore.FindToken(ctx, tokenKey)
 }
 
 func (q quotaControl) CreateAccessToken(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
@@ -137,7 +137,7 @@ func (q quotaControl) CreateAccessToken(ctx context.Context, projectID uint64, d
 }
 
 func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	token, err := q.tokenStore.FindByTokenKey(ctx, tokenKey)
+	token, err := q.tokenStore.FindToken(ctx, tokenKey)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +157,11 @@ func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, di
 }
 
 func (q quotaControl) ListAccessTokens(ctx context.Context, projectID uint64) ([]*proto.AccessToken, error) {
-	return q.tokenStore.ListByProjectID(ctx, projectID, nil)
+	return q.tokenStore.ListTokens(ctx, projectID, nil)
 }
 
 func (q quotaControl) DisableAccessToken(ctx context.Context, tokenKey string) (bool, error) {
-	token, err := q.tokenStore.FindByTokenKey(ctx, tokenKey)
+	token, err := q.tokenStore.FindToken(ctx, tokenKey)
 	if err != nil {
 		return false, err
 	}
