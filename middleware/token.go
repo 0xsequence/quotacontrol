@@ -13,14 +13,21 @@ const (
 	HeaderOrigin           = "Origin"
 )
 
+// Client is the interface that wraps the basic FetchToken, GetUsage and SpendToken methods.
 type Client interface {
 	FetchToken(ctx context.Context, tokenKey, origin string) (*proto.CachedToken, error)
 	GetUsage(ctx context.Context, token *proto.CachedToken, now time.Time) (int64, error)
 	SpendToken(ctx context.Context, token *proto.CachedToken, computeUnits int64, now time.Time) (bool, error)
 }
 
+// ErrorHandler is a function that handles errors.
+type ErrorHandler func(w http.ResponseWriter, err error)
+
 // VerifyToken is a middleware that verifies the token and adds it to the request context.
-func VerifyToken(client Client) func(next http.Handler) http.Handler {
+func VerifyToken(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = DefaultErrorHandler
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// skip with no token key
@@ -33,7 +40,7 @@ func VerifyToken(client Client) func(next http.Handler) http.Handler {
 			ctx := r.Context()
 			token, err := client.FetchToken(ctx, tokenKey, r.Header.Get(HeaderOrigin))
 			if err != nil {
-				proto.RespondWithError(w, err)
+				eh(w, err)
 				return
 			}
 
@@ -45,7 +52,10 @@ func VerifyToken(client Client) func(next http.Handler) http.Handler {
 }
 
 // EnsureUsage is a middleware that checks if the token has enough usage left.
-func EnsureUsage(client Client) func(next http.Handler) http.Handler {
+func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = DefaultErrorHandler
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -64,11 +74,11 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 
 			usage, err := client.GetUsage(ctx, token, GetTime(ctx))
 			if err != nil {
-				proto.RespondWithError(w, err)
+				eh(w, err)
 				return
 			}
 			if usage+cu > token.Limit.HardQuota {
-				proto.RespondWithError(w, proto.ErrLimitExceeded)
+				eh(w, proto.ErrLimitExceeded)
 				return
 			}
 
@@ -78,7 +88,10 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 }
 
 // SpendUsage spends the usage before calling next handler and sets the result in the context.
-func SpendUsage(client Client) func(next http.Handler) http.Handler {
+func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = DefaultErrorHandler
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -91,12 +104,12 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 
 			ok, err := client.SpendToken(ctx, token, GetComputeUnits(ctx), GetTime(ctx))
 			if err != nil {
-				proto.RespondWithError(w, err)
+				eh(w, err)
 				return
 			}
 
 			if !ok {
-				proto.RespondWithError(w, proto.ErrLimitExceeded)
+				eh(w, proto.ErrLimitExceeded)
 				return
 			}
 

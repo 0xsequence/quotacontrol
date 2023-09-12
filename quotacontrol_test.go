@@ -57,17 +57,13 @@ func TestMiddlewareUseToken(t *testing.T) {
 	ctx := context.Background()
 	store.SetAccessLimit(ctx, _ProjectID, &limit)
 	store.InsertToken(ctx, &token)
-	client := NewClient(zerolog.New(zerolog.Nop()), proto.Ptr(proto.Service_Indexer), notifier, cfg)
+	client := NewClient(zerolog.Nop(), proto.Service_Indexer, notifier, cfg)
 
 	server := http.Server{
 		Addr:    _Port,
 		Handler: proto.NewQuotaControlServer(NewQuotaControl(cache, store, store, store)),
 	}
-
-	go func() {
-		require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed)
-	}()
-
+	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
 	defer server.Close()
 
 	router := chi.NewRouter()
@@ -75,12 +71,12 @@ func TestMiddlewareUseToken(t *testing.T) {
 	router.Use(middleware.ChangeContext(func(ctx context.Context) context.Context {
 		return middleware.WithComputeUnits(ctx, 2)
 	}))
-	router.Use(middleware.VerifyToken(client))
+	router.Use(middleware.VerifyToken(client, nil))
 	router.Use(NewPublicRateLimiter(cfg))
 	router.Use(middleware.ChangeContext(func(ctx context.Context) context.Context {
 		return middleware.AddComputeUnits(ctx, -1)
 	}))
-	router.Use(middleware.SpendUsage(client))
+	router.Use(middleware.SpendUsage(client, nil))
 
 	var counter int64
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {

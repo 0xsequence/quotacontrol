@@ -18,7 +18,7 @@ type Notifier interface {
 	Notify(token *proto.AccessToken) error
 }
 
-func NewClient(logger zerolog.Logger, service *proto.Service, notifer Notifier, cfg Config) *Client {
+func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, cfg Config) *Client {
 	// TODO: set other options too...
 	redisClient := redisclient.NewClient(&redisclient.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -44,7 +44,7 @@ func NewClient(logger zerolog.Logger, service *proto.Service, notifer Notifier, 
 }
 
 type Client struct {
-	service     *proto.Service
+	service     proto.Service
 	usage       *usageTracker
 	cache       Cache
 	notifier    Notifier
@@ -155,7 +155,7 @@ func (c *Client) validateToken(token *proto.AccessToken, origin string) (err err
 	if !token.ValidateOrigin(origin) {
 		return proto.ErrInvalidOrigin
 	}
-	if !token.ValidateService(c.service) {
+	if !token.ValidateService(&c.service) {
 		return proto.ErrInvalidService
 	}
 	return nil
@@ -179,7 +179,7 @@ func (c *Client) Run(ctx context.Context) error {
 
 	// Start the http server and serve!
 	for range c.ticker.C {
-		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
+		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
 			c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 			continue
 		}
@@ -196,7 +196,7 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 
 	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopping..")
 	c.ticker.Stop()
-	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
+	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
 		c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 	}
 	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopped.")
