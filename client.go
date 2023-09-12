@@ -27,6 +27,7 @@ func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, c
 	})
 
 	return &Client{
+		cfg:     cfg,
 		service: service,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
@@ -38,12 +39,13 @@ func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, c
 			bearerToken: cfg.Token,
 		}),
 		rateLimiter: NewRateLimiter(redisClient),
-		ticker:      time.NewTicker(cfg.UpdateFreq.Duration),
 		logger:      logger,
 	}
 }
 
 type Client struct {
+	cfg Config
+
 	service     proto.Service
 	usage       *usageTracker
 	cache       Cache
@@ -176,7 +178,7 @@ func (c *Client) Run(ctx context.Context) error {
 		<-ctx.Done()
 		c.Stop(context.Background())
 	}()
-
+	c.ticker = time.NewTicker(c.cfg.UpdateFreq.Duration)
 	// Start the http server and serve!
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
