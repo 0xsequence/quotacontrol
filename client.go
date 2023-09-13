@@ -10,6 +10,7 @@ import (
 
 	redisclient "github.com/redis/go-redis/v9"
 
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/rs/zerolog"
 )
@@ -108,6 +109,16 @@ func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, compu
 	cfg := token.Limit
 	// spend compute units
 	key := getQuotaKey(token.AccessToken.ProjectID, now)
+	// check rate limit
+	if !middleware.IsSkipRateLimit(ctx) {
+		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
+		if err != nil {
+			return false, err
+		}
+		if result.Allowed == 0 {
+			return false, proto.ErrLimitExceeded
+		}
+	}
 	for i := time.Duration(0); i < 3; i++ {
 		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
