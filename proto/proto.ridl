@@ -6,6 +6,7 @@ version = v0.1.0
 enum Service: uint16
   - NodeGateway
   - Indexer
+  - Relayer
 
 struct Limit
   - rateLimit: int64
