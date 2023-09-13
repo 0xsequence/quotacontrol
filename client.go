@@ -27,6 +27,11 @@ func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, c
 		MaxIdleConns: cfg.Redis.MaxIdle,
 	})
 
+	ticker := (*time.Ticker)(nil)
+	if cfg.UpdateFreq.Duration > 0 {
+		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
+	}
+
 	return &Client{
 		cfg:     cfg,
 		service: service,
@@ -40,6 +45,7 @@ func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, c
 			bearerToken: cfg.Token,
 		}),
 		rateLimiter: NewRateLimiter(redisClient),
+		ticker:      ticker,
 		logger:      logger,
 	}
 }
@@ -189,8 +195,10 @@ func (c *Client) Run(ctx context.Context) error {
 		<-ctx.Done()
 		c.Stop(context.Background())
 	}()
-	c.ticker = time.NewTicker(c.cfg.UpdateFreq.Duration)
-	// Start the http server and serve!
+	if c.ticker == nil {
+		return nil
+	}
+	// Start the sync
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
 			c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
@@ -208,7 +216,9 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	atomic.StoreInt32(&c.running, 2)
 
 	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopping..")
-	c.ticker.Stop()
+	if c.ticker != nil {
+		c.ticker.Stop()
+	}
 	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
 		c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
 	}
