@@ -87,7 +87,6 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 	}
 }
 
-// SpendUsage spends the usage before calling next handler and sets the result in the context.
 func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
 		eh = DefaultErrorHandler
@@ -95,14 +94,14 @@ func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Han
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+			token, cu := GetToken(ctx), GetComputeUnits(ctx)
 
-			token := GetToken(ctx)
-			if token == nil {
+			if token == nil || cu == 0 {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			ok, err := client.SpendToken(ctx, token, GetComputeUnits(ctx), GetTime(ctx))
+			ok, err := client.SpendToken(ctx, token, cu, GetTime(ctx))
 			if err != nil {
 				eh(w, err)
 				return
