@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -17,21 +16,36 @@ func (k *contextKey) String() string {
 }
 
 var (
-	ctxKeyToken         = &contextKey{"Token"}
+	ctxKeyTokenKey      = &contextKey{"TokenKey"}
+	ctxKeyCachedToken   = &contextKey{"CachedToken"}
 	ctxKeyComputeUnits  = &contextKey{"ComputeUnits"}
 	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
 	ctxKeyTime          = &contextKey{"Time"}
 	ctxKeyResult        = &contextKey{"Result"}
 )
 
-// WithToken adds the token to the context.
-func WithToken(ctx context.Context, token *proto.CachedToken) context.Context {
-	return context.WithValue(ctx, ctxKeyToken, token)
+// WithTokenKey adds the token key to the context.
+func WithTokenKey(ctx context.Context, tokenKey string) context.Context {
+	return context.WithValue(ctx, ctxKeyTokenKey, tokenKey)
+}
+
+// getTokenKey returns the token key from the context.
+func getTokenKey(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyTokenKey).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// withToken adds the token to the context.
+func withToken(ctx context.Context, token *proto.CachedToken) context.Context {
+	return context.WithValue(ctx, ctxKeyCachedToken, token)
 }
 
 // GetToken returns the token from the context.
 func GetToken(ctx context.Context) *proto.CachedToken {
-	v, ok := ctx.Value(ctxKeyToken).(*proto.CachedToken)
+	v, ok := ctx.Value(ctxKeyCachedToken).(*proto.CachedToken)
 	if !ok {
 		return nil
 	}
@@ -74,8 +88,8 @@ func WithTime(ctx context.Context, now time.Time) context.Context {
 	return context.WithValue(ctx, ctxKeyTime, now)
 }
 
-// GetTime returns the time from the context. If the time is not set, it returns the current time.
-func GetTime(ctx context.Context) time.Time {
+// getTime returns the time from the context. If the time is not set, it returns the current time.
+func getTime(ctx context.Context) time.Time {
 	v, ok := ctx.Value(ctxKeyTime).(time.Time)
 	if !ok {
 		return time.Now().Truncate(time.Hour * 24)
@@ -83,8 +97,8 @@ func GetTime(ctx context.Context) time.Time {
 	return v
 }
 
-// WithResult sets the result of spending in the context.
-func WithResult(ctx context.Context) context.Context {
+// withResult sets the result of spending in the context.
+func withResult(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ctxKeyResult, struct{}{})
 }
 
@@ -92,12 +106,4 @@ func WithResult(ctx context.Context) context.Context {
 func GetResult(ctx context.Context) bool {
 	_, ok := ctx.Value(ctxKeyResult).(struct{})
 	return ok
-}
-
-func ChangeContext(fn func(context.Context) context.Context) func(next http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.ServeHTTP(w, r.WithContext(fn(r.Context())))
-		})
-	}
 }

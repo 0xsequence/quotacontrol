@@ -68,12 +68,13 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	router := chi.NewRouter()
 	// we set the compute units to 2, then in another handler we remove 1 before spending
-	router.Use(middleware.ChangeContext(func(ctx context.Context) context.Context {
+	router.Use(changeContext(func(ctx context.Context) context.Context {
 		return middleware.WithComputeUnits(ctx, 2)
 	}))
+	router.Use(middleware.SetTokenKey)
 	router.Use(middleware.VerifyToken(client, nil))
 	router.Use(NewPublicRateLimiter(cfg))
-	router.Use(middleware.ChangeContext(func(ctx context.Context) context.Context {
+	router.Use(changeContext(func(ctx context.Context) context.Context {
 		return middleware.AddComputeUnits(ctx, -1)
 	}))
 	router.Use(middleware.SpendUsage(client, nil))
@@ -180,4 +181,12 @@ type notifier map[string]struct{}
 func (n notifier) Notify(token *proto.AccessToken) error {
 	n[token.TokenKey] = struct{}{}
 	return nil
+}
+
+func changeContext(fn func(context.Context) context.Context) func(next http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r.WithContext(fn(r.Context())))
+		})
+	}
 }
