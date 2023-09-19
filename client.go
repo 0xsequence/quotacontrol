@@ -19,7 +19,7 @@ type Notifier interface {
 	Notify(token *proto.AccessToken) error
 }
 
-func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, cfg Config) *Client {
+func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client {
 	// TODO: set other options too...
 	redisClient := redisclient.NewClient(&redisclient.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -38,8 +38,7 @@ func NewClient(logger zerolog.Logger, service proto.Service, notifer Notifier, c
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
 		},
-		cache:    NewRedisCache(redisClient, time.Minute),
-		notifier: notifer,
+		cache: NewRedisCache(redisClient, time.Minute),
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.Token,
@@ -56,7 +55,6 @@ type Client struct {
 	service     proto.Service
 	usage       *usageTracker
 	cache       Cache
-	notifier    Notifier
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
 
@@ -138,10 +136,8 @@ func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, compu
 				return true, nil
 			}
 			if total-computeUnits <= cfg.SoftQuota && total > cfg.SoftQuota {
-				if c.notifier != nil {
-					if err := c.notifier.Notify(token.AccessToken); err != nil {
-						c.logger.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
-					}
+				if _, err := c.quotaClient.NotifyEvent(ctx, token.AccessToken.ProjectID, proto.Ptr(proto.EventType_FreeCU)); err != nil {
+					c.logger.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
 				}
 			}
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})

@@ -51,6 +51,9 @@ struct CachedToken
   - limit: Limit
   - accessToken: AccessToken
 
+enum EventType: uint16
+  - FreeCU # Project runs out of free compute units
+
 
 error 1001 Timeout          "Request timed out" HTTP 408
 error 1002 LimitExceeded    "Request limit exceeded" HTTP 429
@@ -75,4 +78,5 @@ service QuotaControl
   - GetUsage(projectID: uint64, service?: Service, now: timestamp) => (usage: AccessTokenUsage)
   - PrepareUsage(projectID: uint64, now: timestamp) => (ok: bool)
   - RetrieveToken(tokenKey: string) => (token: CachedToken)
+  - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessTokenUsage>) => (ok: map<string,bool>)

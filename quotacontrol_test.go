@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -51,17 +52,18 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	redisClient := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
 	cache := NewRedisCache(redisClient, time.Minute)
-	notifier := make(notifier)
 	store := NewMemoryStore()
 	// populate store
 	ctx := context.Background()
 	store.SetAccessLimit(ctx, _ProjectID, &limit)
 	store.InsertToken(ctx, &token)
-	client := NewClient(zerolog.Nop(), proto.Service_Indexer, notifier, cfg)
-
+	client := NewClient(zerolog.Nop(), proto.Service_Indexer, cfg)
+	qc := quotaControl{
+		QuotaControl: NewQuotaControl(cache, store, store, store),
+	}
 	server := http.Server{
 		Addr:    _Port,
-		Handler: proto.NewQuotaControlServer(NewQuotaControl(cache, store, store, store)),
+		Handler: proto.NewQuotaControlServer(&qc),
 	}
 	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
 	defer server.Close()
@@ -102,7 +104,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			_, ok = notifier[_Tokens[0]]
+			_, ok = qc.notifications.Load(_ProjectID)
 			assert.Equal(t, i >= int(limit.SoftQuota), ok, i)
 		}
 
@@ -176,11 +178,15 @@ func executeRequest(ctx context.Context, handler http.Handler, token, origin str
 	return true, nil
 }
 
-type notifier map[string]struct{}
+// quotaControl is a wrapper of quotacontrol
+type quotaControl struct {
+	proto.QuotaControl
+	notifications sync.Map
+}
 
-func (n notifier) Notify(token *proto.AccessToken) error {
-	n[token.TokenKey] = struct{}{}
-	return nil
+func (q *quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+	q.notifications.Store(projectID, struct{}{})
+	return true, nil
 }
 
 func changeContext(fn func(context.Context) context.Context) func(next http.Handler) http.Handler {

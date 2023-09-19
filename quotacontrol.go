@@ -86,6 +86,10 @@ func (q quotaControl) RetrieveToken(ctx context.Context, tokenKey string) (*prot
 	return &record, nil
 }
 
+func (q quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+	return true, nil
+}
+
 func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessTokenUsage) (map[string]bool, error) {
 	var errs []error
 	m := make(map[string]bool, len(usage))
