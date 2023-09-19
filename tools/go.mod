@@ -2,10 +2,11 @@ module tools
 
 go 1.20
 
-require github.com/webrpc/webrpc v0.12.0
+require github.com/webrpc/webrpc v0.13.0
 
 require (
 	github.com/Microsoft/go-winio v0.6.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/golang-cz/textcase v1.2.0 // indirect
 	github.com/google/go-github v17.0.0+incompatible // indirect
