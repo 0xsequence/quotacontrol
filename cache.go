@@ -98,8 +98,8 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	if err != nil {
 		return 0, err
 	}
-	if v+amount > limit {
-		return v + amount, proto.ErrLimitExceeded
+	if v > limit {
+		return v, proto.ErrLimitExceeded
 	}
 	value, err := s.client.IncrBy(ctx, redisKey, amount).Result()
 	if err != nil {

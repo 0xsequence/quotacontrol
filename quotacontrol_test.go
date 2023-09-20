@@ -59,7 +59,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 	store.InsertToken(ctx, &token)
 	client := NewClient(zerolog.Nop(), proto.Service_Indexer, cfg)
 	qc := quotaControl{
-		QuotaControl: NewQuotaControl(cache, store, store, store),
+		QuotaControl:  NewQuotaControl(cache, store, store, store),
+		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{
 		Addr:    _Port,
@@ -70,15 +71,23 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	router := chi.NewRouter()
 	// we set the compute units to 2, then in another handler we remove 1 before spending
-	router.Use(changeContext(func(ctx context.Context) context.Context {
-		return middleware.WithComputeUnits(ctx, 2)
-	}))
+	router.Use(func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			ctx = middleware.WithComputeUnits(ctx, 2)
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
 	router.Use(middleware.SetTokenKey)
 	router.Use(middleware.VerifyToken(client, nil))
 	router.Use(NewPublicRateLimiter(cfg))
-	router.Use(changeContext(func(ctx context.Context) context.Context {
-		return middleware.AddComputeUnits(ctx, -1)
-	}))
+	router.Use(func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			ctx = middleware.AddComputeUnits(ctx, -1)
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
 	router.Use(middleware.SpendUsage(client, nil))
 
 	var counter int64
@@ -94,24 +103,69 @@ func TestMiddlewareUseToken(t *testing.T) {
 		go client.Run(context.Background())
 
 		ctx := middleware.WithTime(context.Background(), _Now)
-		for i := 0; i < 15; i++ {
+		qc.notifications = make(map[uint64][]proto.EventType)
+		qc.notifications = make(map[uint64][]proto.EventType)
+
+		// Spend Free CU
+		for i := int64(1); i < limit.FreeCU; i++ {
 			ok, err := executeRequest(ctx, router, _Tokens[0], "")
-			if i >= int(limit.HardQuota) {
-				assert.ErrorIs(t, err, proto.ErrLimitExceeded)
-				assert.False(t, ok)
-				continue
-			}
 			assert.NoError(t, err)
 			assert.True(t, ok)
-
-			_, ok = qc.notifications.Load(_ProjectID)
-			assert.Equal(t, i >= int(limit.SoftQuota), ok, i)
+			assert.Empty(t, qc.getEvents(_ProjectID), i)
+			expectedCounter.Add(proto.AccessTokenUsage{ValidCompute: 1})
 		}
 
+		// Go over free CU
+		ok, err := executeRequest(ctx, router, _Tokens[0], "")
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_FreeCU)
+		expectedCounter.Add(proto.AccessTokenUsage{ValidCompute: 1})
+
+		// Get close to soft quota
+		for i := limit.FreeCU + 1; i < limit.SoftQuota; i++ {
+			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			assert.NoError(t, err)
+			assert.True(t, ok)
+			assert.Len(t, qc.getEvents(_ProjectID), 1)
+			expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+		}
+
+		// Go over soft quota
+		ok, err = executeRequest(ctx, router, _Tokens[0], "")
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_SoftQuota)
+		expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+
+		// Get close to hard quota
+		for i := limit.SoftQuota + 1; i < limit.HardQuota; i++ {
+			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			assert.NoError(t, err)
+			assert.True(t, ok)
+			assert.Len(t, qc.getEvents(_ProjectID), 2)
+			expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+		}
+
+		// Go over hard quota
+		ok, err = executeRequest(ctx, router, _Tokens[0], "")
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_HardQuota)
+		expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+
+		// Denied
+		for i := 0; i < 10; i++ {
+			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
+			assert.False(t, ok)
+			expectedCounter.Add(proto.AccessTokenUsage{LimitedCompute: 1})
+		}
+
+		// check the usage
 		client.Stop(context.Background())
 		usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
-		expectedCounter.Add(proto.AccessTokenUsage{ValidCompute: 5, OverCompute: 5, LimitedCompute: 5})
 		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
 	})
@@ -123,6 +177,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	t.Run("ChangeLimits", func(t *testing.T) {
 		go client.Run(context.Background())
 		ctx := middleware.WithTime(context.Background(), _Now)
+		qc.notifications = make(map[uint64][]proto.EventType)
 
 		ok, err := executeRequest(ctx, router, _Tokens[0], "")
 		assert.NoError(t, err)
@@ -181,18 +236,21 @@ func executeRequest(ctx context.Context, handler http.Handler, token, origin str
 // quotaControl is a wrapper of quotacontrol
 type quotaControl struct {
 	proto.QuotaControl
-	notifications sync.Map
+	sync.Mutex
+	notifications map[uint64][]proto.EventType
+}
+
+func (q *quotaControl) getEvents(projectID uint64) []proto.EventType {
+	q.Lock()
+	v := q.notifications[projectID]
+	q.Unlock()
+	return v
 }
 
 func (q *quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
-	q.notifications.Store(projectID, struct{}{})
-	return true, nil
-}
+	q.Lock()
+	q.notifications[projectID] = append(q.notifications[projectID], *eventType)
+	q.Unlock()
 
-func changeContext(fn func(context.Context) context.Context) func(next http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.ServeHTTP(w, r.WithContext(fn(r.Context())))
-		})
-	}
+	return true, nil
 }

@@ -127,20 +127,16 @@ func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, compu
 		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
 		case nil:
-			if total > cfg.HardQuota {
-				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
+			usage, event := cfg.GetSpendResult(computeUnits, total)
+			c.usage.AddUsage(tokenKey, now, usage)
+			if usage.LimitedCompute != 0 {
 				return false, proto.ErrLimitExceeded
 			}
-			if total <= cfg.FreeCU {
-				c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{ValidCompute: computeUnits})
-				return true, nil
-			}
-			if total-computeUnits <= cfg.SoftQuota && total > cfg.SoftQuota {
-				if _, err := c.quotaClient.NotifyEvent(ctx, token.AccessToken.ProjectID, proto.Ptr(proto.EventType_FreeCU)); err != nil {
-					c.logger.Error().Err(err).Str("op", "use_token").Msg("-> quota control: failed to notify")
+			if event != nil {
+				if _, err := c.quotaClient.NotifyEvent(ctx, token.AccessToken.ProjectID, event); err != nil {
+					c.logger.Error().Err(err).Str("op", "use_token").Stringer("event", event).Msg("-> quota control: failed to notify")
 				}
 			}
-			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{OverCompute: computeUnits})
 			return true, nil
 		case proto.ErrLimitExceeded:
 			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})

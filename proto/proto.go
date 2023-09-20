@@ -7,6 +7,8 @@ import (
 	"fmt"
 )
 
+func (e EventType) Ptr() *EventType { return &e }
+
 func Ptr[T any](v T) *T {
 	return &v
 }
@@ -58,4 +60,29 @@ func (l *Limit) Validate() error {
 		return fmt.Errorf("hardQuota must be >= 0 and >= softQuota")
 	}
 	return nil
+}
+
+func (cfg *Limit) GetSpendResult(cu, total int64) (u AccessTokenUsage, e *EventType) {
+	switch {
+	case total < cfg.FreeCU:
+		u.ValidCompute = cu
+	case total < cfg.SoftQuota:
+		if before := total - cu; before < cfg.FreeCU {
+			u.ValidCompute += cfg.FreeCU - before
+			e = Ptr(EventType_FreeCU)
+		}
+		u.OverCompute += cu - u.ValidCompute
+	case total >= cfg.HardQuota:
+		if before := total - cu; before < cfg.HardQuota {
+			u.OverCompute += cfg.HardQuota - before
+			e = Ptr(EventType_HardQuota)
+		}
+		u.LimitedCompute += cu - u.OverCompute
+	default:
+		if total-cu < cfg.SoftQuota && total >= cfg.SoftQuota {
+			e = Ptr(EventType_SoftQuota)
+		}
+		u.OverCompute = cu
+	}
+	return
 }

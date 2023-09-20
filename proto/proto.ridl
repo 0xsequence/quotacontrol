@@ -53,6 +53,8 @@ struct CachedToken
 
 enum EventType: uint16
   - FreeCU # Project runs out of free compute units
+  - SoftQuota # Project goes over the soft quota
+  - HardQuota # Project goes reached the hard quota
 
 
 error 1001 Timeout          "Request timed out" HTTP 408
