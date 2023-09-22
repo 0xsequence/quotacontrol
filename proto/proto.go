@@ -5,6 +5,8 @@ package proto
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 )
 
 func (e EventType) Ptr() *EventType { return &e }
@@ -23,12 +25,26 @@ func (u *AccessTokenUsage) GetTotalUsage() int64 {
 	return u.ValidCompute + u.OverCompute
 }
 
-func (t *AccessToken) ValidateOrigin(origin string) bool {
+func matchDomain(domain, pattern string) bool {
+	if pattern == "*" {
+		return true
+	}
+	if strings.HasPrefix(pattern, "*.") {
+		return strings.HasSuffix(domain, pattern[1:])
+	}
+	return domain == pattern
+}
+
+func (t *AccessToken) ValidateOrigin(rawOrigin string) bool {
 	if len(t.AllowedOrigins) == 0 {
 		return true
 	}
+	origin, err := url.Parse(rawOrigin)
+	if err != nil {
+		return false
+	}
 	for _, o := range t.AllowedOrigins {
-		if origin == o {
+		if matchDomain(origin.Host, o) {
 			return true
 		}
 	}

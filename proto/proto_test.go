@@ -15,11 +15,19 @@ func TestAccessTokenValidateOrigin(t *testing.T) {
 
 	t.Run("allowed origins", func(t *testing.T) {
 		tk := &proto.AccessToken{
-			AllowedOrigins: []string{"http://localhost:8080", "http://localhost:8081"},
+			AllowedOrigins: []string{"localhost:8080", "localhost:8081"},
 		}
 		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
 		assert.True(t, tk.ValidateOrigin("http://localhost:8081"))
 		assert.False(t, tk.ValidateOrigin("http://localhost:8082"))
+	})
+	t.Run("wildcards", func(t *testing.T) {
+		tk := &proto.AccessToken{
+			AllowedOrigins: []string{"*.sequence.xyz"},
+		}
+		assert.False(t, tk.ValidateOrigin("http://sequence.xyz"))
+		assert.True(t, tk.ValidateOrigin("http://docs.sequence.xyz"))
+		assert.True(t, tk.ValidateOrigin("http://test.sequence.xyz"))
 	})
 }
 
