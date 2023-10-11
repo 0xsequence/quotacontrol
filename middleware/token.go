@@ -21,7 +21,7 @@ type Client interface {
 }
 
 // ErrorHandler is a function that handles errors.
-type ErrorHandler func(w http.ResponseWriter, err error)
+type ErrorHandler func(w http.ResponseWriter, next http.Handler, err error)
 
 // SetTokenKey get the token key from the header and sets it in the context.
 func SetTokenKey(next http.Handler) http.Handler {
@@ -53,7 +53,7 @@ func VerifyToken(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 
 			token, err := client.FetchToken(ctx, tokenKey, r.Header.Get(HeaderOrigin))
 			if err != nil {
-				eh(w, err)
+				eh(w, next, err)
 				return
 			}
 
@@ -87,11 +87,11 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 
 			usage, err := client.GetUsage(ctx, token, getTime(ctx))
 			if err != nil {
-				eh(w, err)
+				eh(w, next, err)
 				return
 			}
 			if usage+cu > token.Limit.HardQuota {
-				eh(w, proto.ErrLimitExceeded)
+				eh(w, next, proto.ErrLimitExceeded)
 				return
 			}
 
@@ -116,12 +116,12 @@ func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Han
 
 			ok, err := client.SpendToken(ctx, token, cu, getTime(ctx))
 			if err != nil {
-				eh(w, err)
+				eh(w, next, err)
 				return
 			}
 
 			if !ok {
-				eh(w, proto.ErrLimitExceeded)
+				eh(w, next, proto.ErrLimitExceeded)
 				return
 			}
 
