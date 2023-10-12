@@ -15,7 +15,7 @@ func FailOnUnexpectedError(fn func(w http.ResponseWriter, err error)) func(w htt
 
 func ContinueOnUnexpectedError(log zerolog.Logger, fn func(w http.ResponseWriter, err error)) func(w http.ResponseWriter, _ *http.Request, next http.Handler, err error) {
 	return func(w http.ResponseWriter, r *http.Request, next http.Handler, err error) {
-		if werr := proto.NewError(err); werr.HTTPStatus < http.StatusInternalServerError {
+		if werr := proto.NewError(err); werr.HTTPStatus < http.StatusInternalServerError && werr.HTTPStatus != http.StatusNotFound {
 			fn(w, err)
 			return
 		}
