@@ -1,11 +1,13 @@
 package proto
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 )
 
-type LegacyError struct {
+type legacyError struct {
 	Status int    `json:"status"`
 	Code   string `json:"code"`
 	Cause  string `json:"cause,omitempty"`
@@ -13,17 +15,20 @@ type LegacyError struct {
 	Error  string `json:"error"`
 }
 
-func NewLegacyError(err error) LegacyError {
+func NewError(err error) WebRPCError {
 	w := WebRPCError{}
-	if !errors.As(err, &w) {
-		w = WebRPCError{HTTPStatus: 500, Message: err.Error(), Cause: "internal"}
+	if errors.As(err, &w) {
+		return w
 	}
-	return w.GetLegacyPayload()
+	return WebRPCError{HTTPStatus: 500, Message: err.Error(), Cause: "internal"}
 }
 
-func (w WebRPCError) GetLegacyPayload() LegacyError {
-	code := codeFromHTTPStatus(w.HTTPStatus)
-	return LegacyError{
+func (w WebRPCError) getLegacyPayload() legacyError {
+	code, ok := _StatusCode[w.HTTPStatus]
+	if !ok {
+		code = "invalid"
+	}
+	return legacyError{
 		Status: w.HTTPStatus,
 		Code:   code,
 		Cause:  w.Cause,
@@ -32,33 +37,30 @@ func (w WebRPCError) GetLegacyPayload() LegacyError {
 	}
 }
 
-func codeFromHTTPStatus(code int) string {
-	switch code {
-	case 422:
-		return "fail"
-	case 400:
-		return "invalid argument"
-	case 408:
-		return "deadline exceeded"
-	case 404:
-		return "not found"
-	case 403:
-		return "permission denied"
-	case 401:
-		return "unauthenticated"
-	case 412:
-		return "failed precondition"
-	case 409:
-		return "aborted"
-	case 501:
-		return "unimplemented"
-	case 500:
-		return "internal"
-	case 503:
-		return "unavailable"
-	case 200:
-		return ""
-	default:
-		return "invalid"
+var _StatusCode = map[int]string{
+	422: "fail",
+	400: "invalid argument",
+	408: "deadline exceeded",
+	404: "not found",
+	403: "permission denied",
+	401: "unauthenticated",
+	412: "failed precondition",
+	409: "aborted",
+	501: "unimplemented",
+	500: "internal",
+	503: "unavailable",
+	200: "",
+}
+
+func RespondWithLegacyError(w http.ResponseWriter, err error) {
+	rpcErr, ok := err.(WebRPCError)
+	if !ok {
+		rpcErr = ErrorWithCause(ErrWebrpcEndpoint, err)
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(rpcErr.HTTPStatus)
+
+	respBody, _ := json.Marshal(rpcErr.getLegacyPayload())
+	w.Write(respBody)
 }

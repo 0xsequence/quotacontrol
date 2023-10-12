@@ -38,7 +38,7 @@ func SetTokenKey(next http.Handler) http.Handler {
 // VerifyToken verifies the tokenKey and adds the CachedToken to the request context.
 func VerifyToken(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = _DefaultErrorHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +67,7 @@ func VerifyToken(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 // EnsureUsage is a middleware that checks if the token has enough usage left.
 func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = _DefaultErrorHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +102,7 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 
 func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = _DefaultErrorHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,22 +1,25 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/rs/zerolog"
 )
 
-// DefaultErrorHandler is the default function that handles errors. It ignores next.
-func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, _ http.Handler, err error) {
-	proto.RespondWithError(w, err)
+var _DefaultErrorHandler = FailOnUnexpectedError(proto.RespondWithError)
+
+func FailOnUnexpectedError(fn func(w http.ResponseWriter, err error)) func(w http.ResponseWriter, _ *http.Request, _ http.Handler, err error) {
+	return func(w http.ResponseWriter, _ *http.Request, _ http.Handler, err error) { fn(w, err) }
 }
 
-// LegacyErrorHandler is a function that handles errors for older versions of WebRPC.
-func LegacyErrorHandler(w http.ResponseWriter, _ *http.Request, _ http.Handler, err error) {
-	legacyError := proto.NewLegacyError(err)
-	w.Header().Set("Content-Type", "application/json")
-	respBody, _ := json.Marshal(legacyError)
-	w.WriteHeader(legacyError.Status)
-	w.Write(respBody)
+func ContinueOnUnexpectedError(log zerolog.Logger, fn func(w http.ResponseWriter, err error)) func(w http.ResponseWriter, _ *http.Request, next http.Handler, err error) {
+	return func(w http.ResponseWriter, r *http.Request, next http.Handler, err error) {
+		if werr := proto.NewError(err); werr.HTTPStatus != http.StatusInternalServerError {
+			fn(w, err)
+			return
+		}
+		log.Error().Err(err).Str("op", "quota").Msg("-> quotacontrol: unexpected error")
+		next.ServeHTTP(w, r)
+	}
 }
