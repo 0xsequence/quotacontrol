@@ -42,5 +42,4 @@ func TestLRU(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, int32(1), baseCache.count)
-
 }

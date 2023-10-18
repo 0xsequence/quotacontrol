@@ -71,7 +71,7 @@ type Client struct {
 
 var _ middleware.Client = &Client{}
 
-// FetchAccessQuota fetches and validates the accessKey from cache or from the quota server.
+// FetchQuota fetches and validates the accessKey from cache or from the quota server.
 func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)

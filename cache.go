@@ -114,39 +114,42 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 }
 
 type LRU struct {
-	QuotaCache
-	cache *lru.TwoQueueCache[string, *proto.AccessQuota]
+	// mem is in-memory lru cache layer
+	mem *lru.TwoQueueCache[string, *proto.AccessQuota]
+
+	// backend is pluggable cache layer, which usually is redis
+	backend QuotaCache
 }
 
-func NewLRU(tokeCache QuotaCache, size int) (*LRU, error) {
-	cache, err := lru.New2Q[string, *proto.AccessQuota](size)
+func NewLRU(cacheBackend QuotaCache, size int) (*LRU, error) {
+	lruCache, err := lru.New2Q[string, *proto.AccessQuota](size)
 	if err != nil {
 		return nil, err
 	}
 	return &LRU{
-		QuotaCache: tokeCache,
-		cache:      cache,
+		mem:     lruCache,
+		backend: cacheBackend,
 	}, nil
 }
 
 func (s *LRU) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
-	if aq, ok := s.cache.Get(accessKey); ok {
+	if aq, ok := s.mem.Get(accessKey); ok {
 		return aq, nil
 	}
-	aq, err := s.QuotaCache.GetAccessQuota(ctx, accessKey)
+	aq, err := s.backend.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		return nil, err
 	}
-	s.cache.Add(accessKey, aq)
+	s.mem.Add(accessKey, aq)
 	return aq, nil
 }
 
 func (s *LRU) SetAccessQuota(ctx context.Context, aq *proto.AccessQuota) error {
-	s.cache.Add(aq.AccessKey.AccessKey, aq)
-	return s.QuotaCache.SetAccessQuota(ctx, aq)
+	s.mem.Add(aq.AccessKey.AccessKey, aq)
+	return s.backend.SetAccessQuota(ctx, aq)
 }
 
 func (s *LRU) DeleteAccessKey(ctx context.Context, accessKey string) error {
-	s.cache.Remove(accessKey)
-	return s.QuotaCache.DeleteAccessKey(ctx, accessKey)
+	s.mem.Remove(accessKey)
+	return s.backend.DeleteAccessKey(ctx, accessKey)
 }
