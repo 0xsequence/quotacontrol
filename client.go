@@ -34,7 +34,7 @@ func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client
 	cache := NewRedisCache(redisClient, time.Minute)
 	quotaCache := QuotaCache(cache)
 	if cfg.LRUSize > 0 {
-		quotaCache, _ = NewLRU(quotaCache, cfg.LRUSize)
+		quotaCache = NewLRU(quotaCache, cfg.LRUSize)
 	}
 	return &Client{
 		cfg:     cfg,

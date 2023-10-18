@@ -30,12 +30,11 @@ func (s *mockCache) DeleteAccessKey(ctx context.Context, accessKey string) error
 func TestLRU(t *testing.T) {
 	baseCache := mockCache{}
 
-	lru, err := quotacontrol.NewLRU(&baseCache, 2)
-	assert.NoError(t, err)
+	lru := quotacontrol.NewLRU(&baseCache, 2)
 
 	ctx := context.Background()
 
-	_, err = lru.GetAccessQuota(ctx, "a")
+	_, err := lru.GetAccessQuota(ctx, "a")
 	assert.NoError(t, err)
 
 	_, err = lru.GetAccessQuota(ctx, "a")
