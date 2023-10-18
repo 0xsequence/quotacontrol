@@ -117,7 +117,7 @@ type LRU struct {
 	// mem is in-memory lru cache layer
 	mem *lru.TwoQueueCache[string, *proto.AccessQuota]
 
-	// backend is pluggable cache layer, which usually is redis
+	// backend is pluggable QuotaCache layer, which usually is redis
 	backend QuotaCache
 }
 
