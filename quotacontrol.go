@@ -30,9 +30,10 @@ type UsageStore interface {
 	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
-func NewQuotaControl(cache Cache, limit LimitStore, access AccessKeyStore, usage UsageStore) proto.QuotaControl {
+func NewQuotaControl(usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore) proto.QuotaControl {
 	return &quotaControl{
-		cache:          cache,
+		usageCache:     usageCache,
+		quotaCache:     quotaCache,
 		limitStore:     limit,
 		accessKeyStore: access,
 		usageStore:     usage,
@@ -41,7 +42,8 @@ func NewQuotaControl(cache Cache, limit LimitStore, access AccessKeyStore, usage
 }
 
 type quotaControl struct {
-	cache          Cache
+	usageCache     UsageCache
+	quotaCache     QuotaCache
 	limitStore     LimitStore
 	accessKeyStore AccessKeyStore
 	usageStore     UsageStore
@@ -65,7 +67,7 @@ func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now ti
 	if err != nil {
 		return false, err
 	}
-	if err := q.cache.SetComputeUnits(ctx, getQuotaKey(projectID, now), usage.GetTotalUsage()); err != nil {
+	if err := q.usageCache.SetComputeUnits(ctx, getQuotaKey(projectID, now), usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -84,7 +86,7 @@ func (q quotaControl) GetAccessQuota(ctx context.Context, accessKey string) (*pr
 		Limit:     limit,
 		AccessKey: access,
 	}
-	go q.cache.SetAccessQuota(ctx, &record)
+	go q.quotaCache.SetAccessQuota(ctx, &record)
 	return &record, nil
 }
 
