@@ -13,7 +13,6 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
-
 	"github.com/go-chi/chi/v5"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
@@ -22,10 +21,10 @@ import (
 )
 
 var (
-	_Port      = ":8080"
-	_ProjectID = uint64(777)
-	_Tokens    = []string{"abc", "cde"}
-	_Now       = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
+	_Port       = ":8080"
+	_ProjectID  = uint64(777)
+	_AccessKeys = []string{"abc", "cde"}
+	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 
 	cfg = Config{
 		Enabled:    true,
@@ -38,10 +37,10 @@ var (
 	}
 )
 
-func TestMiddlewareUseToken(t *testing.T) {
+func TestMiddlewareUseAccessKey(t *testing.T) {
 	limit := proto.Limit{FreeCU: 5, RateLimit: 100, SoftQuota: 7, HardQuota: 10}
-	token := proto.AccessToken{Active: true, TokenKey: _Tokens[0], ProjectID: _ProjectID}
-	expectedCounter := proto.AccessTokenUsage{}
+	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
+	expectedCounter := proto.AccessUsage{}
 
 	s := miniredis.NewMiniRedis()
 	s.Start()
@@ -56,7 +55,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 	// populate store
 	ctx := context.Background()
 	store.SetAccessLimit(ctx, _ProjectID, &limit)
-	store.InsertToken(ctx, &token)
+	store.InsertAccessKey(ctx, &access)
 	client := NewClient(zerolog.Nop(), proto.Service_Indexer, cfg)
 	qc := quotaControl{
 		QuotaControl:  NewQuotaControl(cache, store, store, store),
@@ -78,8 +77,8 @@ func TestMiddlewareUseToken(t *testing.T) {
 			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	})
-	router.Use(middleware.SetTokenKey)
-	router.Use(middleware.VerifyToken(client, nil))
+	router.Use(middleware.SetAccessKey)
+	router.Use(middleware.VerifyAccessKey(client, nil))
 	router.Use(NewPublicRateLimiter(cfg))
 	router.Use(func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +98,7 @@ func TestMiddlewareUseToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	t.Run("WithToken", func(t *testing.T) {
+	t.Run("WithAccessKey", func(t *testing.T) {
 		go client.Run(context.Background())
 
 		ctx := middleware.WithTime(context.Background(), _Now)
@@ -108,58 +107,58 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 		// Spend Free CU
 		for i := int64(1); i < limit.FreeCU; i++ {
-			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Empty(t, qc.getEvents(_ProjectID), i)
-			expectedCounter.Add(proto.AccessTokenUsage{ValidCompute: 1})
+			expectedCounter.Add(proto.AccessUsage{ValidCompute: 1})
 		}
 
 		// Go over free CU
-		ok, err := executeRequest(ctx, router, _Tokens[0], "")
+		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_FreeCU)
-		expectedCounter.Add(proto.AccessTokenUsage{ValidCompute: 1})
+		expectedCounter.Add(proto.AccessUsage{ValidCompute: 1})
 
 		// Get close to soft quota
 		for i := limit.FreeCU + 1; i < limit.SoftQuota; i++ {
-			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Len(t, qc.getEvents(_ProjectID), 1)
-			expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+			expectedCounter.Add(proto.AccessUsage{OverCompute: 1})
 		}
 
 		// Go over soft quota
-		ok, err = executeRequest(ctx, router, _Tokens[0], "")
+		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_SoftQuota)
-		expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+		expectedCounter.Add(proto.AccessUsage{OverCompute: 1})
 
 		// Get close to hard quota
 		for i := limit.SoftQuota + 1; i < limit.HardQuota; i++ {
-			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Len(t, qc.getEvents(_ProjectID), 2)
-			expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+			expectedCounter.Add(proto.AccessUsage{OverCompute: 1})
 		}
 
 		// Go over hard quota
-		ok, err = executeRequest(ctx, router, _Tokens[0], "")
+		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_HardQuota)
-		expectedCounter.Add(proto.AccessTokenUsage{OverCompute: 1})
+		expectedCounter.Add(proto.AccessUsage{OverCompute: 1})
 
 		// Denied
 		for i := 0; i < 10; i++ {
-			ok, err := executeRequest(ctx, router, _Tokens[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 			assert.False(t, ok)
-			expectedCounter.Add(proto.AccessTokenUsage{LimitedCompute: 1})
+			expectedCounter.Add(proto.AccessUsage{LimitedCompute: 1})
 		}
 
 		// check the usage
@@ -172,21 +171,21 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 	// change limits
 	store.SetAccessLimit(ctx, _ProjectID, &proto.Limit{RateLimit: 100, SoftQuota: 5, HardQuota: 110})
-	cache.DeleteToken(ctx, _Tokens[0])
+	cache.DeleteAccessKey(ctx, _AccessKeys[0])
 
 	t.Run("ChangeLimits", func(t *testing.T) {
 		go client.Run(context.Background())
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
 
-		ok, err := executeRequest(ctx, router, _Tokens[0], "")
+		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
 		client.Stop(context.Background())
 		usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
-		expectedCounter.Add(proto.AccessTokenUsage{ValidCompute: 0, OverCompute: 1, LimitedCompute: 0})
+		expectedCounter.Add(proto.AccessUsage{ValidCompute: 0, OverCompute: 1, LimitedCompute: 0})
 		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
 	})
@@ -215,14 +214,14 @@ func TestMiddlewareUseToken(t *testing.T) {
 
 }
 
-func executeRequest(ctx context.Context, handler http.Handler, token, origin string) (bool, error) {
+func executeRequest(ctx context.Context, handler http.Handler, accessKey, origin string) (bool, error) {
 	req, err := http.NewRequest("POST", "/", nil)
 	if err != nil {
 		return false, err
 	}
 	req.Header.Set("X-Real-IP", "127.0.0.1")
-	if token != "" {
-		req.Header.Set(middleware.HeaderSequenceTokenKey, token)
+	if accessKey != "" {
+		req.Header.Set(middleware.HeaderAccessKey, accessKey)
 	}
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req.WithContext(ctx))

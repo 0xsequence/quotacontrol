@@ -15,13 +15,13 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
-func (u *AccessTokenUsage) Add(usage AccessTokenUsage) {
+func (u *AccessUsage) Add(usage AccessUsage) {
 	u.LimitedCompute += usage.LimitedCompute
 	u.ValidCompute += usage.ValidCompute
 	u.OverCompute += usage.OverCompute
 }
 
-func (u *AccessTokenUsage) GetTotalUsage() int64 {
+func (u *AccessUsage) GetTotalUsage() int64 {
 	return u.ValidCompute + u.OverCompute
 }
 
@@ -35,7 +35,7 @@ func matchDomain(domain, pattern string) bool {
 	return domain == pattern
 }
 
-func (t *AccessToken) ValidateOrigin(rawOrigin string) bool {
+func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	if len(t.AllowedOrigins) == 0 {
 		return true
 	}
@@ -50,7 +50,7 @@ func (t *AccessToken) ValidateOrigin(rawOrigin string) bool {
 	}
 	return false
 }
-func (t *AccessToken) ValidateService(service *Service) bool {
+func (t *AccessKey) ValidateService(service *Service) bool {
 	if len(t.AllowedServices) == 0 {
 		return true
 	}
@@ -78,7 +78,7 @@ func (l *Limit) Validate() error {
 	return nil
 }
 
-func (cfg *Limit) GetSpendResult(cu, total int64) (u AccessTokenUsage, e *EventType) {
+func (cfg *Limit) GetSpendResult(cu, total int64) (u AccessUsage, e *EventType) {
 	switch {
 	case total < cfg.FreeCU:
 		u.ValidCompute = cu

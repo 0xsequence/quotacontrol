@@ -11,7 +11,7 @@ import (
 
 // UsageUpdater is an interface that allows to update the usage of a service
 type UsageUpdater interface {
-	UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessTokenUsage) (map[string]bool, error)
+	UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
 }
 
 // UsageChanges keeps track of the usage of a service
@@ -21,27 +21,27 @@ type usageTracker struct {
 	// Mutext used for sync (calling Stop while another sync is running will wait for the sync to finish)
 	SyncMutex sync.Mutex
 
-	Usage map[time.Time]map[string]*proto.AccessTokenUsage
+	Usage map[time.Time]map[string]*proto.AccessUsage
 }
 
-// AddUsage adds the usage of a token.
-func (u *usageTracker) AddUsage(tokenKey string, now time.Time, usage proto.AccessTokenUsage) {
+// AddUsage adds the usage of a access key.
+func (u *usageTracker) AddUsage(accessKey string, now time.Time, usage proto.AccessUsage) {
 	u.DataMutex.Lock()
 	if _, ok := u.Usage[now]; !ok {
-		u.Usage[now] = make(map[string]*proto.AccessTokenUsage)
+		u.Usage[now] = make(map[string]*proto.AccessUsage)
 	}
-	if _, ok := u.Usage[now][tokenKey]; !ok {
-		u.Usage[now][tokenKey] = &proto.AccessTokenUsage{}
+	if _, ok := u.Usage[now][accessKey]; !ok {
+		u.Usage[now][accessKey] = &proto.AccessUsage{}
 	}
-	u.Usage[now][tokenKey].Add(usage)
+	u.Usage[now][accessKey].Add(usage)
 	u.DataMutex.Unlock()
 }
 
 // GetUpdates returns the usage of a service and clears the usage
-func (u *usageTracker) GetUpdates() map[time.Time]map[string]*proto.AccessTokenUsage {
+func (u *usageTracker) GetUpdates() map[time.Time]map[string]*proto.AccessUsage {
 	u.DataMutex.Lock()
 	result := u.Usage
-	u.Usage = make(map[time.Time]map[string]*proto.AccessTokenUsage)
+	u.Usage = make(map[time.Time]map[string]*proto.AccessUsage)
 	u.DataMutex.Unlock()
 	return result
 }
@@ -57,11 +57,11 @@ func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, serv
 			errList = append(errList, err)
 		}
 		// add back to the counter failed updates
-		for tokenKey, v := range result {
+		for accessKey, v := range result {
 			if v {
 				continue
 			}
-			u.AddUsage(tokenKey, now, *usages[tokenKey])
+			u.AddUsage(accessKey, now, *usages[accessKey])
 		}
 	}
 	return errors.Join(errList...)

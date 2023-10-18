@@ -7,7 +7,6 @@ import (
 
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-
 	"github.com/go-chi/httprate"
 	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/go-redis/redis_rate/v10"
@@ -90,7 +89,7 @@ func NewPublicRateLimiter(cfg Config) func(next http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		rl := httprate.Limit(rpm, time.Minute, options...)(h)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if middleware.GetToken(r.Context()) == nil {
+			if middleware.GetAccessQuota(r.Context()) == nil {
 				rl.ServeHTTP(w, r)
 				return
 			}

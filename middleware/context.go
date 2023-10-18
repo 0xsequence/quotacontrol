@@ -16,36 +16,36 @@ func (k *contextKey) String() string {
 }
 
 var (
-	ctxKeyTokenKey      = &contextKey{"TokenKey"}
-	ctxKeyCachedToken   = &contextKey{"CachedToken"}
+	ctxKeyAccessKey     = &contextKey{"AccessKey"}
+	ctxKeyAccessQuota   = &contextKey{"AccessQuota"}
 	ctxKeyComputeUnits  = &contextKey{"ComputeUnits"}
 	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
 	ctxKeyTime          = &contextKey{"Time"}
 	ctxKeyResult        = &contextKey{"Result"}
 )
 
-// WithTokenKey adds the token key to the context.
-func WithTokenKey(ctx context.Context, tokenKey string) context.Context {
-	return context.WithValue(ctx, ctxKeyTokenKey, tokenKey)
+// WithAccessKey adds the access key to the context.
+func WithAccessKey(ctx context.Context, accessKey string) context.Context {
+	return context.WithValue(ctx, ctxKeyAccessKey, accessKey)
 }
 
-// getTokenKey returns the token key from the context.
-func getTokenKey(ctx context.Context) string {
-	v, ok := ctx.Value(ctxKeyTokenKey).(string)
+// getAccessKey returns the access key from the context.
+func getAccessKey(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyAccessKey).(string)
 	if !ok {
 		return ""
 	}
 	return v
 }
 
-// withToken adds the token to the context.
-func withToken(ctx context.Context, token *proto.CachedToken) context.Context {
-	return context.WithValue(ctx, ctxKeyCachedToken, token)
+// withAccessQuota adds the quota to the context.
+func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Context {
+	return context.WithValue(ctx, ctxKeyAccessQuota, quota)
 }
 
-// GetToken returns the token from the context.
-func GetToken(ctx context.Context) *proto.CachedToken {
-	v, ok := ctx.Value(ctxKeyCachedToken).(*proto.CachedToken)
+// GetAccessQuota returns the access quota from the context.
+func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
+	v, ok := ctx.Value(ctxKeyAccessQuota).(*proto.AccessQuota)
 	if !ok {
 		return nil
 	}
