@@ -9,34 +9,34 @@ import (
 )
 
 const (
-	HeaderSequenceTokenKey = "X-Sequence-Token-Key" // TODO: should we use this header or "Authorization" ? lets discuss
-	HeaderOrigin           = "Origin"
+	HeaderAccessKey = "X-Access-Key"
+	HeaderOrigin    = "Origin"
 )
 
-// Client is the interface that wraps the basic FetchToken, GetUsage and SpendToken methods.
+// Client is the interface that wraps the basic FetchQuota, GetUsage and SpendQuota methods.
 type Client interface {
-	FetchToken(ctx context.Context, tokenKey, origin string) (*proto.CachedToken, error)
-	GetUsage(ctx context.Context, token *proto.CachedToken, now time.Time) (int64, error)
-	SpendToken(ctx context.Context, token *proto.CachedToken, computeUnits int64, now time.Time) (bool, error)
+	FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error)
+	GetUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
+	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
 // ErrorHandler is a function that handles errors.
 type ErrorHandler func(w http.ResponseWriter, r *http.Request, next http.Handler, err error)
 
-// SetTokenKey get the token key from the header and sets it in the context.
-func SetTokenKey(next http.Handler) http.Handler {
+// SetAccessKey get the access key from the header and sets it in the context.
+func SetAccessKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tokenKey := r.Header.Get(HeaderSequenceTokenKey)
+		accessKey := r.Header.Get(HeaderAccessKey)
 		ctx := r.Context()
-		if tokenKey != "" {
-			ctx = WithTokenKey(ctx, tokenKey)
+		if accessKey != "" {
+			ctx = WithAccessKey(ctx, accessKey)
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// VerifyToken verifies the tokenKey and adds the CachedToken to the request context.
-func VerifyToken(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
+// VerifyAccessKey verifies the accessKey and adds the AccessQuota to the request context.
+func VerifyAccessKey(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
 		eh = _DefaultErrorHandler
 	}
@@ -44,27 +44,27 @@ func VerifyToken(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			tokenKey := getTokenKey(ctx)
-			// skip with no token key
-			if tokenKey == "" {
+			accessKey := getAccessKey(ctx)
+			// skip with no access key
+			if accessKey == "" {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			token, err := client.FetchToken(ctx, tokenKey, r.Header.Get(HeaderOrigin))
+			quota, err := client.FetchQuota(ctx, accessKey, r.Header.Get(HeaderOrigin))
 			if err != nil {
 				eh(w, r, next, err)
 				return
 			}
 
-			// set token in context
-			ctx = withToken(ctx, token)
+			// set access quota in context
+			ctx = withAccessQuota(ctx, quota)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// EnsureUsage is a middleware that checks if the token has enough usage left.
+// EnsureUsage is a middleware that checks if the access key has enough usage left.
 func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
 		eh = _DefaultErrorHandler
@@ -73,8 +73,8 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			token := GetToken(ctx)
-			if token == nil {
+			quota := GetAccessQuota(ctx)
+			if quota == nil {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -85,12 +85,12 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 				return
 			}
 
-			usage, err := client.GetUsage(ctx, token, getTime(ctx))
+			usage, err := client.GetUsage(ctx, quota, getTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return
 			}
-			if usage+cu > token.Limit.HardQuota {
+			if usage+cu > quota.Limit.HardQuota {
 				eh(w, r, next, proto.ErrLimitExceeded)
 				return
 			}
@@ -107,14 +107,14 @@ func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Han
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			token, cu := GetToken(ctx), GetComputeUnits(ctx)
+			quota, cu := GetAccessQuota(ctx), GetComputeUnits(ctx)
 
-			if token == nil || cu == 0 {
+			if quota == nil || cu == 0 {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			ok, err := client.SpendToken(ctx, token, cu, getTime(ctx))
+			ok, err := client.SpendQuota(ctx, quota, cu, getTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return

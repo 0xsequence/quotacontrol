@@ -18,37 +18,39 @@ type LimitStore interface {
 	SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error
 }
 
-type TokenStore interface {
-	ListTokens(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessToken, error)
-	FindToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error)
-	InsertToken(ctx context.Context, token *proto.AccessToken) error
-	UpdateToken(ctx context.Context, token *proto.AccessToken) (*proto.AccessToken, error)
+type AccessKeyStore interface {
+	ListAccessKeys(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessKey, error)
+	FindAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error)
+	InsertAccessKey(ctx context.Context, accessKey *proto.AccessKey) error
+	UpdateAccessKey(ctx context.Context, accessKey *proto.AccessKey) (*proto.AccessKey, error)
 }
 
 type UsageStore interface {
-	GetAccountTotalUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessTokenUsage, error)
-	UpdateTokenUsage(ctx context.Context, tokenKey string, service proto.Service, time time.Time, usage proto.AccessTokenUsage) error
+	GetAccountTotalUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
+	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
-func NewQuotaControl(cache Cache, limit LimitStore, token TokenStore, usage UsageStore) proto.QuotaControl {
+func NewQuotaControl(cache Cache, limit LimitStore, access AccessKeyStore, usage UsageStore) proto.QuotaControl {
 	return &quotaControl{
-		cache:      cache,
-		limitStore: limit,
-		tokenStore: token,
-		usageStore: usage,
-		tokenGen:   DefaultTokenKey,
+		cache:          cache,
+		limitStore:     limit,
+		accessKeyStore: access,
+		usageStore:     usage,
+		accessKeyGen:   DefaultAccessKey,
 	}
 }
 
 type quotaControl struct {
-	cache      Cache
-	limitStore LimitStore
-	tokenStore TokenStore
-	usageStore UsageStore
-	tokenGen   func(projectID uint64) string
+	cache          Cache
+	limitStore     LimitStore
+	accessKeyStore AccessKeyStore
+	usageStore     UsageStore
+	accessKeyGen   func(projectID uint64) string
 }
 
-func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (*proto.AccessTokenUsage, error) {
+var _ proto.QuotaControl = &quotaControl{}
+
+func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (*proto.AccessUsage, error) {
 	min := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	max := min.AddDate(0, 1, -1)
 	usage, err := q.usageStore.GetAccountTotalUsage(ctx, projectID, service, min, max)
@@ -69,20 +71,20 @@ func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now ti
 	return true, nil
 }
 
-func (q quotaControl) RetrieveToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error) {
-	token, err := q.tokenStore.FindToken(ctx, tokenKey)
+func (q quotaControl) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
+	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
 	}
-	limit, err := q.limitStore.GetAccessLimit(ctx, token.ProjectID)
+	limit, err := q.limitStore.GetAccessLimit(ctx, access.ProjectID)
 	if err != nil {
 		return nil, err
 	}
-	record := proto.CachedToken{
-		Limit:       limit,
-		AccessToken: token,
+	record := proto.AccessQuota{
+		Limit:     limit,
+		AccessKey: access,
 	}
-	go q.cache.SetToken(ctx, &record)
+	go q.cache.SetAccessQuota(ctx, &record)
 	return &record, nil
 }
 
@@ -90,15 +92,15 @@ func (q quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventTy
 	return true, nil
 }
 
-func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessTokenUsage) (map[string]bool, error) {
+func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
 	var errs []error
 	m := make(map[string]bool, len(usage))
-	for tokenKey, tokenUsage := range usage {
-		err := q.usageStore.UpdateTokenUsage(ctx, tokenKey, *service, now, *tokenUsage)
+	for accessKey, accessUsage := range usage {
+		err := q.usageStore.UpdateAccessUsage(ctx, accessKey, *service, now, *accessUsage)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", tokenKey, err))
+			errs = append(errs, fmt.Errorf("%s: %w", accessKey, err))
 		}
-		m[tokenKey] = err == nil
+		m[accessKey] = err == nil
 	}
 	if len(errs) > 0 {
 		return m, errors.Join(errs...)
@@ -121,72 +123,72 @@ func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, conf
 	return true, nil
 }
 
-func (q quotaControl) GetAccessToken(ctx context.Context, tokenKey string) (*proto.AccessToken, error) {
-	return q.tokenStore.FindToken(ctx, tokenKey)
+func (q quotaControl) GetAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+	return q.accessKeyStore.FindAccessKey(ctx, accessKey)
 }
 
-func (q quotaControl) CreateAccessToken(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	token := proto.AccessToken{
+func (q quotaControl) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
-		TokenKey:        q.tokenGen(projectID),
+		AccessKey:       q.accessKeyGen(projectID),
 		Active:          true,
 		AllowedOrigins:  allowedOrigins,
 		AllowedServices: allowedServices,
 	}
-	if err := q.tokenStore.InsertToken(ctx, &token); err != nil {
+	if err := q.accessKeyStore.InsertAccessKey(ctx, &access); err != nil {
 		return nil, err
 	}
-	return &token, nil
+	return &access, nil
 }
 
-func (q quotaControl) UpdateAccessToken(ctx context.Context, tokenKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessToken, error) {
-	token, err := q.tokenStore.FindToken(ctx, tokenKey)
+func (q quotaControl) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
 	}
 	if displayName != nil {
-		token.DisplayName = *displayName
+		access.DisplayName = *displayName
 	}
 	if allowedOrigins != nil {
-		token.AllowedOrigins = allowedOrigins
+		access.AllowedOrigins = allowedOrigins
 	}
 	if allowedServices != nil {
-		token.AllowedServices = allowedServices
+		access.AllowedServices = allowedServices
 	}
-	if token, err = q.tokenStore.UpdateToken(ctx, token); err != nil {
+	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
-	return token, nil
+	return access, nil
 }
 
-func (q quotaControl) ListAccessTokens(ctx context.Context, projectID uint64) ([]*proto.AccessToken, error) {
-	return q.tokenStore.ListTokens(ctx, projectID, nil)
+func (q quotaControl) ListAccessKeys(ctx context.Context, projectID uint64) ([]*proto.AccessKey, error) {
+	return q.accessKeyStore.ListAccessKeys(ctx, projectID, nil)
 }
 
-func (q quotaControl) DisableAccessToken(ctx context.Context, tokenKey string) (bool, error) {
-	token, err := q.tokenStore.FindToken(ctx, tokenKey)
+func (q quotaControl) DisableAccessKey(ctx context.Context, accessKey string) (bool, error) {
+	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return false, err
 	}
-	token.Active = false
-	if _, err := q.tokenStore.UpdateToken(ctx, token); err != nil {
+	access.Active = false
+	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func DefaultTokenKey(projectID uint64) string {
+func DefaultAccessKey(projectID uint64) string {
 	buf := make([]byte, 24)
 	binary.BigEndian.PutUint64(buf, projectID)
 	rand.Read(buf[8:])
 	return base62.EncodeToString(buf)
 }
 
-func GetProjectID(tokenKey string) (uint64, error) {
-	buf, err := base62.DecodeString(tokenKey)
+func GetProjectID(accessKey string) (uint64, error) {
+	buf, err := base62.DecodeString(accessKey)
 	if err != nil || len(buf) < 8 {
-		return 0, proto.ErrTokenNotFound
+		return 0, proto.ErrAccessKeyNotFound
 	}
 	return binary.BigEndian.Uint64(buf[:8]), nil
 }

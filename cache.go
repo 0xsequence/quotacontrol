@@ -11,9 +11,9 @@ import (
 )
 
 type Cache interface {
-	GetToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error)
-	SetToken(ctx context.Context, token *proto.CachedToken) error
-	DeleteToken(ctx context.Context, tokenKey string) error
+	GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error)
+	SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error
+	DeleteAccessKey(ctx context.Context, accessKey string) error
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
 	PeekComputeUnits(ctx context.Context, redisKey string) (int64, error)
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
@@ -40,31 +40,31 @@ type RedisCache struct {
 	ttl    time.Duration
 }
 
-func (s *RedisCache) GetToken(ctx context.Context, tokenKey string) (*proto.CachedToken, error) {
-	raw, err := s.client.Get(ctx, tokenKey).Bytes()
+func (s *RedisCache) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
+	raw, err := s.client.Get(ctx, accessKey).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, proto.ErrTokenNotFound
+			return nil, proto.ErrAccessKeyNotFound
 		}
 		return nil, err
 	}
-	var token proto.CachedToken
-	if err := json.Unmarshal(raw, &token); err != nil {
+	var quota proto.AccessQuota
+	if err := json.Unmarshal(raw, &quota); err != nil {
 		return nil, err
 	}
-	return &token, nil
+	return &quota, nil
 }
 
-func (s *RedisCache) DeleteToken(ctx context.Context, tokenKey string) error {
-	return s.client.Del(ctx, tokenKey).Err()
+func (s *RedisCache) DeleteAccessKey(ctx context.Context, accessKey string) error {
+	return s.client.Del(ctx, accessKey).Err()
 }
 
-func (s *RedisCache) SetToken(ctx context.Context, token *proto.CachedToken) error {
-	raw, err := json.Marshal(token)
+func (s *RedisCache) SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error {
+	raw, err := json.Marshal(quota)
 	if err != nil {
 		return err
 	}
-	return s.client.Set(ctx, token.AccessToken.TokenKey, raw, s.ttl).Err()
+	return s.client.Set(ctx, quota.AccessKey.AccessKey, raw, s.ttl).Err()
 }
 
 func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amount int64) error {

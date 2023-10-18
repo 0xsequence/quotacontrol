@@ -7,14 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAccessTokenValidateOrigin(t *testing.T) {
+func TestAccessKeyValidateOrigin(t *testing.T) {
 	t.Run("no allowed origins", func(t *testing.T) {
-		tk := &proto.AccessToken{}
+		tk := &proto.AccessKey{}
 		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
 	})
 
 	t.Run("allowed origins", func(t *testing.T) {
-		tk := &proto.AccessToken{
+		tk := &proto.AccessKey{
 			AllowedOrigins: []string{"localhost:8080", "localhost:8081"},
 		}
 		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
@@ -22,7 +22,7 @@ func TestAccessTokenValidateOrigin(t *testing.T) {
 		assert.False(t, tk.ValidateOrigin("http://localhost:8082"))
 	})
 	t.Run("wildcards", func(t *testing.T) {
-		tk := &proto.AccessToken{
+		tk := &proto.AccessKey{
 			AllowedOrigins: []string{"*.sequence.xyz"},
 		}
 		assert.False(t, tk.ValidateOrigin("http://sequence.xyz"))
@@ -43,7 +43,7 @@ func TestGetSpendResult(t *testing.T) {
 		Name  string
 		Total int64
 
-		Usage proto.AccessTokenUsage
+		Usage proto.AccessUsage
 		Event *proto.EventType
 	}
 
@@ -51,57 +51,57 @@ func TestGetSpendResult(t *testing.T) {
 		{
 			Name:  "WithinFreeCU",
 			Total: _Free - 1,
-			Usage: proto.AccessTokenUsage{ValidCompute: _CU},
+			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: nil,
 		}, {
 			Name:  "WithinFreeCUExact",
 			Total: _Free,
-			Usage: proto.AccessTokenUsage{ValidCompute: _CU},
+			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: proto.EventType_FreeCU.Ptr(),
 		}, {
 			Name:  "OverFreeCU",
 			Total: _Free + 2,
-			Usage: proto.AccessTokenUsage{ValidCompute: _CU - 2, OverCompute: 2},
+			Usage: proto.AccessUsage{ValidCompute: _CU - 2, OverCompute: 2},
 			Event: proto.EventType_FreeCU.Ptr(),
 		}, {
 			Name:  "OverFreeCUExact",
 			Total: _Free + _CU,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
 		}, {
 			Name:  "WithinSoft",
 			Total: _Soft - 1,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
 		}, {
 			Name:  "WithinSoftExact",
 			Total: _Soft,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: proto.EventType_SoftQuota.Ptr(),
 		}, {
 			Name:  "OverSoft",
 			Total: _Soft + 2,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: proto.EventType_SoftQuota.Ptr(),
 		}, {
 			Name:  "OverSoftExact",
 			Total: _Soft + _CU,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
 		}, {
 			Name:  "WithinHard",
 			Total: _Hard - 1,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
 		}, {
 			Name:  "OverHardExact",
 			Total: _Hard,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU},
+			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: proto.EventType_HardQuota.Ptr(),
 		}, {
 			Name:  "OverHard",
 			Total: _Hard + 2,
-			Usage: proto.AccessTokenUsage{OverCompute: _CU - 2, LimitedCompute: 2},
+			Usage: proto.AccessUsage{OverCompute: _CU - 2, LimitedCompute: 2},
 			Event: proto.EventType_HardQuota.Ptr(),
 		},
 	} {

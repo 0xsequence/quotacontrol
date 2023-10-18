@@ -8,15 +8,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	redisclient "github.com/redis/go-redis/v9"
-
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
+	redisclient "github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 )
 
 type Notifier interface {
-	Notify(token *proto.AccessToken) error
+	Notify(access *proto.AccessKey) error
 }
 
 func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client {
@@ -36,12 +35,12 @@ func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client
 		cfg:     cfg,
 		service: service,
 		usage: &usageTracker{
-			Usage: make(map[time.Time]map[string]*proto.AccessTokenUsage),
+			Usage: make(map[time.Time]map[string]*proto.AccessUsage),
 		},
 		cache: NewRedisCache(redisClient, time.Minute),
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
-			bearerToken: cfg.Token,
+			bearerToken: cfg.AccessKey,
 		}),
 		rateLimiter: NewRateLimiter(redisClient),
 		ticker:      ticker,
@@ -63,35 +62,37 @@ type Client struct {
 	logger  zerolog.Logger
 }
 
-// FetchToken fetches and validates the token from cache or from the quota server.
-func (c *Client) FetchToken(ctx context.Context, tokenKey, origin string) (*proto.CachedToken, error) {
-	// fetch token
-	token, err := c.cache.GetToken(ctx, tokenKey)
+var _ middleware.Client = &Client{}
+
+// FetchAccessQuota fetches and validates the accessKey from cache or from the quota server.
+func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error) {
+	// fetch access quota
+	quota, err := c.cache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
-		if !errors.Is(err, proto.ErrTokenNotFound) {
+		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 			return nil, err
 		}
-		if token, err = c.quotaClient.RetrieveToken(ctx, tokenKey); err != nil {
+		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey); err != nil {
 			return nil, err
 		}
 	}
-	// validate token
-	if err := c.validateToken(token.AccessToken, origin); err != nil {
-		return token, err
+	// validate access key
+	if err := c.validateAccessKey(quota.AccessKey, origin); err != nil {
+		return quota, err
 	}
-	return token, nil
+	return quota, nil
 }
 
-// GetUsage returns the current usage of the token.
-func (c *Client) GetUsage(ctx context.Context, token *proto.CachedToken, now time.Time) (int64, error) {
-	key := getQuotaKey(token.AccessToken.ProjectID, now)
+// GetUsage returns the current usage of the access key.
+func (c *Client) GetUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
+	key := getQuotaKey(quota.AccessKey.ProjectID, now)
 	for i := time.Duration(0); i < 3; i++ {
 		usage, err := c.cache.PeekComputeUnits(ctx, key)
 		switch err {
 		case nil:
 			return usage, nil
 		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, now)
 			if err != nil {
 				return 0, err
 			}
@@ -108,11 +109,11 @@ func (c *Client) GetUsage(ctx context.Context, token *proto.CachedToken, now tim
 	return 0, proto.ErrTimeout
 }
 
-func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, computeUnits int64, now time.Time) (bool, error) {
-	tokenKey := token.AccessToken.TokenKey
-	cfg := token.Limit
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
+	accessKey := quota.AccessKey.AccessKey
+	cfg := quota.Limit
 	// spend compute units
-	key := getQuotaKey(token.AccessToken.ProjectID, now)
+	key := getQuotaKey(quota.AccessKey.ProjectID, now)
 	// check rate limit
 	if !middleware.IsSkipRateLimit(ctx) {
 		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
@@ -128,21 +129,21 @@ func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, compu
 		switch err {
 		case nil:
 			usage, event := cfg.GetSpendResult(computeUnits, total)
-			c.usage.AddUsage(tokenKey, now, usage)
+			c.usage.AddUsage(accessKey, now, usage)
 			if usage.LimitedCompute != 0 {
 				return false, proto.ErrLimitExceeded
 			}
 			if event != nil {
-				if _, err := c.quotaClient.NotifyEvent(ctx, token.AccessToken.ProjectID, event); err != nil {
+				if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, event); err != nil {
 					c.logger.Error().Err(err).Str("op", "use_token").Stringer("event", event).Msg("-> quota control: failed to notify")
 				}
 			}
 			return true, nil
 		case proto.ErrLimitExceeded:
-			c.usage.AddUsage(tokenKey, now, proto.AccessTokenUsage{LimitedCompute: computeUnits})
+			c.usage.AddUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
 			return false, err
 		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, token.AccessToken.ProjectID, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, now)
 			if err != nil {
 				return false, err
 			}
@@ -159,14 +160,14 @@ func (c *Client) SpendToken(ctx context.Context, token *proto.CachedToken, compu
 	return false, proto.ErrTimeout
 }
 
-func (c *Client) validateToken(token *proto.AccessToken, origin string) (err error) {
-	if !token.Active {
-		return proto.ErrTokenNotFound
+func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {
+	if !access.Active {
+		return proto.ErrAccessKeyNotFound
 	}
-	if !token.ValidateOrigin(origin) {
+	if !access.ValidateOrigin(origin) {
 		return proto.ErrInvalidOrigin
 	}
-	if !token.ValidateService(&c.service) {
+	if !access.ValidateService(&c.service) {
 		return proto.ErrInvalidService
 	}
 	return nil

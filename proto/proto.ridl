@@ -1,4 +1,4 @@
-webrpc = v1 # TODO, use v2
+webrpc = v1
 
 name = quota-control
 version = v0.1.0
@@ -7,6 +7,7 @@ enum Service: uint16
   - NodeGateway
   - Indexer
   - Relayer
+  - Metadata
 
 struct Limit
   - rateLimit: int64
@@ -14,7 +15,7 @@ struct Limit
   - softQuota: int64
   - hardQuota: int64
 
-struct AccessToken
+struct AccessKey
   - projectId: uint64
     + go.field.name = ProjectID
     + go.tag.db = project_id
@@ -22,8 +23,8 @@ struct AccessToken
   - displayName: string
     + go.tag.db = display_name
 
-  - tokenKey: string
-    + go.tag.db = token_key
+  - accessKey: string
+    + go.tag.db = access_key
 
   - active: bool
     + go.tag.db = active
@@ -39,7 +40,7 @@ struct AccessToken
     + go.tag.json = createdAt,omitempty
     + go.tag.db = created_at,omitempty
 
-struct AccessTokenUsage
+struct AccessUsage
   - validCompute: int64
     + go.tag.db = valid_compute
   - overCompute: int64
@@ -47,9 +48,9 @@ struct AccessTokenUsage
   - limitedCompute: int64
     + go.tag.db = limited_compute
 
-struct CachedToken
+struct AccessQuota
   - limit: Limit
-  - accessToken: AccessToken
+  - accessKey: AccessKey
 
 enum EventType: uint16
   - FreeCU # Project runs out of free compute units
@@ -57,11 +58,11 @@ enum EventType: uint16
   - HardQuota # Project goes reached the hard quota
 
 
-error 1001 Timeout          "Request timed out" HTTP 408
-error 1002 LimitExceeded    "Request limit exceeded" HTTP 429
-error 1003 InvalidOrigin    "Invalid origin" HTTP 403
-error 1004 InvalidService   "Invalid service" HTTP 403
-error 1005 TokenNotFound    "Token not found" HTTP 401
+error 1001 Timeout            "Request timed out" HTTP 408
+error 1002 LimitExceeded      "Request limit exceeded" HTTP 429
+error 1003 InvalidOrigin      "Invalid origin" HTTP 403
+error 1004 InvalidService     "Invalid service" HTTP 403
+error 1005 AccessKeyNotFound  "Access key not found" HTTP 401
 
 
 service QuotaControl
@@ -69,16 +70,16 @@ service QuotaControl
   - GetAccessLimit(projectId: uint64) => (limit: Limit)
   - SetAccessLimit(projectId: uint64, limit: Limit) => (ok: bool)
 
-  # Access Token
-  - GetAccessToken(tokenKey: string) => (accessToken: AccessToken)
-  - CreateAccessToken(projectId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessToken: AccessToken)
-  - UpdateAccessToken(tokenKey: string, displayName?: string, allowedOrigins?: []string, allowedServices?: []Service) => (accessToken: AccessToken)
-  - ListAccessTokens(projectId: uint64) => (accessTokens: []AccessToken)
-  - DisableAccessToken(tokenKey: string) => (ok: bool)
+  # Access Key
+  - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
+  - CreateAccessKey(projectId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessKey: AccessKey)
+  - UpdateAccessKey(accessKey: string, displayName?: string, allowedOrigins?: []string, allowedServices?: []Service) => (accessKey: AccessKey)
+  - ListAccessKeys(projectId: uint64) => (accessKeys: []AccessKey)
+  - DisableAccessKey(accessKey: string) => (ok: bool)
 
   # Usage
-  - GetUsage(projectID: uint64, service?: Service, now: timestamp) => (usage: AccessTokenUsage)
+  - GetAccessQuota(accessKey: string) => (accessQuota: AccessQuota)
+  - GetUsage(projectID: uint64, service?: Service, now: timestamp) => (usage: AccessUsage)
   - PrepareUsage(projectID: uint64, now: timestamp) => (ok: bool)
-  - RetrieveToken(tokenKey: string) => (token: CachedToken)
   - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
-  - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessTokenUsage>) => (ok: map<string,bool>)
+  - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
