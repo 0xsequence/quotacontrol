@@ -34,6 +34,7 @@ var (
 			Enabled:                 true,
 			PublicRequestsPerMinute: 10,
 		},
+		LRUSize: 100,
 	}
 )
 
@@ -58,7 +59,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	store.InsertAccessKey(ctx, &access)
 	client := NewClient(zerolog.Nop(), proto.Service_Indexer, cfg)
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControl(cache, store, store, store),
+		QuotaControl:  NewQuotaControl(cache, cache, store, store, store),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{

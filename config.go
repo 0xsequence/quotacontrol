@@ -23,6 +23,7 @@ type Config struct {
 	UpdateFreq  Duration          `toml:"update_freq"`
 	RateLimiter RateLimiterConfig `toml:"rate_limiter"`
 	Redis       redis.Config      `toml:"redis"`
+	LRUSize     int               `toml:"lru_size"`
 }
 
 type RateLimiterConfig struct {

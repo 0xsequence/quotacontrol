@@ -9,6 +9,7 @@ require (
 	github.com/go-chi/httprate-redis v0.2.1
 	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/goware/cachestore v0.8.1
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jxskiss/base62 v1.1.0
 	github.com/redis/go-redis/v9 v9.2.1
 	github.com/rs/zerolog v1.31.0

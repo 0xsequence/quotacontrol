@@ -31,13 +31,19 @@ func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client
 		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
 	}
 
+	cache := NewRedisCache(redisClient, time.Minute)
+	quotaCache := QuotaCache(cache)
+	if cfg.LRUSize > 0 {
+		quotaCache, _ = NewLRU(quotaCache, cfg.LRUSize)
+	}
 	return &Client{
 		cfg:     cfg,
 		service: service,
 		usage: &usageTracker{
 			Usage: make(map[time.Time]map[string]*proto.AccessUsage),
 		},
-		cache: NewRedisCache(redisClient, time.Minute),
+		usageCache: UsageCache(cache),
+		quotaCache: quotaCache,
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.AccessKey,
@@ -53,7 +59,8 @@ type Client struct {
 
 	service     proto.Service
 	usage       *usageTracker
-	cache       Cache
+	usageCache  UsageCache
+	quotaCache  QuotaCache
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
 
@@ -67,7 +74,7 @@ var _ middleware.Client = &Client{}
 // FetchAccessQuota fetches and validates the accessKey from cache or from the quota server.
 func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error) {
 	// fetch access quota
-	quota, err := c.cache.GetAccessQuota(ctx, accessKey)
+	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 			return nil, err
@@ -87,7 +94,7 @@ func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*pro
 func (c *Client) GetUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	key := getQuotaKey(quota.AccessKey.ProjectID, now)
 	for i := time.Duration(0); i < 3; i++ {
-		usage, err := c.cache.PeekComputeUnits(ctx, key)
+		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
 		switch err {
 		case nil:
 			return usage, nil
@@ -125,7 +132,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 		}
 	}
 	for i := time.Duration(0); i < 3; i++ {
-		total, err := c.cache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
+		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
 		case nil:
 			usage, event := cfg.GetSpendResult(computeUnits, total)
@@ -135,7 +142,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			}
 			if event != nil {
 				if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, event); err != nil {
-					c.logger.Error().Err(err).Str("op", "use_token").Stringer("event", event).Msg("-> quota control: failed to notify")
+					c.logger.Error().Err(err).Str("op", "use_access_key").Stringer("event", event).Msg("-> quota control: failed to notify")
 				}
 			}
 			return true, nil

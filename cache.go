@@ -7,13 +7,17 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/redis/go-redis/v9"
 )
 
-type Cache interface {
+type QuotaCache interface {
 	GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error)
 	SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error
 	DeleteAccessKey(ctx context.Context, accessKey string) error
+}
+
+type UsageCache interface {
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
 	PeekComputeUnits(ctx context.Context, redisKey string) (int64, error)
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
@@ -26,9 +30,10 @@ var (
 	ErrCacheWait = errors.New("quotacontrol: cache wait")
 )
 
-var _ Cache = (*RedisCache)(nil)
+var _ QuotaCache = (*RedisCache)(nil)
+var _ UsageCache = (*RedisCache)(nil)
 
-func NewRedisCache(redisClient *redis.Client, ttl time.Duration) Cache {
+func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
 	return &RedisCache{
 		client: redisClient,
 		ttl:    ttl,
@@ -106,4 +111,42 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 		return 0, err
 	}
 	return value, nil
+}
+
+type LRU struct {
+	QuotaCache
+	cache *lru.TwoQueueCache[string, *proto.AccessQuota]
+}
+
+func NewLRU(tokeCache QuotaCache, size int) (*LRU, error) {
+	cache, err := lru.New2Q[string, *proto.AccessQuota](size)
+	if err != nil {
+		return nil, err
+	}
+	return &LRU{
+		QuotaCache: tokeCache,
+		cache:      cache,
+	}, nil
+}
+
+func (s *LRU) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
+	if aq, ok := s.cache.Get(accessKey); ok {
+		return aq, nil
+	}
+	aq, err := s.QuotaCache.GetAccessQuota(ctx, accessKey)
+	if err != nil {
+		return nil, err
+	}
+	s.cache.Add(accessKey, aq)
+	return aq, nil
+}
+
+func (s *LRU) SetAccessQuota(ctx context.Context, aq *proto.AccessQuota) error {
+	s.cache.Add(aq.AccessKey.AccessKey, aq)
+	return s.QuotaCache.SetAccessQuota(ctx, aq)
+}
+
+func (s *LRU) DeleteAccessKey(ctx context.Context, accessKey string) error {
+	s.cache.Remove(accessKey)
+	return s.QuotaCache.DeleteAccessKey(ctx, accessKey)
 }
