@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -115,17 +115,14 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 
 type LRU struct {
 	// mem is in-memory lru cache layer
-	mem *lru.TwoQueueCache[string, *proto.AccessQuota]
+	mem *expirable.LRU[string, *proto.AccessQuota]
 
 	// backend is pluggable QuotaCache layer, which usually is redis
 	backend QuotaCache
 }
 
 func NewLRU(cacheBackend QuotaCache, size int) (*LRU, error) {
-	lruCache, err := lru.New2Q[string, *proto.AccessQuota](size)
-	if err != nil {
-		return nil, err
-	}
+	lruCache := expirable.NewLRU[string, *proto.AccessQuota](size, nil, 5*time.Minute)
 	return &LRU{
 		mem:     lruCache,
 		backend: cacheBackend,
