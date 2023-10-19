@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/rs/zerolog"
@@ -16,7 +17,7 @@ func FailOnUnexpectedError(fn func(w http.ResponseWriter, err error)) func(w htt
 
 func ContinueOnUnexpectedError(log zerolog.Logger, fn func(w http.ResponseWriter, err error)) func(w http.ResponseWriter, _ *http.Request, next http.Handler, err error) {
 	return func(w http.ResponseWriter, r *http.Request, next http.Handler, err error) {
-		if !shouldErrorContinue(err) {
+		if !shouldErrorContinue(log, err) {
 			fn(w, err)
 			return
 		}
@@ -25,10 +26,14 @@ func ContinueOnUnexpectedError(log zerolog.Logger, fn func(w http.ResponseWriter
 	}
 }
 
-func shouldErrorContinue(err error) bool {
+func shouldErrorContinue(log zerolog.Logger, err error) bool {
 	w := proto.WebRPCError{}
 	// Unexpected error
 	if !errors.As(err, &w) {
+		// Sample log of unexpected errors (every 10 seconds)
+		if time.Now().Second()%10 == 0 {
+			log.Error().Err(err).Msgf("quotacontrol: unexpected error, allowing all traffic")
+		}
 		return true
 	}
 	// QuotaControl server down
