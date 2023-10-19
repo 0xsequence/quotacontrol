@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,10 +17,11 @@ func TestContinueOnUnexpectedError(t *testing.T) {
 			t.Error("Unexpected call")
 		}
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-		for _, status := range []int{404, 500, 501} {
-			middleware.ContinueOnUnexpectedError(zerolog.Nop(), fn)(httptest.NewRecorder(), nil, next, proto.WebRPCError{
-				HTTPStatus: status,
-			})
+		for _, err := range []error{
+			proto.ErrWebrpcRequestFailed, proto.ErrWebrpcBadRoute, errors.New("unexpected error"),
+		} {
+			req, _ := http.NewRequest("GET", "/", nil)
+			middleware.ContinueOnUnexpectedError(zerolog.Nop(), fn)(httptest.NewRecorder(), req, next, err)
 		}
 	})
 	t.Run("ShouldError", func(t *testing.T) {
