@@ -95,7 +95,8 @@ func NewPublicRateLimiter(cfg Config) func(next http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		rl := httprate.Limit(rpm, time.Minute, options...)(h)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if middleware.GetAccessQuota(r.Context()) == nil {
+			ctx := r.Context()
+			if middleware.GetAccessQuota(ctx) == nil && !middleware.IsSkipRateLimit(ctx) {
 				rl.ServeHTTP(w, r)
 				return
 			}
