@@ -26,7 +26,7 @@ func ContinueOnUnexpectedError(log zerolog.Logger, fn func(w http.ResponseWriter
 }
 
 func shouldErrorContinue(err error) bool {
-	w := proto.NewError(err)
+	w := proto.WebRPCError{}
 	// Unexpected error
 	if !errors.As(err, &w) {
 		return true

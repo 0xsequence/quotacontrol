@@ -2,7 +2,6 @@ package proto
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 )
@@ -13,14 +12,6 @@ type legacyError struct {
 	Cause  string `json:"cause,omitempty"`
 	Msg    string `json:"msg"`
 	Error  string `json:"error"`
-}
-
-func NewError(err error) WebRPCError {
-	w := WebRPCError{}
-	if errors.As(err, &w) {
-		return w
-	}
-	return WebRPCError{HTTPStatus: 500, Message: err.Error(), Cause: "internal"}
 }
 
 func (w WebRPCError) getLegacyPayload() legacyError {
