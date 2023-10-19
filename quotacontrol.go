@@ -74,7 +74,7 @@ func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *p
 }
 
 func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
-	usage, err := q.GetUsage(ctx, projectID, nil, nil, nil)
+	usage, err := q.GetUsage(ctx, projectID, nil, proto.Ptr(firstOfTheMonth(now)), nil)
 	if err != nil {
 		return false, err
 	}
