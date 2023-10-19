@@ -79,7 +79,7 @@ service QuotaControl
 
   # Usage
   - GetAccessQuota(accessKey: string) => (accessQuota: AccessQuota)
-  - GetUsage(projectID: uint64, service?: Service, now: timestamp) => (usage: AccessUsage)
+  - GetUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - PrepareUsage(projectID: uint64, now: timestamp) => (ok: bool)
   - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)

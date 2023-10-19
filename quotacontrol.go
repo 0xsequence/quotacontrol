@@ -52,10 +52,21 @@ type quotaControl struct {
 
 var _ proto.QuotaControl = &quotaControl{}
 
-func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (*proto.AccessUsage, error) {
-	min := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	max := min.AddDate(0, 1, -1)
-	usage, err := q.usageStore.GetAccountTotalUsage(ctx, projectID, service, min, max)
+func firstOfTheMonth(now time.Time) time.Time {
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+}
+
+func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+	// if not set, first of the month
+	if from == nil {
+		from = proto.Ptr(firstOfTheMonth(time.Now()))
+	}
+	// if not set, one month after `from`
+	if to == nil {
+		to = proto.Ptr(from.AddDate(0, 1, -1))
+	}
+
+	usage, err := q.usageStore.GetAccountTotalUsage(ctx, projectID, service, *from, *to)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +74,7 @@ func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *p
 }
 
 func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
-	usage, err := q.GetUsage(ctx, projectID, nil, now)
+	usage, err := q.GetUsage(ctx, projectID, nil, nil, nil)
 	if err != nil {
 		return false, err
 	}
