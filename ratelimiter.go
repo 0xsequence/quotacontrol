@@ -79,10 +79,16 @@ func NewPublicRateLimiter(cfg Config) func(next http.Handler) http.Handler {
 	if cfg.RateLimiter.PublicRequestsPerMinute > 0 {
 		rpm = cfg.RateLimiter.PublicRequestsPerMinute
 	}
+
+	err := proto.ErrLimitExceeded
+	if cfg.RateLimiter.ErrorMessage != "" {
+		err.Message = cfg.RateLimiter.ErrorMessage
+	}
+
 	options := []httprate.Option{
 		httprate.WithKeyFuncs(httprate.KeyByRealIP),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, proto.ErrLimitExceeded)
+			proto.RespondWithError(w, err)
 		}),
 		httprate.WithLimitCounter(limitCounter),
 	}

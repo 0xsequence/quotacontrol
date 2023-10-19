@@ -30,4 +30,5 @@ type RateLimiterConfig struct {
 	Enabled                   bool          `toml:"enabled"`
 	PublicRequestsPerMinute   int           `toml:"public_requests_per_minute"`
 	AccessKeyUsageFlushPeriod time.Duration `toml:"access_key_usage_flush_period"`
+	ErrorMessage              string        `toml:"error_message"`
 }

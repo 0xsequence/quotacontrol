@@ -38,6 +38,16 @@ var (
 	}
 )
 
+func middlewareCU(i int64) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			ctx = middleware.WithComputeUnits(ctx, i)
+			h.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	limit := proto.Limit{FreeCU: 5, RateLimit: 100, SoftQuota: 7, HardQuota: 10}
 	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
@@ -70,24 +80,13 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	defer server.Close()
 
 	router := chi.NewRouter()
+
 	// we set the compute units to 2, then in another handler we remove 1 before spending
-	router.Use(func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			ctx = middleware.WithComputeUnits(ctx, 2)
-			h.ServeHTTP(w, r.WithContext(ctx))
-		})
-	})
+	router.Use(middlewareCU(2))
 	router.Use(middleware.SetAccessKey)
 	router.Use(middleware.VerifyAccessKey(client, nil))
 	router.Use(NewPublicRateLimiter(cfg))
-	router.Use(func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			ctx = middleware.AddComputeUnits(ctx, -1)
-			h.ServeHTTP(w, r.WithContext(ctx))
-		})
-	})
+	router.Use(middlewareCU(-1))
 	router.Use(middleware.SpendUsage(client, nil))
 
 	var counter int64
