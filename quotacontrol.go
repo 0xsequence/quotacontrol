@@ -155,6 +155,18 @@ func (q quotaControl) CreateAccessKey(ctx context.Context, projectID uint64, dis
 	return &access, nil
 }
 
+func (q quotaControl) RotateAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
+	if err != nil {
+		return nil, err
+	}
+	access.Active = false
+	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+		return nil, err
+	}
+	return q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+}
+
 func (q quotaControl) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
 	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
