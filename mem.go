@@ -54,7 +54,7 @@ func (m MemoryStore) FindAccessKey(ctx context.Context, accessKey string) (*prot
 	return access, nil
 }
 
-func (m MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessKey, error) {
+func (m MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error) {
 	accessKeys := []*proto.AccessKey{}
 	for i, v := range m.accessKeys {
 		if v.ProjectID == projectID {

@@ -19,7 +19,7 @@ type LimitStore interface {
 }
 
 type AccessKeyStore interface {
-	ListAccessKeys(ctx context.Context, projectID uint64, active *bool) ([]*proto.AccessKey, error)
+	ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error)
 	FindAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error)
 	InsertAccessKey(ctx context.Context, accessKey *proto.AccessKey) error
 	UpdateAccessKey(ctx context.Context, accessKey *proto.AccessKey) (*proto.AccessKey, error)
@@ -187,8 +187,8 @@ func (q quotaControl) UpdateAccessKey(ctx context.Context, accessKey string, dis
 	return access, nil
 }
 
-func (q quotaControl) ListAccessKeys(ctx context.Context, projectID uint64) ([]*proto.AccessKey, error) {
-	return q.accessKeyStore.ListAccessKeys(ctx, projectID, nil)
+func (q quotaControl) ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error) {
+	return q.accessKeyStore.ListAccessKeys(ctx, projectID, active, service)
 }
 
 func (q quotaControl) DisableAccessKey(ctx context.Context, accessKey string) (bool, error) {
