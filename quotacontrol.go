@@ -26,7 +26,8 @@ type AccessKeyStore interface {
 }
 
 type UsageStore interface {
-	GetAccountTotalUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
+	GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
+	GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
 	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
@@ -56,8 +57,7 @@ func firstOfTheMonth(now time.Time) time.Time {
 	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 }
 
-func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	// if not set, first of the month
+func getTimeInterval(from, to *time.Time) (min time.Time, max time.Time) {
 	if from == nil {
 		from = proto.Ptr(firstOfTheMonth(time.Now()))
 	}
@@ -65,8 +65,23 @@ func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *p
 	if to == nil {
 		to = proto.Ptr(from.AddDate(0, 1, -1))
 	}
+	return *from, *to
+}
 
-	usage, err := q.usageStore.GetAccountTotalUsage(ctx, projectID, service, *from, *to)
+func (q quotaControl) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+	min, max := getTimeInterval(from, to)
+
+	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, min, max)
+	if err != nil {
+		return nil, err
+	}
+	return &usage, nil
+}
+
+func (q quotaControl) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+	min, max := getTimeInterval(from, to)
+
+	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, min, max)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +89,7 @@ func (q quotaControl) GetUsage(ctx context.Context, projectID uint64, service *p
 }
 
 func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
-	usage, err := q.GetUsage(ctx, projectID, nil, proto.Ptr(firstOfTheMonth(now)), nil)
+	usage, err := q.GetAccountUsage(ctx, projectID, nil, proto.Ptr(firstOfTheMonth(now)), nil)
 	if err != nil {
 		return false, err
 	}

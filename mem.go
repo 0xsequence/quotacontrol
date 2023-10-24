@@ -64,7 +64,7 @@ func (m MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, activ
 	return accessKeys, nil
 }
 
-func (m MemoryStore) GetAccountTotalUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error) {
+func (m MemoryStore) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error) {
 	usage := proto.AccessUsage{}
 	for _, v := range m.accessKeys {
 		if v.ProjectID == projectID {
@@ -76,6 +76,17 @@ func (m MemoryStore) GetAccountTotalUsage(ctx context.Context, projectID uint64,
 		}
 	}
 	return usage, nil
+}
+
+func (m MemoryStore) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error) {
+	if _, ok := m.accessKeys[accessKey]; !ok {
+		return proto.AccessUsage{}, proto.ErrAccessKeyNotFound
+	}
+	usage, ok := m.usage[accessKey]
+	if !ok {
+		return proto.AccessUsage{}, nil
+	}
+	return *usage, nil
 }
 
 func (m MemoryStore) UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error {

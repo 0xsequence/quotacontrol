@@ -163,7 +163,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// check the usage
 		client.Stop(context.Background())
-		usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
 		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
@@ -183,7 +183,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.True(t, ok)
 
 		client.Stop(context.Background())
-		usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
 		expectedCounter.Add(proto.AccessUsage{ValidCompute: 0, OverCompute: 1, LimitedCompute: 0})
 		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
@@ -206,7 +206,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		client.Stop(context.Background())
-		usage, err := store.GetAccountTotalUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
 		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
