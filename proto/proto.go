@@ -102,3 +102,18 @@ func (cfg *Limit) GetSpendResult(cu, total int64) (u AccessUsage, e *EventType) 
 	}
 	return
 }
+
+func (q *AccessQuota) IsActive() bool {
+	if q.Limit == nil || q.AccessKey == nil {
+		return false
+	}
+	return q.AccessKey.Active
+}
+
+func (q *AccessQuota) ProjectID() uint64 {
+	if q.AccessKey == nil {
+		return 0
+	} else {
+		return q.AccessKey.ProjectID
+	}
+}

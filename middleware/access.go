@@ -28,10 +28,13 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, next http.Handler
 func SetAccessKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		accessKey := r.Header.Get(HeaderAccessKey)
+
+		// TODO: remove legacy header support
 		if accessKey == "" {
-			// TODO: remove legacy header support
 			accessKey = r.Header.Get(HeaderAccessKeyLegacy)
 		}
+		//--
+
 		ctx := r.Context()
 		if accessKey != "" {
 			ctx = WithAccessKey(ctx, accessKey)
