@@ -52,6 +52,18 @@ func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
 	return v
 }
 
+// GetProjectID returns the projectID and if its active from the context.
+// In case its not set, it will return 0.
+func GetProjectID(ctx context.Context) (uint64, bool) {
+	accessQuota := GetAccessQuota(ctx)
+	if accessQuota == nil {
+		return 0, false
+	}
+	projectID := accessQuota.ProjectID()
+	active := accessQuota.IsActive()
+	return projectID, active
+}
+
 // WithSkipRateLimit adds the skip rate limit flag to the context.
 func WithSkipRateLimit(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ctxKeyRateLimitSkip, struct{}{})
