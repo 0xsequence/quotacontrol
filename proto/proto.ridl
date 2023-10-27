@@ -57,12 +57,18 @@ enum EventType: uint16
   - SoftQuota # Project goes over the soft quota
   - HardQuota # Project goes reached the hard quota
 
+enum UserAuthLevel: uint16
+  - UNAUTHORIZED
+  - READ
+  - READ_WRITE
+
 
 error 1001 Timeout            "Request timed out" HTTP 408
 error 1002 LimitExceeded      "Request limit exceeded" HTTP 429
 error 1003 InvalidOrigin      "Invalid origin" HTTP 403
 error 1004 InvalidService     "Invalid service" HTTP 403
 error 1005 AccessKeyNotFound  "Access key not found" HTTP 401
+error 1006 UnauthorizedUser   "Unauthorized user" HTTP 403
 
 
 service QuotaControl
@@ -87,4 +93,4 @@ service QuotaControl
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
   # User authorization for a projectId (based on accessKey)
-  - VerifyUserAuthorization(accessKey: string, userId: string) => (authorized: bool)
+  - VerifyUserAuthorization(accessKey: string, userId: string) => (authorized: UserAuthLevel)
