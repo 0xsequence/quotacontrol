@@ -93,4 +93,4 @@ service QuotaControl
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
   # User authorization for a projectId (based on accessKey)
-  - VerifyUserAuthorization(accessKey: string, userId: string) => (authorized: UserAuthLevel)
+  - VerifyUserAuthorization(accessKey: string, userId: string) => (authorized: UserAuthLevel, extra: map<string,any>)
