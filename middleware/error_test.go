@@ -8,7 +8,7 @@ import (
 
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/rs/zerolog"
+	"github.com/goware/logger"
 )
 
 func TestContinueOnUnexpectedError(t *testing.T) {
@@ -21,7 +21,7 @@ func TestContinueOnUnexpectedError(t *testing.T) {
 			proto.ErrWebrpcRequestFailed, proto.ErrWebrpcBadRoute, errors.New("unexpected error"),
 		} {
 			req, _ := http.NewRequest("GET", "/", nil)
-			middleware.ContinueOnUnexpectedError(zerolog.Nop(), fn)(httptest.NewRecorder(), req, next, err)
+			middleware.ContinueOnUnexpectedError(logger.Nop(), fn)(httptest.NewRecorder(), req, next, err)
 		}
 	})
 	t.Run("ShouldError", func(t *testing.T) {
@@ -30,7 +30,7 @@ func TestContinueOnUnexpectedError(t *testing.T) {
 			t.Error("Unexpected call")
 		})
 		for _, status := range []int{403, 408, 429} {
-			middleware.ContinueOnUnexpectedError(zerolog.Nop(), fn)(httptest.NewRecorder(), nil, next, proto.WebRPCError{
+			middleware.ContinueOnUnexpectedError(logger.Nop(), fn)(httptest.NewRecorder(), nil, next, proto.WebRPCError{
 				HTTPStatus: status,
 			})
 		}

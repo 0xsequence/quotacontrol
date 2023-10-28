@@ -14,8 +14,8 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +67,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	ctx := context.Background()
 	store.SetAccessLimit(ctx, _ProjectID, &limit)
 	store.InsertAccessKey(ctx, &access)
-	client := NewClient(zerolog.Nop(), proto.Service_Indexer, cfg)
+	client := NewClient(logger.Nop(), proto.Service_Indexer, cfg)
 	qc := quotaControl{
 		QuotaControl:  NewQuotaControl(cache, cache, store, store, store),
 		notifications: make(map[uint64][]proto.EventType),

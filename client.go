@@ -10,15 +10,15 @@ import (
 
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
-	"github.com/rs/zerolog"
 )
 
 type Notifier interface {
 	Notify(access *proto.AccessKey) error
 }
 
-func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client {
+func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client {
 	// TODO: set other options too...
 	redisClient := redisclient.NewClient(&redisclient.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -55,7 +55,8 @@ func NewClient(logger zerolog.Logger, service proto.Service, cfg Config) *Client
 }
 
 type Client struct {
-	cfg Config
+	cfg    Config
+	logger logger.Logger
 
 	service     proto.Service
 	usage       *usageTracker
@@ -66,7 +67,6 @@ type Client struct {
 
 	running int32
 	ticker  *time.Ticker
-	logger  zerolog.Logger
 }
 
 var _ middleware.Client = &Client{}
@@ -147,7 +147,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			}
 			if event != nil {
 				if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, event); err != nil {
-					c.logger.Error().Err(err).Str("op", "use_access_key").Stringer("event", event).Msg("-> quota control: failed to notify")
+					c.logger.With("err", err, "op", "use_access_key", "event", event).Error("-> quota control: failed to notify")
 				}
 			}
 			return true, nil
@@ -190,7 +190,7 @@ func (c *Client) Run(ctx context.Context) error {
 		return fmt.Errorf("quota control: already running")
 	}
 
-	c.logger.Info().Str("op", "run").Msg("-> quota control: running")
+	c.logger.With("op", "run").Info("-> quota control: running")
 
 	atomic.StoreInt32(&c.running, 1)
 	defer atomic.StoreInt32(&c.running, 0)
@@ -206,10 +206,10 @@ func (c *Client) Run(ctx context.Context) error {
 	// Start the sync
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
-			c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+			c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 			continue
 		}
-		c.logger.Info().Str("op", "run").Msg("-> quota control: synced usage")
+		c.logger.With("op", "run").Info("-> quota control: synced usage")
 	}
 	return nil
 }
@@ -220,14 +220,14 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	}
 	atomic.StoreInt32(&c.running, 2)
 
-	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopping..")
+	c.logger.With("op", "stop").Info("-> quota control: stopping..")
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
 	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
-		c.logger.Error().Err(err).Str("op", "run").Msg("-> quota control: failed to sync usage")
+		c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 	}
-	c.logger.Info().Str("op", "stop").Msg("-> quota control: stopped.")
+	c.logger.With("op", "stop").Info("-> quota control: stopped.")
 }
 
 func (c *Client) isRunning() bool {
