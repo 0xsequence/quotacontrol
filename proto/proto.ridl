@@ -57,7 +57,7 @@ enum EventType: uint16
   - SoftQuota # Project goes over the soft quota
   - HardQuota # Project goes reached the hard quota
 
-enum UserAuthLevel: uint16
+enum UserPermission: uint16
   - UNAUTHORIZED
   - READ
   - READ_WRITE
@@ -93,4 +93,4 @@ service QuotaControl
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
   # User authorization for a projectId (based on accessKey)
-  - VerifyUserAuthorization(accessKey: string, userId: string) => (authorized: UserAuthLevel, extra: map<string,any>)
+  - VerifyUserAuthorization(accessKey: string, userId: string) => (permission: UserPermission, serviceAuth: map<string,any>)
