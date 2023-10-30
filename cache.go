@@ -23,6 +23,13 @@ type UsageCache interface {
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
 }
 
+// TODOX .. think about this.. etc...
+type PermissionCache interface {
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
+	SetUserPermission(ctx context.Context, projectID uint64, userID string, a *proto.UserPermission, b map[string]interface{}) error
+	DeleteUserPermission(ctx context.Context, projectID uint64, userID string) error
+}
+
 type CacheResponse uint8
 
 var (

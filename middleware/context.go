@@ -43,6 +43,15 @@ func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Cont
 	return context.WithValue(ctx, ctxKeyAccessQuota, quota)
 }
 
+// GetAccessKey returns the access key from the context.
+func GetAccessKey(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyAccessKey).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
 // GetAccessQuota returns the access quota from the context.
 func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
 	v, ok := ctx.Value(ctxKeyAccessQuota).(*proto.AccessQuota)

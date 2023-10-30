@@ -28,24 +28,32 @@ type UsageStore interface {
 	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
-func NewQuotaControl(usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore) proto.QuotaControl {
+type PermissionStore interface {
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
+}
+
+// NewQuotaControl returns implementation for proto.QuotaControl which is used by the service which
+// manages the quota control source of truth.
+func NewQuotaControl(usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
 	return &quotaControl{
-		usageCache:     usageCache,
-		quotaCache:     quotaCache,
-		limitStore:     limit,
-		accessKeyStore: access,
-		usageStore:     usage,
-		accessKeyGen:   DefaultAccessKey,
+		usageCache:      usageCache,
+		quotaCache:      quotaCache,
+		limitStore:      limit,
+		accessKeyStore:  access,
+		usageStore:      usage,
+		permissionStore: perm,
+		accessKeyGen:    DefaultAccessKey,
 	}
 }
 
 type quotaControl struct {
-	usageCache     UsageCache
-	quotaCache     QuotaCache
-	limitStore     LimitStore
-	accessKeyStore AccessKeyStore
-	usageStore     UsageStore
-	accessKeyGen   func(projectID uint64) string
+	usageCache      UsageCache
+	quotaCache      QuotaCache
+	limitStore      LimitStore
+	accessKeyStore  AccessKeyStore
+	usageStore      UsageStore
+	permissionStore PermissionStore
+	accessKeyGen    func(projectID uint64) string
 }
 
 var _ proto.QuotaControl = &quotaControl{}
@@ -215,6 +223,7 @@ func (q quotaControl) DisableAccessKey(ctx context.Context, accessKey string) (b
 	return true, nil
 }
 
-func (q quotaControl) VerifyUserAuthorization(ctx context.Context, accessKey string, userId string) (*proto.UserPermission, map[string]interface{}, error) {
-	return nil, nil, nil
+func (q quotaControl) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
+	// TODO: .. add cache ........
+	return q.permissionStore.GetUserPermission(ctx, projectID, userID)
 }

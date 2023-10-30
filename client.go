@@ -95,8 +95,8 @@ func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*pro
 	return quota, nil
 }
 
-// GetUsage returns the current usage of the access key.
-func (c *Client) GetUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
+// FetchUsage fetches the current usage of the access key.
+func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	key := getQuotaKey(quota.AccessKey.ProjectID, now)
 	for i := time.Duration(0); i < 3; i++ {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
@@ -121,11 +121,19 @@ func (c *Client) GetUsage(ctx context.Context, quota *proto.AccessQuota, now tim
 	return 0, proto.ErrTimeout
 }
 
+func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]any, error) {
+	// TODO: add caching, etc..
+	return c.quotaClient.GetUserPermission(ctx, projectID, userID)
+	// return nil, nil, nil
+}
+
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
 	accessKey := quota.AccessKey.AccessKey
 	cfg := quota.Limit
+
 	// spend compute units
 	key := getQuotaKey(quota.AccessKey.ProjectID, now)
+
 	// check rate limit
 	if !middleware.IsSkipRateLimit(ctx) {
 		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
@@ -136,6 +144,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			return false, proto.ErrLimitExceeded
 		}
 	}
+
 	for i := time.Duration(0); i < 3; i++ {
 		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
@@ -169,6 +178,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			return false, err
 		}
 	}
+
 	return false, proto.ErrTimeout
 }
 

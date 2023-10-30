@@ -18,7 +18,8 @@ const (
 type Client interface {
 	IsEnabled() bool
 	FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error)
-	GetUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
+	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
+	FetchUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]any, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
@@ -94,7 +95,7 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 				return
 			}
 
-			usage, err := client.GetUsage(ctx, quota, getTime(ctx))
+			usage, err := client.FetchUsage(ctx, quota, getTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return

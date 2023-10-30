@@ -92,5 +92,5 @@ service QuotaControl
   - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
-  # User authorization for a projectId (based on accessKey)
-  - VerifyUserAuthorization(accessKey: string, userId: string) => (permission: UserPermission, serviceAuth: map<string,any>)
+  # User permissions for a projectId
+  - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resources: map<string,any>)
