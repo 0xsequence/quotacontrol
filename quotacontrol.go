@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 )
 
 type LimitStore interface {
@@ -32,10 +33,11 @@ type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
 }
 
-// NewQuotaControl returns implementation for proto.QuotaControl which is used by the service which
-// manages the quota control source of truth.
-func NewQuotaControl(usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
+// NewQuotaControl returns implementation for proto.QuotaControl which is used by the Builder
+// (service which manages the quotacontrol source of truth).
+func NewQuotaControl(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
 	return &quotaControl{
+		log:             log,
 		usageCache:      usageCache,
 		quotaCache:      quotaCache,
 		limitStore:      limit,
@@ -47,6 +49,7 @@ func NewQuotaControl(usageCache UsageCache, quotaCache QuotaCache, limit LimitSt
 }
 
 type quotaControl struct {
+	log             logger.Logger
 	usageCache      UsageCache
 	quotaCache      QuotaCache
 	limitStore      LimitStore
@@ -117,7 +120,12 @@ func (q quotaControl) GetAccessQuota(ctx context.Context, accessKey string) (*pr
 		Limit:     limit,
 		AccessKey: access,
 	}
-	go q.quotaCache.SetAccessQuota(ctx, &record)
+	go func() {
+		err := q.quotaCache.SetAccessQuota(context.Background(), &record)
+		if err != nil {
+			q.log.With("err", err).Error("quotacontrol: failed to set access quota in cache")
+		}
+	}()
 	return &record, nil
 }
 
