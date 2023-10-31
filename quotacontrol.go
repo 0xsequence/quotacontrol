@@ -33,9 +33,9 @@ type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
 }
 
-// NewQuotaControl returns implementation for proto.QuotaControl which is used by the Builder
-// (service which manages the quotacontrol source of truth).
-func NewQuotaControl(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
+// NewQuotaControlBackend returns server implementation for proto.QuotaControl which is used
+// by the Builder (aka quotacontrol backend).
+func NewQuotaControlBackend(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
 	return &quotaControl{
 		log:             log,
 		usageCache:      usageCache,
@@ -48,6 +48,7 @@ func NewQuotaControl(log logger.Logger, usageCache UsageCache, quotaCache QuotaC
 	}
 }
 
+// quotaControl is the quotacontrol backend implementation.
 type quotaControl struct {
 	log             logger.Logger
 	usageCache      UsageCache
@@ -60,21 +61,6 @@ type quotaControl struct {
 }
 
 var _ proto.QuotaControl = &quotaControl{}
-
-func firstOfTheMonth(now time.Time) time.Time {
-	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-}
-
-func getTimeInterval(from, to *time.Time) (min time.Time, max time.Time) {
-	if from == nil {
-		from = proto.Ptr(firstOfTheMonth(time.Now()))
-	}
-	// if not set, one month after `from`
-	if to == nil {
-		to = proto.Ptr(from.AddDate(0, 1, -1))
-	}
-	return *from, *to
-}
 
 func (q quotaControl) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	min, max := getTimeInterval(from, to)
@@ -234,4 +220,19 @@ func (q quotaControl) DisableAccessKey(ctx context.Context, accessKey string) (b
 func (q quotaControl) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
 	// TODO: .. add cache ........
 	return q.permissionStore.GetUserPermission(ctx, projectID, userID)
+}
+
+func firstOfTheMonth(now time.Time) time.Time {
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+}
+
+func getTimeInterval(from, to *time.Time) (min time.Time, max time.Time) {
+	if from == nil {
+		from = proto.Ptr(firstOfTheMonth(time.Now()))
+	}
+	// if not set, one month after `from`
+	if to == nil {
+		to = proto.Ptr(from.AddDate(0, 1, -1))
+	}
+	return *from, *to
 }
