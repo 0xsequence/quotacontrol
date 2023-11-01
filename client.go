@@ -182,6 +182,10 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 	return false, proto.ErrTimeout
 }
 
+func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey string) error {
+	return c.quotaCache.DeleteAccessKey(ctx, accessKey)
+}
+
 func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {
 	if !access.Active {
 		return proto.ErrAccessKeyNotFound

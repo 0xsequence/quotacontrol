@@ -21,14 +21,14 @@ import (
 )
 
 var (
-	_Port       = ":8080"
+	_Host       = "localhost:8080"
 	_ProjectID  = uint64(777)
 	_AccessKeys = []string{"abc", "cde"}
 	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 
 	cfg = Config{
 		Enabled:    true,
-		URL:        `http://localhost` + _Port,
+		URL:        `http://` + _Host,
 		UpdateFreq: Duration{time.Minute},
 		RateLimiter: RateLimiterConfig{
 			Enabled:                 true,
@@ -49,9 +49,10 @@ func middlewareCU(i int64) func(http.Handler) http.Handler {
 }
 
 func TestMiddlewareUseAccessKey(t *testing.T) {
-	limit := proto.Limit{FreeCU: 5, RateLimit: 100, SoftQuota: 7, HardQuota: 10}
+	limit := proto.Limit{RateLimit: 100, FreeCU: 5, SoftQuota: 7, HardQuota: 10}
 	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
 	expectedCounter := proto.AccessUsage{}
+	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
 
 	s := miniredis.NewMiniRedis()
 	s.Start()
@@ -63,21 +64,27 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	redisClient := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
 	cache := NewRedisCache(redisClient, time.Minute)
 	store := NewMemoryStore()
+
 	// populate store
 	ctx := context.Background()
-	store.SetAccessLimit(ctx, _ProjectID, &limit)
-	store.InsertAccessKey(ctx, &access)
-	client := NewClient(logger.Nop(), proto.Service_Indexer, cfg)
+	err := store.SetAccessLimit(ctx, _ProjectID, &limit)
+	require.NoError(t, err)
+	err = store.InsertAccessKey(ctx, &access)
+	require.NoError(t, err)
+
+	client := NewClient(wlog.With("client", "client"), proto.Service_Indexer, cfg)
+
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControl(cache, cache, store, store, store),
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), cache, cache, store, store, store, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{
-		Addr:    _Port,
+		Addr:    _Host,
 		Handler: proto.NewQuotaControlServer(&qc),
 	}
 	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
 	defer server.Close()
+	time.Sleep(1 * time.Second)
 
 	router := chi.NewRouter()
 
@@ -100,6 +107,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("WithAccessKey", func(t *testing.T) {
 		go client.Run(context.Background())
+		time.Sleep(1 * time.Second)
 
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
@@ -169,12 +177,18 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, &expectedCounter, &usage)
 	})
 
-	// change limits
-	store.SetAccessLimit(ctx, _ProjectID, &proto.Limit{RateLimit: 100, SoftQuota: 5, HardQuota: 110})
-	cache.DeleteAccessKey(ctx, _AccessKeys[0])
-
 	t.Run("ChangeLimits", func(t *testing.T) {
+		// Change limits
+		//
+		// Increase HardQuota which should still allow requests to go through, etc.
+		err = store.SetAccessLimit(ctx, _ProjectID, &proto.Limit{RateLimit: 100, SoftQuota: 5, HardQuota: 110})
+		assert.NoError(t, err)
+		err = client.ClearQuotaCacheByAccessKey(ctx, _AccessKeys[0])
+		assert.NoError(t, err)
+
 		go client.Run(context.Background())
+		time.Sleep(1 * time.Second)
+
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
 
@@ -192,6 +206,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("PublicRateLimit", func(t *testing.T) {
 		go client.Run(context.Background())
+		time.Sleep(1 * time.Second)
+
 		ctx := middleware.WithTime(context.Background(), _Now)
 
 		for i, max := 0, cfg.RateLimiter.PublicRequestsPerMinute*2; i < max; i++ {

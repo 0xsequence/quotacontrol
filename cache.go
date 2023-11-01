@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -37,7 +38,10 @@ var (
 	ErrCacheWait = errors.New("quotacontrol: cache wait")
 )
 
+const redisKeyPrefix = "quota:"
+
 var _ QuotaCache = (*RedisCache)(nil)
+var _ QuotaCache = (*LRU)(nil)
 var _ UsageCache = (*RedisCache)(nil)
 
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
@@ -53,7 +57,8 @@ type RedisCache struct {
 }
 
 func (s *RedisCache) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
-	raw, err := s.client.Get(ctx, accessKey).Bytes()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, accessKey)
+	raw, err := s.client.Get(ctx, cacheKey).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, proto.ErrAccessKeyNotFound
@@ -68,7 +73,8 @@ func (s *RedisCache) GetAccessQuota(ctx context.Context, accessKey string) (*pro
 }
 
 func (s *RedisCache) DeleteAccessKey(ctx context.Context, accessKey string) error {
-	return s.client.Del(ctx, accessKey).Err()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, accessKey)
+	return s.client.Del(ctx, cacheKey).Err()
 }
 
 func (s *RedisCache) SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error {
@@ -76,16 +82,19 @@ func (s *RedisCache) SetAccessQuota(ctx context.Context, quota *proto.AccessQuot
 	if err != nil {
 		return err
 	}
-	return s.client.Set(ctx, quota.AccessKey.AccessKey, raw, s.ttl).Err()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, quota.AccessKey.AccessKey)
+	return s.client.Set(ctx, cacheKey, raw, s.ttl).Err()
 }
 
 func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amount int64) error {
-	return s.client.Set(ctx, redisKey, amount, s.ttl).Err()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
+	return s.client.Set(ctx, cacheKey, amount, s.ttl).Err()
 }
 
 func (s *RedisCache) PeekComputeUnits(ctx context.Context, redisKey string) (int64, error) {
 	const SpecialValue = -1
-	v, err := s.client.Get(ctx, redisKey).Int64()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
+	v, err := s.client.Get(ctx, cacheKey).Int64()
 	if err == nil {
 		if v == SpecialValue {
 			return 0, ErrCacheWait
@@ -95,7 +104,7 @@ func (s *RedisCache) PeekComputeUnits(ctx context.Context, redisKey string) (int
 	if !errors.Is(err, redis.Nil) {
 		return 0, err
 	}
-	ok, err := s.client.SetNX(ctx, redisKey, SpecialValue, time.Second*2).Result()
+	ok, err := s.client.SetNX(ctx, cacheKey, SpecialValue, time.Second*2).Result()
 	if err != nil {
 		return 0, err
 	}
@@ -106,6 +115,7 @@ func (s *RedisCache) PeekComputeUnits(ctx context.Context, redisKey string) (int
 }
 
 func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
+	// NOTE: skip redisKeyPrefix as it's already in PeekComputeUnits
 	v, err := s.PeekComputeUnits(ctx, redisKey)
 	if err != nil {
 		return 0, err
@@ -113,7 +123,8 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	if v > limit {
 		return v, proto.ErrLimitExceeded
 	}
-	value, err := s.client.IncrBy(ctx, redisKey, amount).Result()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
+	value, err := s.client.IncrBy(ctx, cacheKey, amount).Result()
 	if err != nil {
 		return 0, err
 	}

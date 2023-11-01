@@ -33,9 +33,9 @@ type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
 }
 
-// NewQuotaControlBackend returns server implementation for proto.QuotaControl which is used
+// NewQuotaControlHandler returns server implementation for proto.QuotaControl which is used
 // by the Builder (aka quotacontrol backend).
-func NewQuotaControlBackend(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
+func NewQuotaControlHandler(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
 	return &quotaControl{
 		log:             log,
 		usageCache:      usageCache,
