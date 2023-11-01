@@ -36,6 +36,9 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 	if cfg.LRUSize > 0 {
 		quotaCache = NewLRU(quotaCache, cfg.LRUSize)
 	}
+
+	permCache := PermissionCache(cache)
+
 	return &Client{
 		cfg:     cfg,
 		service: service,
@@ -44,6 +47,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		},
 		usageCache: UsageCache(cache),
 		quotaCache: quotaCache,
+		permCache:  permCache,
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.AccessKey,
@@ -62,6 +66,7 @@ type Client struct {
 	usage       *usageTracker
 	usageCache  UsageCache
 	quotaCache  QuotaCache
+	permCache   PermissionCache
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
 
@@ -121,10 +126,35 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	return 0, proto.ErrTimeout
 }
 
-func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]any, error) {
-	// TODO: add caching, etc..
-	return c.quotaClient.GetUserPermission(ctx, projectID, userID)
-	// return nil, nil, nil
+func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, map[string]any, error) {
+	var userPerm *proto.UserPermission
+	var resourceAccess map[string]interface{}
+	var err error
+
+	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.
+	if useCache {
+		userPerm, resourceAccess, err = c.permCache.GetUserPermission(ctx, projectID, userID)
+		if err != nil {
+			// log the error, but don't stop
+			c.logger.With("err", err).Error("FetchUserPermission failed to query the permCache")
+		}
+	}
+
+	// Ask quotacontrol server via client
+	if userPerm == nil {
+		userPerm, resourceAccess, err = c.quotaClient.GetUserPermission(ctx, projectID, userID)
+		if err != nil {
+			return userPerm, resourceAccess, err
+		}
+	}
+
+	// Check if userPerm is still nil, in which case return unauthorized
+	if userPerm == nil {
+		v := proto.UserPermission_UNAUTHORIZED
+		return &v, resourceAccess, nil
+	}
+
+	return userPerm, resourceAccess, nil
 }
 
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {

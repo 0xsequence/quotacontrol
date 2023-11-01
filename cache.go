@@ -24,10 +24,9 @@ type UsageCache interface {
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
 }
 
-// TODOX .. think about this.. etc...
 type PermissionCache interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
-	SetUserPermission(ctx context.Context, projectID uint64, userID string, a *proto.UserPermission, b map[string]interface{}) error
+	SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess map[string]interface{}) error
 	DeleteUserPermission(ctx context.Context, projectID uint64, userID string) error
 }
 
@@ -131,6 +130,47 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	return value, nil
 }
 
+type cacheUserPermission struct {
+	UserPermission *proto.UserPermission  `json:"userPerm"`
+	ResourceAccess map[string]interface{} `json:"resourceAccess"`
+}
+
+func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, getUserPermKey(projectID, userID))
+	raw, err := s.client.Get(ctx, cacheKey).Bytes()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil, nil // not found, without error
+		}
+		return nil, nil, err
+	}
+	var v cacheUserPermission
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, nil, err
+	}
+	return v.UserPermission, v.ResourceAccess, nil
+}
+
+func (s *RedisCache) SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess map[string]interface{}) error {
+	v := cacheUserPermission{
+		UserPermission: userPerm,
+		ResourceAccess: resourceAccess,
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	// cache userPermissions for 10 seconds
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, getUserPermKey(projectID, userID))
+	return s.client.Set(ctx, cacheKey, raw, 10*time.Second).Err()
+}
+
+func (s *RedisCache) DeleteUserPermission(ctx context.Context, projectID uint64, userID string) error {
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, getUserPermKey(projectID, userID))
+	return s.client.Del(ctx, cacheKey).Err()
+}
+
 type LRU struct {
 	// mem is in-memory lru cache layer
 	mem *expirable.LRU[string, *proto.AccessQuota]
@@ -167,4 +207,8 @@ func (s *LRU) SetAccessQuota(ctx context.Context, aq *proto.AccessQuota) error {
 func (s *LRU) DeleteAccessKey(ctx context.Context, accessKey string) error {
 	s.mem.Remove(accessKey)
 	return s.backend.DeleteAccessKey(ctx, accessKey)
+}
+
+func getUserPermKey(projectID uint64, userID string) string {
+	return fmt.Sprintf("project:%d:userPerm:%s", projectID, userID)
 }

@@ -35,29 +35,31 @@ type PermissionStore interface {
 
 // NewQuotaControlHandler returns server implementation for proto.QuotaControl which is used
 // by the Builder (aka quotacontrol backend).
-func NewQuotaControlHandler(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
+func NewQuotaControlHandler(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, permCache PermissionCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
 	return &qcHandler{
-		log:             log,
-		usageCache:      usageCache,
-		quotaCache:      quotaCache,
-		limitStore:      limit,
-		accessKeyStore:  access,
-		usageStore:      usage,
-		permissionStore: perm,
-		accessKeyGen:    DefaultAccessKey,
+		log:            log,
+		usageCache:     usageCache,
+		quotaCache:     quotaCache,
+		permCache:      permCache,
+		limitStore:     limit,
+		accessKeyStore: access,
+		usageStore:     usage,
+		permStore:      perm,
+		accessKeyGen:   DefaultAccessKey,
 	}
 }
 
 // qcHandler is the quotacontrol handler backend implementation.
 type qcHandler struct {
-	log             logger.Logger
-	usageCache      UsageCache
-	quotaCache      QuotaCache
-	limitStore      LimitStore
-	accessKeyStore  AccessKeyStore
-	usageStore      UsageStore
-	permissionStore PermissionStore
-	accessKeyGen    func(projectID uint64) string
+	log            logger.Logger
+	usageCache     UsageCache
+	quotaCache     QuotaCache
+	permCache      PermissionCache
+	limitStore     LimitStore
+	accessKeyStore AccessKeyStore
+	usageStore     UsageStore
+	permStore      PermissionStore
+	accessKeyGen   func(projectID uint64) string
 }
 
 var _ proto.QuotaControl = &qcHandler{}
@@ -220,15 +222,23 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 }
 
 func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
-	// TODO: .. add cache ........
-	userPerm, resource, err := q.permissionStore.GetUserPermission(ctx, projectID, userID)
+	userPerm, resourceAccess, err := q.permStore.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
-		return userPerm, resource, proto.ErrUnauthorizedUser
+		return userPerm, resourceAccess, proto.ErrUnauthorizedUser
 	}
 	if userPerm != nil && *userPerm == proto.UserPermission_UNAUTHORIZED {
-		return userPerm, resource, proto.ErrUnauthorizedUser
+		return userPerm, resourceAccess, proto.ErrUnauthorizedUser
 	}
-	return userPerm, resource, nil
+	go func() {
+		// NOTE: we pass a fresh context here, as otherwise requests/other contexts which cancel
+		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
+		err := q.permCache.SetUserPermission(context.Background(), projectID, userID, userPerm, resourceAccess)
+		if err != nil {
+			q.log.With("err", err).Error("quotacontrol: failed to set user perm in cache")
+		}
+	}()
+
+	return userPerm, resourceAccess, nil
 }
 
 func firstOfTheMonth(now time.Time) time.Time {

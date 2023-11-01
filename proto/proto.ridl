@@ -93,4 +93,4 @@ service QuotaControl
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
   # User permissions for a projectId
-  - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resources: map<string,any>)
+  - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: map<string,any>)

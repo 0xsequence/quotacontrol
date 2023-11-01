@@ -75,7 +75,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	client := NewClient(wlog.With("client", "client"), proto.Service_Indexer, cfg)
 
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), cache, cache, store, store, store, nil),
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), cache, cache, cache, store, store, store, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{
