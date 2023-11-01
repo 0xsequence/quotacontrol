@@ -14,6 +14,7 @@ const (
 	UserPermission_UNAUTHORIZED = proto.UserPermission_UNAUTHORIZED
 	UserPermission_READ         = proto.UserPermission_READ
 	UserPermission_READ_WRITE   = proto.UserPermission_READ_WRITE
+	UserPermission_ADMIN        = proto.UserPermission_ADMIN
 )
 
 func DefaultAccessKey(projectID uint64) string {

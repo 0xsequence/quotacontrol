@@ -61,6 +61,7 @@ enum UserPermission: uint16
   - UNAUTHORIZED
   - READ
   - READ_WRITE
+  - ADMIN
 
 
 error 1001 Timeout            "Request timed out" HTTP 408
