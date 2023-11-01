@@ -2,15 +2,13 @@ package quotacontrol
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/jxskiss/base62"
+	"github.com/goware/logger"
 )
 
 type LimitStore interface {
@@ -31,44 +29,42 @@ type UsageStore interface {
 	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
-func NewQuotaControl(usageCache UsageCache, quotaCache QuotaCache, limit LimitStore, access AccessKeyStore, usage UsageStore) proto.QuotaControl {
-	return &quotaControl{
+type PermissionStore interface {
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
+}
+
+// NewQuotaControlHandler returns server implementation for proto.QuotaControl which is used
+// by the Builder (aka quotacontrol backend).
+func NewQuotaControlHandler(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, permCache PermissionCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
+	return &qcHandler{
+		log:            log,
 		usageCache:     usageCache,
 		quotaCache:     quotaCache,
+		permCache:      permCache,
 		limitStore:     limit,
 		accessKeyStore: access,
 		usageStore:     usage,
+		permStore:      perm,
 		accessKeyGen:   DefaultAccessKey,
 	}
 }
 
-type quotaControl struct {
+// qcHandler is the quotacontrol handler backend implementation.
+type qcHandler struct {
+	log            logger.Logger
 	usageCache     UsageCache
 	quotaCache     QuotaCache
+	permCache      PermissionCache
 	limitStore     LimitStore
 	accessKeyStore AccessKeyStore
 	usageStore     UsageStore
+	permStore      PermissionStore
 	accessKeyGen   func(projectID uint64) string
 }
 
-var _ proto.QuotaControl = &quotaControl{}
+var _ proto.QuotaControl = &qcHandler{}
 
-func firstOfTheMonth(now time.Time) time.Time {
-	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-}
-
-func getTimeInterval(from, to *time.Time) (min time.Time, max time.Time) {
-	if from == nil {
-		from = proto.Ptr(firstOfTheMonth(time.Now()))
-	}
-	// if not set, one month after `from`
-	if to == nil {
-		to = proto.Ptr(from.AddDate(0, 1, -1))
-	}
-	return *from, *to
-}
-
-func (q quotaControl) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	min, max := getTimeInterval(from, to)
 
 	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, min, max)
@@ -78,7 +74,7 @@ func (q quotaControl) GetAccountUsage(ctx context.Context, projectID uint64, ser
 	return &usage, nil
 }
 
-func (q quotaControl) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	min, max := getTimeInterval(from, to)
 
 	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, min, max)
@@ -88,7 +84,7 @@ func (q quotaControl) GetAccessKeyUsage(ctx context.Context, accessKey string, s
 	return &usage, nil
 }
 
-func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
+func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
 	usage, err := q.GetAccountUsage(ctx, projectID, nil, proto.Ptr(firstOfTheMonth(now)), nil)
 	if err != nil {
 		return false, err
@@ -99,7 +95,7 @@ func (q quotaControl) PrepareUsage(ctx context.Context, projectID uint64, now ti
 	return true, nil
 }
 
-func (q quotaControl) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
+func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
 	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -112,15 +108,22 @@ func (q quotaControl) GetAccessQuota(ctx context.Context, accessKey string) (*pr
 		Limit:     limit,
 		AccessKey: access,
 	}
-	go q.quotaCache.SetAccessQuota(ctx, &record)
+	go func() {
+		// NOTE: we pass a fresh context here, as otherwise requests/other contexts which cancel
+		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
+		err := q.quotaCache.SetAccessQuota(context.Background(), &record)
+		if err != nil {
+			q.log.With("err", err).Error("quotacontrol: failed to set access quota in cache")
+		}
+	}()
 	return &record, nil
 }
 
-func (q quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+func (q qcHandler) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
 	return true, nil
 }
 
-func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+func (q qcHandler) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for accessKey, accessUsage := range usage {
@@ -136,11 +139,11 @@ func (q quotaControl) UpdateUsage(ctx context.Context, service *proto.Service, n
 	return m, nil
 }
 
-func (q quotaControl) GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
+func (q qcHandler) GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
 	return q.limitStore.GetAccessLimit(ctx, projectID)
 }
 
-func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) (bool, error) {
+func (q qcHandler) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) (bool, error) {
 	if err := config.Validate(); err != nil {
 		return false, proto.WebRPCError{HTTPStatus: http.StatusBadRequest, Message: err.Error()}
 	}
@@ -151,11 +154,11 @@ func (q quotaControl) SetAccessLimit(ctx context.Context, projectID uint64, conf
 	return true, nil
 }
 
-func (q quotaControl) GetAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+func (q qcHandler) GetAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
 	return q.accessKeyStore.FindAccessKey(ctx, accessKey)
 }
 
-func (q quotaControl) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
@@ -170,7 +173,7 @@ func (q quotaControl) CreateAccessKey(ctx context.Context, projectID uint64, dis
 	return &access, nil
 }
 
-func (q quotaControl) RotateAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
 	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -182,7 +185,7 @@ func (q quotaControl) RotateAccessKey(ctx context.Context, accessKey string) (*p
 	return q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
 }
 
-func (q quotaControl) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
 	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -202,11 +205,11 @@ func (q quotaControl) UpdateAccessKey(ctx context.Context, accessKey string, dis
 	return access, nil
 }
 
-func (q quotaControl) ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error) {
+func (q qcHandler) ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error) {
 	return q.accessKeyStore.ListAccessKeys(ctx, projectID, active, service)
 }
 
-func (q quotaControl) DisableAccessKey(ctx context.Context, accessKey string) (bool, error) {
+func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool, error) {
 	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return false, err
@@ -218,17 +221,37 @@ func (q quotaControl) DisableAccessKey(ctx context.Context, accessKey string) (b
 	return true, nil
 }
 
-func DefaultAccessKey(projectID uint64) string {
-	buf := make([]byte, 24)
-	binary.BigEndian.PutUint64(buf, projectID)
-	rand.Read(buf[8:])
-	return base62.EncodeToString(buf)
+func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
+	userPerm, resourceAccess, err := q.permStore.GetUserPermission(ctx, projectID, userID)
+	if err != nil {
+		return userPerm, resourceAccess, proto.ErrUnauthorizedUser
+	}
+	if userPerm != nil && *userPerm == proto.UserPermission_UNAUTHORIZED {
+		return userPerm, resourceAccess, proto.ErrUnauthorizedUser
+	}
+	go func() {
+		// NOTE: we pass a fresh context here, as otherwise requests/other contexts which cancel
+		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
+		err := q.permCache.SetUserPermission(context.Background(), projectID, userID, userPerm, resourceAccess)
+		if err != nil {
+			q.log.With("err", err).Error("quotacontrol: failed to set user perm in cache")
+		}
+	}()
+
+	return userPerm, resourceAccess, nil
 }
 
-func GetProjectID(accessKey string) (uint64, error) {
-	buf, err := base62.DecodeString(accessKey)
-	if err != nil || len(buf) < 8 {
-		return 0, proto.ErrAccessKeyNotFound
+func firstOfTheMonth(now time.Time) time.Time {
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+}
+
+func getTimeInterval(from, to *time.Time) (min time.Time, max time.Time) {
+	if from == nil {
+		from = proto.Ptr(firstOfTheMonth(time.Now()))
 	}
-	return binary.BigEndian.Uint64(buf[:8]), nil
+	// if not set, one month after `from`
+	if to == nil {
+		to = proto.Ptr(from.AddDate(0, 1, -1))
+	}
+	return *from, *to
 }

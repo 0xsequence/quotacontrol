@@ -36,6 +36,9 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 	if cfg.LRUSize > 0 {
 		quotaCache = NewLRU(quotaCache, cfg.LRUSize)
 	}
+
+	permCache := PermissionCache(cache)
+
 	return &Client{
 		cfg:     cfg,
 		service: service,
@@ -44,6 +47,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		},
 		usageCache: UsageCache(cache),
 		quotaCache: quotaCache,
+		permCache:  permCache,
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.AccessKey,
@@ -62,6 +66,7 @@ type Client struct {
 	usage       *usageTracker
 	usageCache  UsageCache
 	quotaCache  QuotaCache
+	permCache   PermissionCache
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
 
@@ -95,8 +100,8 @@ func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*pro
 	return quota, nil
 }
 
-// GetUsage returns the current usage of the access key.
-func (c *Client) GetUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
+// FetchUsage fetches the current usage of the access key.
+func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	key := getQuotaKey(quota.AccessKey.ProjectID, now)
 	for i := time.Duration(0); i < 3; i++ {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
@@ -121,11 +126,44 @@ func (c *Client) GetUsage(ctx context.Context, quota *proto.AccessQuota, now tim
 	return 0, proto.ErrTimeout
 }
 
+func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, map[string]any, error) {
+	var userPerm *proto.UserPermission
+	var resourceAccess map[string]interface{}
+	var err error
+
+	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.
+	if useCache {
+		userPerm, resourceAccess, err = c.permCache.GetUserPermission(ctx, projectID, userID)
+		if err != nil {
+			// log the error, but don't stop
+			c.logger.With("err", err).Error("FetchUserPermission failed to query the permCache")
+		}
+	}
+
+	// Ask quotacontrol server via client
+	if userPerm == nil {
+		userPerm, resourceAccess, err = c.quotaClient.GetUserPermission(ctx, projectID, userID)
+		if err != nil {
+			return userPerm, resourceAccess, err
+		}
+	}
+
+	// Check if userPerm is still nil, in which case return unauthorized
+	if userPerm == nil {
+		v := proto.UserPermission_UNAUTHORIZED
+		return &v, resourceAccess, nil
+	}
+
+	return userPerm, resourceAccess, nil
+}
+
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
 	accessKey := quota.AccessKey.AccessKey
 	cfg := quota.Limit
+
 	// spend compute units
 	key := getQuotaKey(quota.AccessKey.ProjectID, now)
+
 	// check rate limit
 	if !middleware.IsSkipRateLimit(ctx) {
 		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
@@ -136,6 +174,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			return false, proto.ErrLimitExceeded
 		}
 	}
+
 	for i := time.Duration(0); i < 3; i++ {
 		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
 		switch err {
@@ -169,7 +208,12 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			return false, err
 		}
 	}
+
 	return false, proto.ErrTimeout
+}
+
+func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey string) error {
+	return c.quotaCache.DeleteAccessKey(ctx, accessKey)
 }
 
 func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {
