@@ -8,6 +8,14 @@ import (
 	"github.com/jxskiss/base62"
 )
 
+type UserPermission = proto.UserPermission
+
+const (
+	UserPermission_UNAUTHORIZED = proto.UserPermission_UNAUTHORIZED
+	UserPermission_READ         = proto.UserPermission_READ
+	UserPermission_READ_WRITE   = proto.UserPermission_READ_WRITE
+)
+
 func DefaultAccessKey(projectID uint64) string {
 	buf := make([]byte, 24)
 	binary.BigEndian.PutUint64(buf, projectID)
