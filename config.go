@@ -20,6 +20,7 @@ type Config struct {
 	Enabled     bool              `toml:"enabled"`
 	URL         string            `toml:"url"`
 	AccessKey   string            `toml:"access_key"`
+	SpecialKeys map[string]uint64 `toml:"special_keys"`
 	UpdateFreq  Duration          `toml:"update_freq"`
 	RateLimiter RateLimiterConfig `toml:"rate_limiter"`
 	Redis       redis.Config      `toml:"redis"`

@@ -14,6 +14,12 @@ type UsageUpdater interface {
 	UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
 }
 
+func newUsageTracker() *usageTracker {
+	return &usageTracker{
+		Usage: make(map[time.Time]map[string]*proto.AccessUsage),
+	}
+}
+
 // UsageChanges keeps track of the usage of a service
 type usageTracker struct {
 	// Mutex used for usage data

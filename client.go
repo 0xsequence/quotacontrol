@@ -14,10 +14,6 @@ import (
 	redisclient "github.com/redis/go-redis/v9"
 )
 
-type Notifier interface {
-	Notify(access *proto.AccessKey) error
-}
-
 func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client {
 	// TODO: set other options too...
 	redisClient := redisclient.NewClient(&redisclient.Options{
@@ -40,21 +36,24 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 	permCache := PermissionCache(cache)
 
 	return &Client{
-		cfg:     cfg,
-		service: service,
-		usage: &usageTracker{
-			Usage: make(map[time.Time]map[string]*proto.AccessUsage),
-		},
+		cfg:    cfg,
+		logger: logger,
+
+		service:      service,
+		specialKeys:  newSpecialKeys(cfg.SpecialKeys),
+		usageTracker: newUsageTracker(),
+
 		usageCache: UsageCache(cache),
 		quotaCache: quotaCache,
 		permCache:  permCache,
+
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.AccessKey,
 		}),
 		rateLimiter: NewRateLimiter(redisClient),
-		ticker:      ticker,
-		logger:      logger,
+
+		ticker: ticker,
 	}
 }
 
@@ -62,11 +61,14 @@ type Client struct {
 	cfg    Config
 	logger logger.Logger
 
-	service     proto.Service
-	usage       *usageTracker
-	usageCache  UsageCache
-	quotaCache  QuotaCache
-	permCache   PermissionCache
+	service      proto.Service
+	specialKeys  *specialKeys
+	usageTracker *usageTracker
+
+	usageCache UsageCache
+	quotaCache QuotaCache
+	permCache  PermissionCache
+
 	quotaClient proto.QuotaControl
 	rateLimiter RateLimiter
 
@@ -81,8 +83,33 @@ func (c *Client) IsEnabled() bool {
 	return c.cfg.Enabled //&& c.isRunning()
 }
 
+func (c *Client) AddSpecialKey(key string, projectID uint64) {
+	c.specialKeys.Set(key, projectID)
+}
+
+func (c *Client) RemoveSpecialKey(key string) {
+	c.specialKeys.Delete(key)
+}
+
 // FetchQuota fetches and validates the accessKey from cache or from the quota server.
 func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error) {
+	// check special keys
+	if projectID, ok := c.specialKeys.Get(accessKey); ok {
+		return &proto.AccessQuota{
+			AccessKey: &proto.AccessKey{
+				ProjectID:   projectID,
+				AccessKey:   accessKey,
+				DisplayName: "special",
+				Active:      true,
+			},
+			Limit: &proto.Limit{
+				RateLimit: 1_000_000_000_000_000_000,
+				FreeCU:    1_000_000_000_000_000_000,
+				SoftQuota: 1_000_000_000_000_000_000,
+				HardQuota: 1_000_000_000_000_000_000,
+			},
+		}, nil
+	}
 	// fetch access quota
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
@@ -102,6 +129,11 @@ func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*pro
 
 // FetchUsage fetches the current usage of the access key.
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
+	// check special keys
+	if _, ok := c.specialKeys.Get(quota.AccessKey.AccessKey); ok {
+		return 0, nil
+	}
+
 	key := getQuotaKey(quota.AccessKey.ProjectID, now)
 	for i := time.Duration(0); i < 3; i++ {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
@@ -158,7 +190,11 @@ func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, user
 }
 
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
+	// check special keys
 	accessKey := quota.AccessKey.AccessKey
+	if _, ok := c.specialKeys.Get(accessKey); ok {
+		return true, nil
+	}
 	cfg := quota.Limit
 
 	// spend compute units
@@ -180,7 +216,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 		switch err {
 		case nil:
 			usage, event := cfg.GetSpendResult(computeUnits, total)
-			c.usage.AddUsage(accessKey, now, usage)
+			c.usageTracker.AddUsage(accessKey, now, usage)
 			if usage.LimitedCompute != 0 {
 				return false, proto.ErrLimitExceeded
 			}
@@ -191,7 +227,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			}
 			return true, nil
 		case proto.ErrLimitExceeded:
-			c.usage.AddUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
+			c.usageTracker.AddUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
 			return false, err
 		case ErrCachePing:
 			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, now)
@@ -249,7 +285,7 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 	// Start the sync
 	for range c.ticker.C {
-		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
+		if err := c.usageTracker.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
 			c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 			continue
 		}
@@ -268,7 +304,7 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
-	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
+	if err := c.usageTracker.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
 		c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 	}
 	c.logger.With("op", "stop").Info("-> quota control: stopped.")
