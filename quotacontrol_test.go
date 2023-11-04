@@ -111,7 +111,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
-		qc.notifications = make(map[uint64][]proto.EventType)
 
 		// Spend Free CU
 		for i := int64(1); i < limit.FreeCU; i++ {
