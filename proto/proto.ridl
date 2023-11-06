@@ -10,6 +10,8 @@ enum Service: uint16
   - Metadata
 
 struct Limit
+  - maxKeys: int64
+    + go.tag.json = max_keys,omitempty
   - rateLimit: int64
   - freeCU: int64
   - softQuota: int64
@@ -70,6 +72,7 @@ error 1003 InvalidOrigin      "Invalid origin" HTTP 403
 error 1004 InvalidService     "Invalid service" HTTP 403
 error 1005 AccessKeyNotFound  "Access key not found" HTTP 401
 error 1006 UnauthorizedUser   "Unauthorized user" HTTP 403
+error 1007 MaxAccessKeys      "Access keys limit reached" HTTP 403
 
 
 service QuotaControl

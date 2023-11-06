@@ -159,6 +159,20 @@ func (q qcHandler) GetAccessKey(ctx context.Context, accessKey string) (*proto.A
 }
 
 func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+	limit, err := q.limitStore.GetAccessLimit(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if limit.MaxKeys > 0 {
+		list, err := q.accessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
+		if err != nil {
+			return nil, err
+		}
+		if l := len(list); int64(l) >= limit.MaxKeys {
+			return nil, proto.ErrMaxAccessKeys
+		}
+	}
+
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
