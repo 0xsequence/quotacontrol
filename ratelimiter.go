@@ -92,15 +92,34 @@ func NewPublicRateLimiter(cfg Config) func(next http.Handler) http.Handler {
 		}),
 		httprate.WithLimitCounter(limitCounter),
 	}
-	return func(h http.Handler) http.Handler {
-		rl := httprate.Limit(rpm, time.Minute, options...)(h)
+
+	return func(next http.Handler) http.Handler {
+		rl := httprate.Limit(rpm, time.Minute, options...)(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			if middleware.GetAccessQuota(ctx) == nil && !middleware.IsSkipRateLimit(ctx) {
 				rl.ServeHTTP(w, r)
 				return
 			}
-			h.ServeHTTP(w, r)
+			next.ServeHTTP(w, r)
 		})
 	}
 }
+
+func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+type RateLimitVaryFn func(r *http.Request) (RateLimitType, string)
+
+type RateLimitType uint16
+
+const (
+	RateLimitType_Public RateLimitType = iota
+	RateLimitType_User
+	RateLimitType_Service
+)
