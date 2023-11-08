@@ -15,13 +15,13 @@ import (
 
 func TestRateLimiter(t *testing.T) {
 	const _CustomErrorMessage = "Custom error message"
-	rl := NewPublicRateLimiter(Config{
+	rl := NewHTTPRateLimiter(Config{
 		RateLimiter: RateLimiterConfig{
 			Enabled:                 true,
 			PublicRequestsPerMinute: 10,
 			ErrorMessage:            _CustomErrorMessage,
 		},
-	})
+	}, nil)
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)
