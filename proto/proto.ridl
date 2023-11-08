@@ -5,6 +5,7 @@ version = v0.1.0
 
 enum Service: uint16
   - NodeGateway
+  - API
   - Indexer
   - Relayer
   - Metadata
