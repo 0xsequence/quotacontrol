@@ -58,54 +58,6 @@ func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits
 	}, nil
 }
 
-func NewPublicRateLimiter(cfg Config) func(next http.Handler) http.Handler {
-	const _DefaultRPM = 120
-
-	if !cfg.RateLimiter.Enabled {
-		return func(next http.Handler) http.Handler {
-			return next
-		}
-	}
-
-	limitCounter, _ := httprateredis.NewRedisLimitCounter(&httprateredis.Config{
-		Host:      cfg.Redis.Host,
-		Port:      cfg.Redis.Port,
-		MaxIdle:   cfg.Redis.MaxIdle,
-		MaxActive: cfg.Redis.MaxActive,
-		DBIndex:   cfg.Redis.DBIndex,
-	})
-
-	rpm := _DefaultRPM
-	if cfg.RateLimiter.PublicRequestsPerMinute > 0 {
-		rpm = cfg.RateLimiter.PublicRequestsPerMinute
-	}
-
-	err := proto.ErrLimitExceeded
-	if cfg.RateLimiter.ErrorMessage != "" {
-		err.Message = cfg.RateLimiter.ErrorMessage
-	}
-
-	options := []httprate.Option{
-		httprate.WithKeyFuncs(httprate.KeyByRealIP),
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, err)
-		}),
-		httprate.WithLimitCounter(limitCounter),
-	}
-
-	return func(next http.Handler) http.Handler {
-		rl := httprate.Limit(rpm, time.Minute, options...)(next)
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			if middleware.GetAccessQuota(ctx) == nil && !middleware.IsSkipRateLimit(ctx) {
-				rl.ServeHTTP(w, r)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler) http.Handler {
 	// Short-cut the middleware if the rate limiter is disabled
 	if !cfg.RateLimiter.Enabled {
