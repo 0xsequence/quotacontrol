@@ -193,9 +193,13 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler
 			}
 
 			// Rate limit
-			rateLimitType, rlKey := vary(r)
-			if rlKey != "" {
-				r = r.WithContext(context.WithValue(r.Context(), ctxRateLimitKey, rlKey))
+			var rateLimitType RateLimitType
+			var rlKey string
+			if vary != nil {
+				rateLimitType, rlKey = vary(r)
+				if rlKey != "" {
+					r = r.WithContext(context.WithValue(r.Context(), ctxRateLimitKey, rlKey))
+				}
 			}
 
 			switch rateLimitType {
