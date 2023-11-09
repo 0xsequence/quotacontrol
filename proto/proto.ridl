@@ -12,7 +12,7 @@ enum Service: uint16
 
 struct Limit
   - maxKeys: int64
-    + go.tag.json = max_keys,omitempty
+    + go.tag.json = maxKeys,omitempty
   - rateLimit: int64
   - freeCU: int64
   - softQuota: int64
