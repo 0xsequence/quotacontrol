@@ -158,16 +158,44 @@ func (q qcHandler) GetAccessKey(ctx context.Context, accessKey string) (*proto.A
 	return q.accessKeyStore.FindAccessKey(ctx, accessKey)
 }
 
+func (q qcHandler) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*proto.AccessKey, error) {
+	list, err := q.accessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var defaultAccessKey *proto.AccessKey 
+	for _, accessKey := range list {
+		if accessKey.Default {
+			defaultAccessKey = accessKey
+			break
+		}
+	}
+
+	if defaultAccessKey == nil {
+		return nil, fmt.Errorf("no default access key found")
+	}
+
+	return defaultAccessKey, nil
+}
+
 func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
 	limit, err := q.limitStore.GetAccessLimit(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
+
+	list, err := q.accessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	isFirstAccessKey := false
+	if len(list) == 0 {
+		isFirstAccessKey = true
+	}
+
 	if limit.MaxKeys > 0 {
-		list, err := q.accessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
-		if err != nil {
-			return nil, err
-		}
 		if l := len(list); int64(l) >= limit.MaxKeys {
 			return nil, proto.ErrMaxAccessKeys
 		}
@@ -178,6 +206,7 @@ func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displa
 		DisplayName:     displayName,
 		AccessKey:       q.accessKeyGen(projectID),
 		Active:          true,
+		Default:         isFirstAccessKey,
 		AllowedOrigins:  allowedOrigins,
 		AllowedServices: allowedServices,
 	}
@@ -219,6 +248,42 @@ func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displa
 	return access, nil
 }
 
+func (q qcHandler) UpdateDefaultAccessKey(ctx context.Context, projectID uint64, accessKey string) (bool, error) {
+	// make sure accessKey exists
+	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
+	if err != nil {
+		return false, err
+	}
+
+	if access.ProjectID != projectID {
+		return false, fmt.Errorf("project doesn't own the given access key")
+	}
+
+	defaultAccess, err := q.GetDefaultAccessKey(ctx, projectID)
+	if err != nil {
+		return false, err
+	}
+
+	// make sure new default access key & old default access key are different
+	if defaultAccess.AccessKey == access.AccessKey {
+		return true, nil
+	}
+
+	// update old default access
+	defaultAccess.Default = false
+	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, defaultAccess); err != nil {
+		return false, err
+	}
+
+	// set new access key to default
+	access.Default = true
+	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 func (q qcHandler) ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error) {
 	return q.accessKeyStore.ListAccessKeys(ctx, projectID, active, service)
 }
@@ -228,10 +293,41 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 	if err != nil {
 		return false, err
 	}
+
+	list, err := q.accessKeyStore.ListAccessKeys(ctx, access.ProjectID, proto.Ptr(true), nil)
+	if err != nil {
+		return false, err
+	}
+
+	if len(list) == 1 {
+		return false, fmt.Errorf("There should be atleast one active accessKey per project")
+	}
+
+	isDefault := access.Default
+
 	access.Active = false
+	access.Default = false
 	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
 		return false, err
 	}
+
+	if isDefault == false {
+		return true, nil
+	}
+
+	// set another project accessKey to default
+	listUpdated, err := q.accessKeyStore.ListAccessKeys(ctx, access.ProjectID, proto.Ptr(true), nil)
+	if err != nil {
+		return false, err
+	}
+
+	anotherAccessKey := listUpdated[0] 
+	if anotherAccessKey != nil {
+		if _, err := q.UpdateDefaultAccessKey(ctx, anotherAccessKey.ProjectID, anotherAccessKey.AccessKey); err != nil {
+			return false, err
+		}
+	}
+
 	return true, nil
 }
 

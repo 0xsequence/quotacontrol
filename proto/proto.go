@@ -110,6 +110,14 @@ func (q *AccessQuota) IsActive() bool {
 	return q.AccessKey.Active
 }
 
+
+func (q *AccessQuota) IsDefault() bool {
+	if q.Limit == nil || q.AccessKey == nil {
+		return false
+	}
+	return q.AccessKey.Default
+}
+
 func (q *AccessQuota) ProjectID() uint64 {
 	if q.AccessKey == nil {
 		return 0
