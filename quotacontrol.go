@@ -164,19 +164,12 @@ func (q qcHandler) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*
 		return nil, err
 	}
 
-	var defaultAccessKey *proto.AccessKey 
 	for _, accessKey := range list {
 		if accessKey.Default {
-			defaultAccessKey = accessKey
-			break
+			return accessKey, nil
 		}
 	}
-
-	if defaultAccessKey == nil {
-		return nil, fmt.Errorf("no default access key found")
-	}
-
-	return defaultAccessKey, nil
+	return nil, proto.ErrNoDefaultKey
 }
 
 func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
@@ -190,11 +183,6 @@ func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displa
 		return nil, err
 	}
 
-	isFirstAccessKey := false
-	if len(list) == 0 {
-		isFirstAccessKey = true
-	}
-
 	if limit.MaxKeys > 0 {
 		if l := len(list); int64(l) >= limit.MaxKeys {
 			return nil, proto.ErrMaxAccessKeys
@@ -206,7 +194,7 @@ func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displa
 		DisplayName:     displayName,
 		AccessKey:       q.accessKeyGen(projectID),
 		Active:          true,
-		Default:         isFirstAccessKey,
+		Default:         len(list) == 0,
 		AllowedOrigins:  allowedOrigins,
 		AllowedServices: allowedServices,
 	}
@@ -300,7 +288,7 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 	}
 
 	if len(list) == 1 {
-		return false, fmt.Errorf("There should be atleast one active accessKey per project")
+		return false, proto.ErrAtLeastOneKey
 	}
 
 	isDefault := access.Default
@@ -321,11 +309,9 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		return false, err
 	}
 
-	anotherAccessKey := listUpdated[0] 
-	if anotherAccessKey != nil {
-		if _, err := q.UpdateDefaultAccessKey(ctx, anotherAccessKey.ProjectID, anotherAccessKey.AccessKey); err != nil {
-			return false, err
-		}
+	anotherAccessKey := listUpdated[0]
+	if q.UpdateDefaultAccessKey(ctx, anotherAccessKey.ProjectID, anotherAccessKey.AccessKey); err != nil {
+		return false, err
 	}
 
 	return true, nil

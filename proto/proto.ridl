@@ -77,7 +77,8 @@ error 1004 InvalidService     "Invalid service" HTTP 403
 error 1005 AccessKeyNotFound  "Access key not found" HTTP 401
 error 1006 UnauthorizedUser   "Unauthorized user" HTTP 403
 error 1007 MaxAccessKeys      "Access keys limit reached" HTTP 403
-
+error 1008 NoDefaultKey       "No default access key found" HTTP 403
+error 1009 AtLeastOneKey       "There should be atleast one active accessKey per project" HTTP 403
 
 service QuotaControl
   # Access Limit
