@@ -304,9 +304,11 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		if err != nil {
 			return false, err
 		}
-	
-		anotherAccessKey := listUpdated[0]
-		if q.UpdateDefaultAccessKey(ctx, anotherAccessKey.ProjectID, anotherAccessKey.AccessKey); err != nil {
+
+		newDefaultKey := listUpdated[0]
+		newDefaultKey.Default = true
+
+		if access, err = q.accessKeyStore.UpdateAccessKey(ctx, newDefaultKey); err != nil {
 			return false, err
 		}
 	}
