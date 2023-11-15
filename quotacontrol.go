@@ -259,7 +259,7 @@ func (q qcHandler) UpdateDefaultAccessKey(ctx context.Context, projectID uint64,
 
 	// update old default access
 	defaultAccess.Default = false
-	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, defaultAccess); err != nil {
+	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, defaultAccess); err != nil {
 		return false, err
 	}
 
