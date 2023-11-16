@@ -33,7 +33,8 @@ struct AccessKey
     + go.tag.db = active
 
   - default: bool
-    + go.tag.db = default
+    + go.field.name = Default
+    + go.tag.db = is_default
 
   - allowedOrigins: []string
     + go.tag.db = allowed_origins

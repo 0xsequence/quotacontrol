@@ -209,11 +209,27 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 	if err != nil {
 		return nil, err
 	}
+
+	isDefaultKey := access.Default
+
 	access.Active = false
+	access.Default = false
+
 	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
-	return q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+	if err != nil {
+		return nil, err
+	}
+
+	if isDefaultKey == true {
+		// set new key as default
+		newAccess.Default = true
+		return q.accessKeyStore.UpdateAccessKey(ctx, newAccess);
+	}
+
+	return newAccess, nil
 }
 
 func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
@@ -259,7 +275,7 @@ func (q qcHandler) UpdateDefaultAccessKey(ctx context.Context, projectID uint64,
 
 	// update old default access
 	defaultAccess.Default = false
-	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, defaultAccess); err != nil {
+	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, defaultAccess); err != nil {
 		return false, err
 	}
 
@@ -291,7 +307,6 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		return false, proto.ErrAtLeastOneKey
 	}
 
-	isDefault := access.Default
 
 	access.Active = false
 	access.Default = false
@@ -299,19 +314,19 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		return false, err
 	}
 
-	if isDefault == false {
-		return true, nil
-	}
-
 	// set another project accessKey to default
-	listUpdated, err := q.accessKeyStore.ListAccessKeys(ctx, access.ProjectID, proto.Ptr(true), nil)
-	if err != nil {
-		return false, err
-	}
+	if _, err := q.GetDefaultAccessKey(ctx, access.ProjectID); err == proto.ErrNoDefaultKey {
+		listUpdated, err := q.accessKeyStore.ListAccessKeys(ctx, access.ProjectID, proto.Ptr(true), nil)
+		if err != nil {
+			return false, err
+		}
 
-	anotherAccessKey := listUpdated[0]
-	if q.UpdateDefaultAccessKey(ctx, anotherAccessKey.ProjectID, anotherAccessKey.AccessKey); err != nil {
-		return false, err
+		newDefaultKey := listUpdated[0]
+		newDefaultKey.Default = true
+
+		if access, err = q.accessKeyStore.UpdateAccessKey(ctx, newDefaultKey); err != nil {
+			return false, err
+		}
 	}
 
 	return true, nil
