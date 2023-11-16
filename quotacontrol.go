@@ -209,11 +209,27 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 	if err != nil {
 		return nil, err
 	}
+
+	isDefaultKey := access.Default
+
 	access.Active = false
+	access.Default = false
+
 	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
-	return q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+	if err != nil {
+		return nil, err
+	}
+
+	if isDefaultKey == true {
+		// set new key as default
+		newAccess.Default = true
+		return q.accessKeyStore.UpdateAccessKey(ctx, newAccess);
+	}
+
+	return newAccess, nil
 }
 
 func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
