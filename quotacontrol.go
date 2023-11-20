@@ -81,10 +81,8 @@ func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, servic
 	return &usage, nil
 }
 
-func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, cycle *proto.Cycle, now time.Time) (*proto.AccessUsage, error) {
-	min, max := cycle.GetStart(now), cycle.GetEnd(now)
-
-	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, min, max)
+func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to time.Time) (*proto.AccessUsage, error) {
+	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, from, to)
 	if err != nil {
 		return nil, err
 	}
