@@ -55,7 +55,12 @@ struct AccessUsage
   - limitedCompute: int64
     + go.tag.db = limited_compute
 
+struct Cycle
+  - start: timestamp
+  - end: timestamp
+
 struct AccessQuota
+  - cycle: Cycle
   - limit: Limit
   - accessKey: AccessKey
 
