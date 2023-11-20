@@ -19,6 +19,7 @@ func NewMemoryStore() *MemoryStore {
 // MemoryStore is an in-memory store, used for testing and prototype.
 type MemoryStore struct {
 	limits     map[uint64]*proto.Limit
+	cycles     map[uint64]*proto.Cycle
 	accessKeys map[string]*proto.AccessKey
 	usage      map[string]*proto.AccessUsage
 }
@@ -34,6 +35,15 @@ func (m MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64) (*pro
 		return nil, proto.ErrAccessKeyNotFound
 	}
 	return limit, nil
+}
+
+func (m MemoryStore) SetCycle(ctx context.Context, projectID uint64, cycle *proto.Cycle) error {
+	m.cycles[projectID] = cycle
+	return nil
+}
+
+func (m MemoryStore) GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error) {
+	return m.cycles[projectID], nil
 }
 
 func (m MemoryStore) InsertAccessKey(ctx context.Context, access *proto.AccessKey) error {

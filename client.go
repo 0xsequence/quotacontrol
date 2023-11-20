@@ -82,14 +82,14 @@ func (c *Client) IsEnabled() bool {
 }
 
 // FetchQuota fetches and validates the accessKey from cache or from the quota server.
-func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error) {
+func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 			return nil, err
 		}
-		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey); err != nil {
+		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
 			return nil, err
 		}
 	}

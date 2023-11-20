@@ -29,13 +29,20 @@ type UsageStore interface {
 	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
+type CycleStore interface {
+	GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error)
+}
+
 type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
 }
 
 // NewQuotaControlHandler returns server implementation for proto.QuotaControl which is used
 // by the Builder (aka quotacontrol backend).
-func NewQuotaControlHandler(log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, permCache PermissionCache, limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore) proto.QuotaControl {
+func NewQuotaControlHandler(
+	log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, permCache PermissionCache,
+	limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore, cycle CycleStore,
+) proto.QuotaControl {
 	return &qcHandler{
 		log:            log,
 		usageCache:     usageCache,
@@ -45,6 +52,7 @@ func NewQuotaControlHandler(log logger.Logger, usageCache UsageCache, quotaCache
 		accessKeyStore: access,
 		usageStore:     usage,
 		permStore:      perm,
+		cycleStore:     cycle,
 		accessKeyGen:   DefaultAccessKey,
 	}
 }
@@ -58,6 +66,7 @@ type qcHandler struct {
 	limitStore     LimitStore
 	accessKeyStore AccessKeyStore
 	usageStore     UsageStore
+	cycleStore     CycleStore
 	permStore      PermissionStore
 	accessKeyGen   func(projectID uint64) string
 }
@@ -96,7 +105,7 @@ func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, cycle *pr
 	return true, nil
 }
 
-func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
+func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := q.accessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -105,8 +114,13 @@ func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string) (*proto
 	if err != nil {
 		return nil, err
 	}
+	cycle, err := q.cycleStore.GetAccessCycle(ctx, access.ProjectID, now)
+	if err != nil {
+		return nil, err
+	}
 	record := proto.AccessQuota{
 		Limit:     limit,
+		Cycle:     cycle,
 		AccessKey: access,
 	}
 	go func() {
