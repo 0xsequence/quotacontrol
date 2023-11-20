@@ -73,10 +73,8 @@ type qcHandler struct {
 
 var _ proto.QuotaControl = &qcHandler{}
 
-func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (*proto.AccessUsage, error) {
-	min, max := cycle.GetStart(now), cycle.GetEnd(now)
-
-	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, min, max)
+func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to time.Time) (*proto.AccessUsage, error) {
+	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +92,8 @@ func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, serv
 }
 
 func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
-	usage, err := q.GetAccountUsage(ctx, projectID, nil, cycle, now)
+	min, max := cycle.GetStart(now), cycle.GetEnd(now)
+	usage, err := q.GetAccountUsage(ctx, projectID, nil, min, max)
 	if err != nil {
 		return false, err
 	}
