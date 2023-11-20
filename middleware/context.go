@@ -68,7 +68,7 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 	if accessQuota == nil {
 		return 0, false
 	}
-	projectID := accessQuota.ProjectID()
+	projectID := accessQuota.GetProjectID()
 	active := accessQuota.IsActive()
 	return projectID, active
 }

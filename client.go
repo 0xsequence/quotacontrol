@@ -82,14 +82,14 @@ func (c *Client) IsEnabled() bool {
 }
 
 // FetchQuota fetches and validates the accessKey from cache or from the quota server.
-func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error) {
+func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 			return nil, err
 		}
-		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey); err != nil {
+		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
 			return nil, err
 		}
 	}
@@ -102,14 +102,14 @@ func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string) (*pro
 
 // FetchUsage fetches the current usage of the access key.
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
-	key := getQuotaKey(quota.AccessKey.ProjectID, now)
+	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 	for i := time.Duration(0); i < 3; i++ {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
 		switch err {
 		case nil:
 			return usage, nil
 		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
 			if err != nil {
 				return 0, err
 			}
@@ -162,7 +162,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 	cfg := quota.Limit
 
 	// spend compute units
-	key := getQuotaKey(quota.AccessKey.ProjectID, now)
+	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	// check rate limit
 	if !middleware.IsSkipRateLimit(ctx) {
@@ -194,7 +194,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			c.usage.AddUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
 			return false, err
 		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, now)
+			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
 			if err != nil {
 				return false, err
 			}
@@ -292,6 +292,7 @@ func (c *authorizedClient) Do(req *http.Request) (*http.Response, error) {
 	return c.client.Do(req)
 }
 
-func getQuotaKey(projectID uint64, now time.Time) string {
-	return fmt.Sprintf("project:%v:%s", projectID, now.Format("2006-01"))
+func getQuotaKey(projectID uint64, cycle *proto.Cycle, now time.Time) string {
+	start, end := cycle.GetStart(now), cycle.GetEnd(now)
+	return fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 }

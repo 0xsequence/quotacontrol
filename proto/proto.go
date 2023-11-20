@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 func (e EventType) Ptr() *EventType { return &e }
@@ -50,6 +51,7 @@ func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	}
 	return false
 }
+
 func (t *AccessKey) ValidateService(service *Service) bool {
 	if len(t.AllowedServices) == 0 {
 		return true
@@ -110,7 +112,6 @@ func (q *AccessQuota) IsActive() bool {
 	return q.AccessKey.Active
 }
 
-
 func (q *AccessQuota) IsDefault() bool {
 	if q.Limit == nil || q.AccessKey == nil {
 		return false
@@ -118,10 +119,28 @@ func (q *AccessQuota) IsDefault() bool {
 	return q.AccessKey.Default
 }
 
-func (q *AccessQuota) ProjectID() uint64 {
+func (q *AccessQuota) GetProjectID() uint64 {
 	if q.AccessKey == nil {
 		return 0
 	} else {
 		return q.AccessKey.ProjectID
 	}
+}
+
+func (c *Cycle) GetStart(now time.Time) time.Time {
+	if c != nil && !c.Start.IsZero() {
+		return c.Start
+	}
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+}
+
+func (c *Cycle) GetEnd(now time.Time) time.Time {
+	if c != nil && !c.End.IsZero() {
+		return c.End
+	}
+	return c.GetStart(now).AddDate(0, 1, -1)
+}
+
+func (c *Cycle) GetDuration(now time.Time) time.Duration {
+	return c.GetEnd(now).Sub(c.GetStart(now))
 }

@@ -55,7 +55,12 @@ struct AccessUsage
   - limitedCompute: int64
     + go.tag.db = limited_compute
 
+struct Cycle
+  - start: timestamp
+  - end: timestamp
+
 struct AccessQuota
+  - cycle: Cycle
   - limit: Limit
   - accessKey: AccessKey
 
@@ -97,10 +102,10 @@ service QuotaControl
   - DisableAccessKey(accessKey: string) => (ok: bool)
 
   # Usage
-  - GetAccessQuota(accessKey: string) => (accessQuota: AccessQuota)
+  - GetAccessQuota(accessKey: string, now: timestamp) => (accessQuota: AccessQuota)
   - GetAccountUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
-  - PrepareUsage(projectID: uint64, now: timestamp) => (ok: bool)
+  - PrepareUsage(projectID: uint64, cycle: Cycle, now: timestamp) => (ok: bool)
   - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 

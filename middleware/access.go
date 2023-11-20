@@ -17,7 +17,7 @@ const (
 // Client is the interface that wraps the basic FetchQuota, GetUsage and SpendQuota methods.
 type Client interface {
 	IsEnabled() bool
-	FetchQuota(ctx context.Context, accessKey, origin string) (*proto.AccessQuota, error)
+	FetchQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
 	FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, map[string]any, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
@@ -61,7 +61,7 @@ func VerifyAccessKey(client Client, eh ErrorHandler) func(next http.Handler) htt
 				return
 			}
 
-			quota, err := client.FetchQuota(ctx, accessKey, r.Header.Get(HeaderOrigin))
+			quota, err := client.FetchQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), getTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return
