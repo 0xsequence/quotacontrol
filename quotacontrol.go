@@ -223,10 +223,10 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 		return nil, err
 	}
 
-	if isDefaultKey == true {
+	if isDefaultKey {
 		// set new key as default
 		newAccess.Default = true
-		return q.accessKeyStore.UpdateAccessKey(ctx, newAccess);
+		return q.accessKeyStore.UpdateAccessKey(ctx, newAccess)
 	}
 
 	return newAccess, nil
@@ -281,7 +281,7 @@ func (q qcHandler) UpdateDefaultAccessKey(ctx context.Context, projectID uint64,
 
 	// set new access key to default
 	access.Default = true
-	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+	if _, err = q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
 		return false, err
 	}
 
@@ -307,7 +307,6 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		return false, proto.ErrAtLeastOneKey
 	}
 
-
 	access.Active = false
 	access.Default = false
 	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
@@ -324,7 +323,7 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		newDefaultKey := listUpdated[0]
 		newDefaultKey.Default = true
 
-		if access, err = q.accessKeyStore.UpdateAccessKey(ctx, newDefaultKey); err != nil {
+		if _, err = q.accessKeyStore.UpdateAccessKey(ctx, newDefaultKey); err != nil {
 			return false, err
 		}
 	}
