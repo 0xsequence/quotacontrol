@@ -140,3 +140,7 @@ func (c *Cycle) GetEnd(now time.Time) time.Time {
 	}
 	return c.GetStart(now).AddDate(0, 1, -1)
 }
+
+func (c *Cycle) GetDuration(now time.Time) time.Duration {
+	return c.GetEnd(now).Sub(c.GetStart(now))
+}
