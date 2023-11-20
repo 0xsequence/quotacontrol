@@ -139,13 +139,15 @@ func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, serv
 	return &usage, nil
 }
 
-func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
+func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time, key string) (bool, error) {
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
 	usage, err := q.GetAccountUsage(ctx, projectID, nil, &min, &max)
 	if err != nil {
 		return false, err
 	}
-	key := getQuotaKey(projectID, cycle, now)
+	if key == "" {
+		key = getQuotaKey(projectID, cycle, now)
+	}
 	if err := q.cache.UsageCache.SetComputeUnits(ctx, key, usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
@@ -522,7 +524,7 @@ func (q qcHandler) GetProjectStatus(ctx context.Context, projectID uint64) (*pro
 		if !errors.Is(err, ErrCachePing) {
 			return nil, err
 		}
-		if _, err := q.PrepareUsage(ctx, projectID, cycle, now); err != nil {
+		if _, err := q.PrepareUsage(ctx, projectID, cycle, now, key); err != nil {
 			return nil, err
 		}
 		if usage, err = q.cache.UsageCache.PeekComputeUnits(ctx, key); err != nil {
