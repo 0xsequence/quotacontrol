@@ -73,32 +73,32 @@ type qcHandler struct {
 
 var _ proto.QuotaControl = &qcHandler{}
 
-func (q qcHandler) GetTimeRange(ctx context.Context, projectID uint64, from, to *time.Time) (*time.Time, *time.Time, error) {
+func (q qcHandler) GetTimeRange(ctx context.Context, projectID uint64, from, to *time.Time) (time.Time, time.Time, error) {
 	if from != nil && to != nil {
-		return from, to, nil
+		return *from, *to, nil
 	}
 	now := time.Now()
 	cycle, err := q.cycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
-		return nil, nil, err
+		return time.Time{}, time.Time{}, err
 	}
 	if from == nil && to == nil {
-		return &cycle.Start, &cycle.End, nil
+		return cycle.Start, cycle.End, nil
 	}
 	duration := cycle.GetDuration(now)
 	if from == nil {
-		return proto.Ptr(to.Add(-duration)), to, nil
+		return to.Add(-duration), *to, nil
 	}
-	return from, proto.Ptr(from.Add(duration)), nil
+	return *from, from.Add(duration), nil
 }
 
 func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	from, to, err := q.GetTimeRange(ctx, projectID, from, to)
+	min, max, err := q.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
 		return nil, err
 	}
 
-	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, *from, *to)
+	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, min, max)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +111,12 @@ func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, serv
 		return nil, err
 	}
 
-	from, to, err = q.GetTimeRange(ctx, projectID, from, to)
+	min, max, err := q.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
 		return nil, err
 	}
 
-	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, *from, *to)
+	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, min, max)
 	if err != nil {
 		return nil, err
 	}
