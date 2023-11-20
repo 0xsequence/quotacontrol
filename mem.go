@@ -37,7 +37,7 @@ func (m MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64) (*pro
 	return limit, nil
 }
 
-func (m MemoryStore) SetCycle(ctx context.Context, projectID uint64, cycle *proto.Cycle) error {
+func (m MemoryStore) SetAccessCycle(ctx context.Context, projectID uint64, cycle *proto.Cycle) error {
 	m.cycles[projectID] = cycle
 	return nil
 }
