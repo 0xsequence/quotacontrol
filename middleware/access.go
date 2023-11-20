@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -127,11 +126,7 @@ func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Han
 
 			ok, err := client.SpendQuota(ctx, quota, cu, getTime(ctx))
 			if err != nil {
-				if !errors.Is(err, proto.ErrTimeout) {
-					eh(w, r, next, err)
-					return
-				}
-				next.ServeHTTP(w, r.WithContext(withResult(ctx)))
+				eh(w, r, next, err)
 				return
 			}
 
