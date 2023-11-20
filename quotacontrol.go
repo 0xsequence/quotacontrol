@@ -64,8 +64,8 @@ type qcHandler struct {
 
 var _ proto.QuotaControl = &qcHandler{}
 
-func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	min, max := getTimeInterval(from, to)
+func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (*proto.AccessUsage, error) {
+	min, max := cycle.GetStart(now), cycle.GetEnd(now)
 
 	usage, err := q.usageStore.GetAccountUsage(ctx, projectID, service, min, max)
 	if err != nil {
@@ -74,8 +74,8 @@ func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, servic
 	return &usage, nil
 }
 
-func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	min, max := getTimeInterval(from, to)
+func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, cycle *proto.Cycle, now time.Time) (*proto.AccessUsage, error) {
+	min, max := cycle.GetStart(now), cycle.GetEnd(now)
 
 	usage, err := q.usageStore.GetAccessKeyUsage(ctx, accessKey, service, min, max)
 	if err != nil {
@@ -84,12 +84,13 @@ func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, serv
 	return &usage, nil
 }
 
-func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
-	usage, err := q.GetAccountUsage(ctx, projectID, nil, proto.Ptr(firstOfTheMonth(now)), nil)
+func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
+	usage, err := q.GetAccountUsage(ctx, projectID, nil, cycle, now)
 	if err != nil {
 		return false, err
 	}
-	if err := q.usageCache.SetComputeUnits(ctx, getQuotaKey(projectID, now), usage.GetTotalUsage()); err != nil {
+	key := getQuotaKey(projectID, cycle, now)
+	if err := q.usageCache.SetComputeUnits(ctx, key, usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -349,19 +350,4 @@ func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, user
 	}()
 
 	return userPerm, resourceAccess, nil
-}
-
-func firstOfTheMonth(now time.Time) time.Time {
-	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-}
-
-func getTimeInterval(from, to *time.Time) (min time.Time, max time.Time) {
-	if from == nil {
-		from = proto.Ptr(firstOfTheMonth(time.Now()))
-	}
-	// if not set, one month after `from`
-	if to == nil {
-		to = proto.Ptr(from.AddDate(0, 1, -1))
-	}
-	return *from, *to
 }

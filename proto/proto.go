@@ -127,16 +127,16 @@ func (q *AccessQuota) GetProjectID() uint64 {
 	}
 }
 
-func (q *AccessQuota) GetCycleStart(now time.Time) time.Time {
-	if q.Cycle != nil && !q.Cycle.Start.IsZero() {
-		return q.Cycle.Start
+func (c *Cycle) GetStart(now time.Time) time.Time {
+	if c != nil && !c.Start.IsZero() {
+		return c.Start
 	}
 	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 }
 
-func (q *AccessQuota) GetCycleEnd(now time.Time) time.Time {
-	if q.Cycle != nil && !q.Cycle.End.IsZero() {
-		return q.Cycle.End
+func (c *Cycle) GetEnd(now time.Time) time.Time {
+	if c != nil && !c.End.IsZero() {
+		return c.End
 	}
-	return q.GetCycleStart(now).AddDate(0, 1, -1)
+	return c.GetStart(now).AddDate(0, 1, -1)
 }
