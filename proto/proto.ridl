@@ -79,7 +79,7 @@ enum UserPermission: uint16
 error 1001 Timeout            "Request timed out" HTTP 408
 error 1002 LimitExceeded      "Request limit exceeded" HTTP 429
 error 1003 InvalidOrigin      "Invalid origin" HTTP 403
-error 1004 InvalidService     "Invalid service" HTTP 403
+error 1004 InvalidService     "Access key is not configured for this service" HTTP 403
 error 1005 AccessKeyNotFound  "Access key not found" HTTP 401
 error 1006 UnauthorizedUser   "Unauthorized user" HTTP 403
 error 1007 MaxAccessKeys      "Access keys limit reached" HTTP 403
