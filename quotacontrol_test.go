@@ -269,3 +269,83 @@ func (q *quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventT
 
 	return true, nil
 }
+
+func TestDefaultKey(t *testing.T) {
+	service := proto.Ptr(proto.Service_Metadata)
+
+	limit := proto.Limit{RateLimit: 100, FreeCU: 5, SoftQuota: 7, HardQuota: 10}
+	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
+
+	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
+
+	s := miniredis.NewMiniRedis()
+	s.Start()
+	t.Cleanup(s.Close)
+
+	cfg.Redis.Host = s.Host()
+	cfg.Redis.Port = uint16(s.Server().Addr().Port)
+
+	redisClient := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+	cache := NewRedisCache(redisClient, time.Minute)
+	store := NewMemoryStore()
+
+	// populate store
+	ctx := context.Background()
+	err := store.SetAccessLimit(ctx, _ProjectID, &limit)
+	require.NoError(t, err)
+	err = store.InsertAccessKey(ctx, &access)
+	require.NoError(t, err)
+
+	qc := quotaControl{
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), cache, cache, cache, store, store, store, nil, store),
+		notifications: make(map[uint64][]proto.EventType),
+	}
+	server := http.Server{
+		Addr:    _Host,
+		Handler: proto.NewQuotaControlServer(&qc),
+	}
+	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
+	defer server.Close()
+	time.Sleep(1 * time.Second)
+
+	client := NewClient(wlog.With("client", "client"), *service, cfg)
+
+	aq, err := client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	require.NoError(t, err)
+	assert.Equal(t, &access, aq.AccessKey)
+	assert.Equal(t, &limit, aq.Limit)
+
+	access.DisplayName = "new name"
+	access.AllowedServices = append(access.AllowedServices, service)
+
+	_, err = qc.UpdateAccessKey(ctx, access.AccessKey, &access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+	require.NoError(t, err)
+
+	// wait for cache deletion
+	time.Sleep(1 * time.Second)
+
+	aq, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	require.NoError(t, err)
+	assert.Equal(t, &access, aq.AccessKey)
+	assert.Equal(t, &limit, aq.Limit)
+
+	ok, err := qc.DisableAccessKey(ctx, access.AccessKey)
+	require.ErrorIs(t, err, proto.ErrAtLeastOneKey)
+	assert.False(t, ok)
+
+	newAccess := proto.AccessKey{Active: true, AccessKey: _AccessKeys[1], ProjectID: _ProjectID}
+	err = store.InsertAccessKey(ctx, &newAccess)
+	require.NoError(t, err)
+
+	ok, err = qc.DisableAccessKey(ctx, access.AccessKey)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	_, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
+
+	newAccess.Default = true
+	aq, err = client.FetchQuota(ctx, newAccess.AccessKey, "", _Now)
+	require.NoError(t, err)
+	assert.Equal(t, &newAccess, aq.AccessKey)
+}

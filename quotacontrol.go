@@ -197,6 +197,16 @@ func (q qcHandler) SetAccessLimit(ctx context.Context, projectID uint64, config 
 	if err != nil {
 		return false, err
 	}
+	accessKeys, err := q.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
+	if err != nil {
+		q.log.With("err", err).Error("quotacontrol: failed to list access keys")
+		return true, nil
+	}
+	for _, access := range accessKeys {
+		if err := q.quotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
+			q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
+		}
+	}
 	return true, nil
 }
 
@@ -261,7 +271,7 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 	access.Active = false
 	access.Default = false
 
-	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+	if _, err := q.updateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
 	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
@@ -272,7 +282,7 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 	if isDefaultKey {
 		// set new key as default
 		newAccess.Default = true
-		return q.accessKeyStore.UpdateAccessKey(ctx, newAccess)
+		return q.updateAccessKey(ctx, newAccess)
 	}
 
 	return newAccess, nil
@@ -283,6 +293,7 @@ func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displa
 	if err != nil {
 		return nil, err
 	}
+
 	if displayName != nil {
 		access.DisplayName = *displayName
 	}
@@ -292,7 +303,8 @@ func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displa
 	if allowedServices != nil {
 		access.AllowedServices = allowedServices
 	}
-	if access, err = q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+
+	if access, err = q.updateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
 	return access, nil
@@ -321,13 +333,13 @@ func (q qcHandler) UpdateDefaultAccessKey(ctx context.Context, projectID uint64,
 
 	// update old default access
 	defaultAccess.Default = false
-	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, defaultAccess); err != nil {
+	if _, err := q.updateAccessKey(ctx, defaultAccess); err != nil {
 		return false, err
 	}
 
 	// set new access key to default
 	access.Default = true
-	if _, err = q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+	if _, err = q.updateAccessKey(ctx, access); err != nil {
 		return false, err
 	}
 
@@ -355,7 +367,7 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 
 	access.Active = false
 	access.Default = false
-	if _, err := q.accessKeyStore.UpdateAccessKey(ctx, access); err != nil {
+	if _, err := q.updateAccessKey(ctx, access); err != nil {
 		return false, err
 	}
 
@@ -369,7 +381,7 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 		newDefaultKey := listUpdated[0]
 		newDefaultKey.Default = true
 
-		if _, err = q.accessKeyStore.UpdateAccessKey(ctx, newDefaultKey); err != nil {
+		if _, err = q.updateAccessKey(ctx, newDefaultKey); err != nil {
 			return false, err
 		}
 	}
@@ -395,4 +407,17 @@ func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, user
 	}()
 
 	return userPerm, resourceAccess, nil
+}
+
+func (q qcHandler) updateAccessKey(ctx context.Context, access *proto.AccessKey) (*proto.AccessKey, error) {
+	access, err := q.accessKeyStore.UpdateAccessKey(ctx, access)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := q.quotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
+		q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
+	}
+
+	return access, nil
 }
