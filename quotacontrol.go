@@ -37,22 +37,33 @@ type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
 }
 
+type Cache struct {
+	QuotaCache
+	UsageCache
+	PermissionCache
+}
+
+type Store struct {
+	LimitStore
+	AccessKeyStore
+	UsageStore
+	CycleStore
+	PermissionStore
+}
+
 // NewQuotaControlHandler returns server implementation for proto.QuotaControl which is used
 // by the Builder (aka quotacontrol backend).
-func NewQuotaControlHandler(
-	log logger.Logger, usageCache UsageCache, quotaCache QuotaCache, permCache PermissionCache,
-	limit LimitStore, access AccessKeyStore, usage UsageStore, perm PermissionStore, cycle CycleStore,
-) proto.QuotaControl {
+func NewQuotaControlHandler(log logger.Logger, cache Cache, store Store) proto.QuotaControl {
 	return &qcHandler{
 		log:            log,
-		usageCache:     usageCache,
-		quotaCache:     quotaCache,
-		permCache:      permCache,
-		limitStore:     limit,
-		accessKeyStore: access,
-		usageStore:     usage,
-		permStore:      perm,
-		cycleStore:     cycle,
+		usageCache:     cache.UsageCache,
+		quotaCache:     cache.QuotaCache,
+		permCache:      cache.PermissionCache,
+		limitStore:     store.LimitStore,
+		accessKeyStore: store.AccessKeyStore,
+		usageStore:     store.UsageStore,
+		permStore:      store.PermissionStore,
+		cycleStore:     store.CycleStore,
 		accessKeyGen:   DefaultAccessKey,
 	}
 }

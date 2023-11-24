@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xsequence/quotacontrol"
 	. "github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -74,8 +75,21 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	client := NewClient(wlog.With("client", "client"), proto.Service_Indexer, cfg)
 
+	qcCache := quotacontrol.Cache{
+		QuotaCache:      cache,
+		UsageCache:      cache,
+		PermissionCache: cache,
+	}
+	qcStore := quotacontrol.Store{
+		LimitStore:      store,
+		AccessKeyStore:  store,
+		UsageStore:      store,
+		CycleStore:      store,
+		PermissionStore: nil,
+	}
+
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), cache, cache, cache, store, store, store, nil, store),
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{
@@ -296,8 +310,21 @@ func TestDefaultKey(t *testing.T) {
 	err = store.InsertAccessKey(ctx, &access)
 	require.NoError(t, err)
 
+	qcCache := quotacontrol.Cache{
+		QuotaCache:      cache,
+		UsageCache:      cache,
+		PermissionCache: cache,
+	}
+	qcStore := quotacontrol.Store{
+		LimitStore:      store,
+		AccessKeyStore:  store,
+		UsageStore:      store,
+		CycleStore:      store,
+		PermissionStore: nil,
+	}
+
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), cache, cache, cache, store, store, store, nil, store),
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{
