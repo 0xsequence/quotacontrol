@@ -7,6 +7,8 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
+var DefaultCreditsUsagePerCall int64 = 1
+
 type contextKey struct {
 	name string
 }
@@ -93,7 +95,7 @@ func WithComputeUnits(ctx context.Context, cu int64) context.Context {
 func GetComputeUnits(ctx context.Context) int64 {
 	v, ok := ctx.Value(ctxKeyComputeUnits).(int64)
 	if !ok {
-		return 1
+		return DefaultCreditsUsagePerCall
 	}
 	return v
 }
