@@ -170,7 +170,7 @@ func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now tim
 		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
 		err := q.quotaCache.SetAccessQuota(context.Background(), &record)
 		if err != nil {
-			q.log.With("err", err).Error("quotacontrol: failed to set access quota in cache")
+			q.log.With("error", err).Error("quotacontrol: failed to set access quota in cache")
 		}
 	}()
 	return &record, nil
@@ -210,12 +210,12 @@ func (q qcHandler) SetAccessLimit(ctx context.Context, projectID uint64, config 
 	}
 	accessKeys, err := q.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
-		q.log.With("err", err).Error("quotacontrol: failed to list access keys")
+		q.log.With("error", err).Error("quotacontrol: failed to list access keys")
 		return true, nil
 	}
 	for _, access := range accessKeys {
 		if err := q.quotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
-			q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
+			q.log.With("error", err).Error("quotacontrol: failed to delete access quota from cache")
 		}
 	}
 	return true, nil
@@ -413,7 +413,7 @@ func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, user
 		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
 		err := q.permCache.SetUserPermission(context.Background(), projectID, userID, userPerm, resourceAccess)
 		if err != nil {
-			q.log.With("err", err).Error("quotacontrol: failed to set user perm in cache")
+			q.log.With("error", err).Error("quotacontrol: failed to set user perm in cache")
 		}
 	}()
 
@@ -427,7 +427,7 @@ func (q qcHandler) updateAccessKey(ctx context.Context, access *proto.AccessKey)
 	}
 
 	if err := q.quotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
-		q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
+		q.log.With("error", err).Error("quotacontrol: failed to delete access quota from cache")
 	}
 
 	return access, nil
