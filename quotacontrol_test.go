@@ -26,7 +26,7 @@ var (
 	_AccessKeys = []string{"abc", "cde"}
 	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 
-	cfg = Config{
+	_Config = Config{
 		Enabled:    true,
 		URL:        `http://` + _Host,
 		UpdateFreq: Duration{time.Minute},
@@ -34,7 +34,6 @@ var (
 			Enabled:                 true,
 			PublicRequestsPerMinute: 10,
 		},
-		LRUSize: 100,
 	}
 )
 
@@ -48,20 +47,25 @@ func middlewareCU(i int64) func(http.Handler) http.Handler {
 	}
 }
 
+func SetupRedis(t *testing.T, cfg *Config) *redisclient.Client {
+	s := miniredis.NewMiniRedis()
+	s.Start()
+	t.Cleanup(s.Close)
+	cfg.Redis.Host = s.Host()
+	cfg.Redis.Port = uint16(s.Server().Addr().Port)
+	return redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+}
+
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	limit := proto.Limit{RateLimit: 100, FreeCU: 5, SoftQuota: 7, HardQuota: 10}
 	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
 	expectedCounter := proto.AccessUsage{}
 	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
 
-	s := miniredis.NewMiniRedis()
-	s.Start()
-	t.Cleanup(s.Close)
+	cfg := _Config
+	cfg.LRUSize = 100
+	redisClient := SetupRedis(t, &cfg)
 
-	cfg.Redis.Host = s.Host()
-	cfg.Redis.Port = uint16(s.Server().Addr().Port)
-
-	redisClient := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
 	cache := NewRedisCache(redisClient, time.Minute)
 	store := NewMemoryStore()
 
@@ -287,7 +291,7 @@ func TestDefaultKey(t *testing.T) {
 	service := proto.Ptr(proto.Service_Metadata)
 
 	limit := proto.Limit{RateLimit: 100, FreeCU: 5, SoftQuota: 7, HardQuota: 10}
-	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
+	access := &proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
 
 	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
 
@@ -295,10 +299,10 @@ func TestDefaultKey(t *testing.T) {
 	s.Start()
 	t.Cleanup(s.Close)
 
-	cfg.Redis.Host = s.Host()
-	cfg.Redis.Port = uint16(s.Server().Addr().Port)
+	cfg := _Config
 
-	redisClient := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+	redisClient := SetupRedis(t, &cfg)
+
 	cache := NewRedisCache(redisClient, time.Minute)
 	store := NewMemoryStore()
 
@@ -306,7 +310,7 @@ func TestDefaultKey(t *testing.T) {
 	ctx := context.Background()
 	err := store.SetAccessLimit(ctx, _ProjectID, &limit)
 	require.NoError(t, err)
-	err = store.InsertAccessKey(ctx, &access)
+	err = store.InsertAccessKey(ctx, access)
 	require.NoError(t, err)
 
 	qcCache := Cache{
@@ -338,27 +342,25 @@ func TestDefaultKey(t *testing.T) {
 
 	aq, err := client.FetchQuota(ctx, access.AccessKey, "", _Now)
 	require.NoError(t, err)
-	assert.Equal(t, &access, aq.AccessKey)
+	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
-
-	access.DisplayName = "new name"
-	access.AllowedServices = append(access.AllowedServices, service)
-
-	_, err = qc.UpdateAccessKey(ctx, access.AccessKey, &access.DisplayName, access.AllowedOrigins, access.AllowedServices)
-	require.NoError(t, err)
-
-	// wait for cache deletion
-	time.Sleep(1 * time.Second)
 
 	aq, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
 	require.NoError(t, err)
-	assert.Equal(t, &access, aq.AccessKey)
+	assert.Equal(t, access, aq.AccessKey)
+	assert.Equal(t, &limit, aq.Limit)
+
+	access, err = qc.UpdateAccessKey(ctx, access.AccessKey, proto.Ptr("new name"), nil, []*proto.Service{service})
+	require.NoError(t, err)
+
+	aq, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	require.NoError(t, err)
+	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
 
 	ok, err := qc.DisableAccessKey(ctx, access.AccessKey)
 	require.ErrorIs(t, err, proto.ErrAtLeastOneKey)
 	assert.False(t, ok)
-
 	newAccess := proto.AccessKey{Active: true, AccessKey: _AccessKeys[1], ProjectID: _ProjectID}
 	err = store.InsertAccessKey(ctx, &newAccess)
 	require.NoError(t, err)
