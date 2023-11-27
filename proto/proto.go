@@ -1,6 +1,3 @@
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.0 -pkg=proto -server -client -out=./proto.gen.go
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/builder.gen.ts
-
 package proto
 
 import (
@@ -10,7 +7,8 @@ import (
 	"time"
 )
 
-func (e EventType) Ptr() *EventType { return &e }
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.0 -pkg=proto -server -client -out=./proto.gen.go
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/builder.gen.ts
 
 func Ptr[T any](v T) *T {
 	return &v

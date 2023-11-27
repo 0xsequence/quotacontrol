@@ -57,12 +57,12 @@ func TestGetSpendResult(t *testing.T) {
 			Name:  "WithinFreeCUExact",
 			Total: _Free,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: proto.EventType_FreeCU.Ptr(),
+			Event: proto.Ptr(proto.EventType_FreeCU),
 		}, {
 			Name:  "OverFreeCU",
 			Total: _Free + 2,
 			Usage: proto.AccessUsage{ValidCompute: _CU - 2, OverCompute: 2},
-			Event: proto.EventType_FreeCU.Ptr(),
+			Event: proto.Ptr(proto.EventType_FreeCU),
 		}, {
 			Name:  "OverFreeCUExact",
 			Total: _Free + _CU,
@@ -77,12 +77,12 @@ func TestGetSpendResult(t *testing.T) {
 			Name:  "WithinSoftExact",
 			Total: _Soft,
 			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.EventType_SoftQuota.Ptr(),
+			Event: proto.Ptr(proto.EventType_SoftQuota),
 		}, {
 			Name:  "OverSoft",
 			Total: _Soft + 2,
 			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.EventType_SoftQuota.Ptr(),
+			Event: proto.Ptr(proto.EventType_SoftQuota),
 		}, {
 			Name:  "OverSoftExact",
 			Total: _Soft + _CU,
@@ -97,12 +97,12 @@ func TestGetSpendResult(t *testing.T) {
 			Name:  "OverHardExact",
 			Total: _Hard,
 			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.EventType_HardQuota.Ptr(),
+			Event: proto.Ptr(proto.EventType_HardQuota),
 		}, {
 			Name:  "OverHard",
 			Total: _Hard + 2,
 			Usage: proto.AccessUsage{OverCompute: _CU - 2, LimitedCompute: 2},
-			Event: proto.EventType_HardQuota.Ptr(),
+			Event: proto.Ptr(proto.EventType_HardQuota),
 		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
