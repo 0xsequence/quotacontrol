@@ -144,3 +144,11 @@ func (c *Cycle) GetEnd(now time.Time) time.Time {
 func (c *Cycle) GetDuration(now time.Time) time.Duration {
 	return c.GetEnd(now).Sub(c.GetStart(now))
 }
+
+func (c *Cycle) Advance(now time.Time) {
+	for c.End.Before(now) {
+		c.Start = c.Start.AddDate(0, 1, 0)
+		c.End = c.End.AddDate(0, 1, 0)
+	}
+
+}
