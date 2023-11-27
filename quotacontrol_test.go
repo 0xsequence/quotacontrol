@@ -101,7 +101,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	}
 	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
 	defer server.Close()
-	time.Sleep(1 * time.Second)
 
 	router := chi.NewRouter()
 
@@ -124,7 +123,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("WithAccessKey", func(t *testing.T) {
 		go client.Run(context.Background())
-		time.Sleep(1 * time.Second)
 
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
@@ -204,7 +202,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.NoError(t, err)
 
 		go client.Run(context.Background())
-		time.Sleep(1 * time.Second)
 
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
@@ -223,7 +220,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("PublicRateLimit", func(t *testing.T) {
 		go client.Run(context.Background())
-		time.Sleep(1 * time.Second)
 
 		ctx := middleware.WithTime(context.Background(), _Now)
 
@@ -336,7 +332,6 @@ func TestDefaultKey(t *testing.T) {
 	}
 	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
 	defer server.Close()
-	time.Sleep(1 * time.Second)
 
 	client := NewClient(wlog.With("client", "client"), *service, cfg)
 
