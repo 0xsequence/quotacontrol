@@ -165,14 +165,11 @@ func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now tim
 		Cycle:     cycle,
 		AccessKey: access,
 	}
-	go func() {
-		// NOTE: we pass a fresh context here, as otherwise requests/other contexts which cancel
-		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
-		err := q.quotaCache.SetAccessQuota(context.Background(), &record)
-		if err != nil {
-			q.log.With("error", err).Error("quotacontrol: failed to set access quota in cache")
-		}
-	}()
+
+	if err := q.quotaCache.SetAccessQuota(ctx, &record); err != nil {
+		q.log.With("error", err).Error("quotacontrol: failed to set access quota in cache")
+	}
+
 	return &record, nil
 }
 
@@ -401,23 +398,19 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 }
 
 func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
-	userPerm, resourceAccess, err := q.permStore.GetUserPermission(ctx, projectID, userID)
+	perm, access, err := q.permStore.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
-		return userPerm, resourceAccess, proto.ErrUnauthorizedUser
+		return perm, access, proto.ErrUnauthorizedUser
 	}
-	if userPerm != nil && *userPerm == proto.UserPermission_UNAUTHORIZED {
-		return userPerm, resourceAccess, proto.ErrUnauthorizedUser
+	if perm != nil && *perm == proto.UserPermission_UNAUTHORIZED {
+		return perm, access, proto.ErrUnauthorizedUser
 	}
-	go func() {
-		// NOTE: we pass a fresh context here, as otherwise requests/other contexts which cancel
-		// above will cancel this goroutine and the AccessQuota will never be saved into cache.
-		err := q.permCache.SetUserPermission(context.Background(), projectID, userID, userPerm, resourceAccess)
-		if err != nil {
-			q.log.With("error", err).Error("quotacontrol: failed to set user perm in cache")
-		}
-	}()
 
-	return userPerm, resourceAccess, nil
+	if err := q.permCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
+		q.log.With("error", err).Error("quotacontrol: failed to set user perm in cache")
+	}
+
+	return perm, access, nil
 }
 
 func (q qcHandler) updateAccessKey(ctx context.Context, access *proto.AccessKey) (*proto.AccessKey, error) {
