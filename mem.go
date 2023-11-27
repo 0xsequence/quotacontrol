@@ -2,7 +2,6 @@ package quotacontrol
 
 import (
 	"context"
-	"slices"
 	"sync"
 	"time"
 
@@ -93,7 +92,7 @@ func (m *MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, acti
 		if active != nil && *active != v.Active {
 			continue
 		}
-		if service != nil && !slices.Contains(v.AllowedServices, service) {
+		if service != nil && !v.ValidateService(service) {
 			continue
 		}
 		accessKeys = append(accessKeys, m.accessKeys[i])
