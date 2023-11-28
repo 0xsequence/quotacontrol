@@ -1,4 +1,6 @@
 # Quota Control
+![Go Workflow](https://github.com/0xsequence/quotacontrol/actions/workflows/go.yml/badge.svg)
+[![Go Reference](https://pkg.go.dev/badge/github.com/0xsequence/quotacontrol.svg)](https://pkg.go.dev/github.com/0xsequence/quotacontrol)
 
 This package implements a Quota Control - Rate Limiting service.
 
