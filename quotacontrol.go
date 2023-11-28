@@ -167,7 +167,7 @@ func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now tim
 	}
 
 	if err := q.quotaCache.SetAccessQuota(ctx, &record); err != nil {
-		q.log.With("error", err).Error("quotacontrol: failed to set access quota in cache")
+		q.log.With("err", err).Error("quotacontrol: failed to set access quota in cache")
 	}
 
 	return &record, nil
@@ -207,12 +207,12 @@ func (q qcHandler) SetAccessLimit(ctx context.Context, projectID uint64, config 
 	}
 	accessKeys, err := q.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
-		q.log.With("error", err).Error("quotacontrol: failed to list access keys")
+		q.log.With("err", err).Error("quotacontrol: failed to list access keys")
 		return true, nil
 	}
 	for _, access := range accessKeys {
 		if err := q.quotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
-			q.log.With("error", err).Error("quotacontrol: failed to delete access quota from cache")
+			q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
 		}
 	}
 	return true, nil
@@ -407,7 +407,7 @@ func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, user
 	}
 
 	if err := q.permCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
-		q.log.With("error", err).Error("quotacontrol: failed to set user perm in cache")
+		q.log.With("err", err).Error("quotacontrol: failed to set user perm in cache")
 	}
 
 	return perm, access, nil
@@ -420,7 +420,7 @@ func (q qcHandler) updateAccessKey(ctx context.Context, access *proto.AccessKey)
 	}
 
 	if err := q.quotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
-		q.log.With("error", err).Error("quotacontrol: failed to delete access quota from cache")
+		q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
 	}
 
 	return access, nil

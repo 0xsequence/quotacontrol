@@ -2,6 +2,7 @@ package proto
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -43,15 +44,24 @@ var _StatusCode = map[int]string{
 	200: "",
 }
 
-func RespondWithLegacyError(w http.ResponseWriter, err error) {
-	rpcErr, ok := err.(WebRPCError)
-	if !ok {
-		rpcErr = ErrorWithCause(ErrWebrpcEndpoint, err)
+func RespondWithLegacyError(rateLimitErrorMessage string) func(w http.ResponseWriter, err error) {
+	return func(w http.ResponseWriter, err error) {
+		rpcErr, ok := err.(WebRPCError)
+		if !ok {
+			rpcErr = ErrorWithCause(ErrWebrpcEndpoint, err)
+		}
+
+		if errors.Is(err, ErrLimitExceeded) {
+			rpcErr = ErrLimitExceeded
+			if rateLimitErrorMessage != "" {
+				rpcErr.Message = rateLimitErrorMessage
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(rpcErr.HTTPStatus)
+
+		respBody, _ := json.Marshal(rpcErr.getLegacyPayload())
+		w.Write(respBody)
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(rpcErr.HTTPStatus)
-
-	respBody, _ := json.Marshal(rpcErr.getLegacyPayload())
-	w.Write(respBody)
 }

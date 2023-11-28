@@ -136,7 +136,7 @@ func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, user
 		userPerm, resourceAccess, err = c.permCache.GetUserPermission(ctx, projectID, userID)
 		if err != nil {
 			// log the error, but don't stop
-			c.logger.With("error", err).Error("FetchUserPermission failed to query the permCache")
+			c.logger.With("err", err).Error("FetchUserPermission failed to query the permCache")
 		}
 	}
 
@@ -186,7 +186,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			}
 			if event != nil {
 				if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, event); err != nil {
-					c.logger.With("error", err, "op", "use_access_key", "event", event).Error("-> quota control: failed to notify")
+					c.logger.With("err", err, "op", "use_access_key", "event", event).Error("-> quota control: failed to notify")
 				}
 			}
 			return true, nil
@@ -250,7 +250,7 @@ func (c *Client) Run(ctx context.Context) error {
 	// Start the sync
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
-			c.logger.With("error", err, "op", "run").Error("-> quota control: failed to sync usage")
+			c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 			continue
 		}
 		c.logger.With("op", "run").Info("-> quota control: synced usage")
@@ -269,7 +269,7 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 		c.ticker.Stop()
 	}
 	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
-		c.logger.With("error", err, "op", "run").Error("-> quota control: failed to sync usage")
+		c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 	}
 	c.logger.With("op", "stop").Info("-> quota control: stopped.")
 }
