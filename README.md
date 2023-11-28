@@ -2,34 +2,54 @@
 ![Go Workflow](https://github.com/0xsequence/quotacontrol/actions/workflows/go.yml/badge.svg)
 [![Go Reference](https://pkg.go.dev/badge/github.com/0xsequence/quotacontrol.svg)](https://pkg.go.dev/github.com/0xsequence/quotacontrol)
 
-This package implements a Quota Control - Rate Limiting service.
+This package implements a Quota Control - Rate Limiting service. 
+It allows to limit the amount of compute units spent by projects.
 
-For each project there are a series of `ServiceLimit`: it defines the monthly quotas and hour rate limit for each Service.
-Projects have a series of `AccessKey` that are used to execute calls that are limited by `ServiceLimit`.
-The last entity is `AccessUsage` which represent the usage of a access key for a certain period.
+# Entities
+- AccessKey: a specific key used for Quota Control, it belongs to a project.
+- Limit: attribute of project, a series of limitations like quota and number of keys.
+- AccessUsage: the usage of certain project or key. It has 3 values:
+  - valid: requests done using the "Free Limit" limit
+  - over: requests over "Free Limit" and below "Hard Limit"
+  - limited: request over "Hard Limit" which result in a failure (HTTP 429)
+- Cycle:a range of time where limits should be enforced (e.g. monthly, weekly)  
+
+# Actors
+There are two actors at play:
+- server: the main responsabilities are taking care of persisting records and preparing cache entries
+- client: it communicates with cache and server to retrieve record. It does it using a series of [middlewares](https://github.com/0xsequence/quotacontrol/blob/062a68e96a4de99b85c38d4f4d6f66346311e961/middleware/).
+  - `SetAccessKey`: looks into a specific header (`X-Access-Key`) to set the access key.
+  - `VerifyAccessKey`: fetches the data related to the access key (timeframe, limits, access key metadata) and verifies that the provided key is valid.
+  - `SpendUsage`: tries to increment the usage counter in the cache and compares it to the existing limits.
+
+The actors share information through the cache, and server is the one populating it. 
+The only execption is the usage spending, which is done by the clients using an increment operation on the cache.
+
+# Configuration
+The configuration for the service can be found here:
+https://github.com/0xsequence/quotacontrol/blob/062a68e96a4de99b85c38d4f4d6f66346311e961/config.go#L19-L35
 
 # Service
 
-The implementation of the `QuotaControlService` it's intentionally incomplete. 
+The `QuotaControlService` server requires two storages: a cache and a permanent store.
+
+https://github.com/0xsequence/quotacontrol/blob/062a68e96a4de99b85c38d4f4d6f66346311e961/quotacontrol.go#L40-L53
+
+Each aspect of the cache and the storage can be re-implemented and customised to the project needs.
+
+The package offers a Redis implementation for the cache, and a Memory version of the permanent store useful for testing.
+
+
+
 The methods that are used to save/load in a permanent storage the 3 entities are not implemented.
 The requests are measure in compute units, if a compute unit is not specified it is assumed that the value it's 1.
 A client can specify the amount of compute units by manipulating the request context using the `WithComputeUnits` function.
 
-# Middleware
+# Increment operation
 
-The clients will have to create a `QuotaControlClient` in order to use the provided middleware.
-The client saves the `AccessUsage` changes in memory. If the `QuotaControlClient.Run` method is called, 
-they will periodically sent to the `QuotaControlService` which will store them periodically.
-
-The clients that want to use the service can use the existing middleware which does the following:
-
-- It tries to get the `AccessKey` from Cache, falling back to `QuotaControlService.GetAccessQuota` 
-(which also prepare Cache for future usage).
-- Checks for `ServiceLimit` validity and for `AccessKey` to be active.
-- Checks if the call origin matches one of the `AccessKey.AllowedOrigins`, if specified.
-- Checks if the service matches one of the `AccessKey.AllowedServices`, if specified.
-- Uses `QuotaControlService.SpendComputeUnits`.
-- If `CACHE_PING` is returned it calls for `QuotaControlService.PrepareUsage` and tries again
-- If `CACHE_WAIT_AND_RETRY` waits and tries again.
-- If `CACHE_ALLOWED` it updates the number of `ValidCompute` and continues with the next http handler.
-- If `CACHE_LIMITED` it updates the number of `LimitCompute` and stops.
+The client method `SpendComputeUnits` takes care of doing an increment operation in the cache. And works as follows:
+- It tries to fetch the usage record from the cache
+- On a hit it executes the INCR operation.
+- On a miss it sets it to `-1` and ask the server to populate it.
+- If it finds the value `-1` it waits and retries
+- After a few retries it fails with a timeout.
