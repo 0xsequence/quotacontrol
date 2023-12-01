@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -193,18 +192,7 @@ func (q qcHandler) UpdateUsage(ctx context.Context, service *proto.Service, now 
 	return m, nil
 }
 
-func (q qcHandler) GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
-	return q.limitStore.GetAccessLimit(ctx, projectID)
-}
-
-func (q qcHandler) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) (bool, error) {
-	if err := config.Validate(); err != nil {
-		return false, proto.WebRPCError{HTTPStatus: http.StatusBadRequest, Message: err.Error()}
-	}
-	err := q.limitStore.SetAccessLimit(ctx, projectID, config)
-	if err != nil {
-		return false, err
-	}
+func (q qcHandler) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bool, error) {
 	accessKeys, err := q.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
 		q.log.With("err", err).Error("quotacontrol: failed to list access keys")

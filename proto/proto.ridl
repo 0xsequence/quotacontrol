@@ -87,10 +87,6 @@ error 1008 NoDefaultKey       "No default access key found" HTTP 403
 error 1009 AtLeastOneKey      "There should be at least one active accessKey per project" HTTP 403
 
 service QuotaControl
-  # Access Limit
-  - GetAccessLimit(projectId: uint64) => (limit: Limit)
-  - SetAccessLimit(projectId: uint64, limit: Limit) => (ok: bool)
-
   # Access Key
   - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
   - GetDefaultAccessKey(projectID: uint64) => (accessKey: AccessKey)
@@ -103,6 +99,7 @@ service QuotaControl
 
   # Usage
   - GetAccessQuota(accessKey: string, now: timestamp) => (accessQuota: AccessQuota)
+  - ClearAccessQuotaCache(projectID: uint64) => (ok: bool)
   - GetAccountUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - PrepareUsage(projectID: uint64, cycle: Cycle, now: timestamp) => (ok: bool)
