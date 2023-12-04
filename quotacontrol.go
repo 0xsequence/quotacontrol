@@ -92,7 +92,8 @@ func (q qcHandler) GetTimeRange(ctx context.Context, projectID uint64, from, to 
 		return time.Time{}, time.Time{}, err
 	}
 	if from == nil && to == nil {
-		return cycle.Start, cycle.End, nil
+		cycle, _ := DefaultCycleStore{}.GetAccessCycle(ctx, projectID, now)
+		return cycle.GetStart(now), cycle.GetEnd(now), nil
 	}
 	duration := cycle.GetDuration(now)
 	if from == nil {

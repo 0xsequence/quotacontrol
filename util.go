@@ -1,8 +1,10 @@
 package quotacontrol
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/jxskiss/base62"
@@ -30,4 +32,13 @@ func GetProjectID(accessKey string) (uint64, error) {
 		return 0, proto.ErrAccessKeyNotFound
 	}
 	return binary.BigEndian.Uint64(buf[:8]), nil
+}
+
+type DefaultCycleStore struct{}
+
+func (s DefaultCycleStore) GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error) {
+	return &proto.Cycle{
+		Start: now.AddDate(0, 0, 1-now.Day()),
+		End:   now.AddDate(0, 1, 1-now.Day()),
+	}, nil
 }
