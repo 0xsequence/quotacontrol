@@ -17,7 +17,7 @@ func FailOnUnexpectedError(fn func(w http.ResponseWriter, err error)) func(w htt
 
 func ContinueOnUnexpectedError(log logger.Logger, fn func(w http.ResponseWriter, err error)) func(w http.ResponseWriter, _ *http.Request, next http.Handler, err error) {
 	return func(w http.ResponseWriter, r *http.Request, next http.Handler, err error) {
-		log.With("err", err, "op", "quota").Error("-> quotacontrol: unexpected error")
+		log.With("err", err, "op", "quota").Warn("-> quotacontrol: unexpected error")
 
 		if !shouldErrorContinue(log, err) {
 			// trigger error response fn
@@ -38,7 +38,7 @@ func ContinueOnAnyError(log logger.Logger, fn func(w http.ResponseWriter, err er
 			return
 		}
 
-		log.With("err", err, "op", "quota").Error("-> quotacontrol: unexpected error -- continuing anyways")
+		log.With("err", err, "op", "quota").Warn("-> quotacontrol: unexpected error -- continuing anyways")
 		next.ServeHTTP(w, r.WithContext(WithSkipRateLimit(r.Context())))
 	}
 }
