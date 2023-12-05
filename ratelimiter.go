@@ -42,6 +42,7 @@ type redisRateLimit struct {
 	client *redis_rate.Limiter
 }
 
+// NOTE: this method is broken, so going to skip it entirely for now.
 func (r *redisRateLimit) RateLimit(ctx context.Context, key string, computeUnits int, l RateLimit) (*RateLimitResult, error) {
 	res, err := r.client.AllowN(ctx, key, redis_rate.Limit{Rate: int(l.Rate), Period: l.Period, Burst: int(l.Rate)}, computeUnits)
 	if err != nil {
