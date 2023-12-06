@@ -30,7 +30,7 @@ func (s *mockCache) DeleteAccessKey(ctx context.Context, accessKey string) error
 func TestLRU(t *testing.T) {
 	baseCache := mockCache{}
 
-	lru := quotacontrol.NewLRU(&baseCache, 2)
+	lru := quotacontrol.NewLRU(&baseCache, 2, 0)
 
 	ctx := context.Background()
 

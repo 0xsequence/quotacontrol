@@ -17,13 +17,14 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type Config struct {
-	Enabled     bool              `toml:"enabled"`
-	URL         string            `toml:"url"`
-	AccessKey   string            `toml:"access_key"`
-	UpdateFreq  Duration          `toml:"update_freq"`
-	RateLimiter RateLimiterConfig `toml:"rate_limiter"`
-	Redis       redis.Config      `toml:"redis"`
-	LRUSize     int               `toml:"lru_size"`
+	Enabled       bool              `toml:"enabled"`
+	URL           string            `toml:"url"`
+	AccessKey     string            `toml:"access_key"`
+	UpdateFreq    Duration          `toml:"update_freq"`
+	RateLimiter   RateLimiterConfig `toml:"rate_limiter"`
+	Redis         redis.Config      `toml:"redis"`
+	LRUSize       int               `toml:"lru_size"`
+	LRUExpiration Duration          `toml:"lru_expiration"`
 }
 
 type RateLimiterConfig struct {

@@ -179,8 +179,11 @@ type LRU struct {
 	backend QuotaCache
 }
 
-func NewLRU(cacheBackend QuotaCache, size int) *LRU {
-	lruCache := expirable.NewLRU[string, *proto.AccessQuota](size, nil, 5*time.Minute)
+func NewLRU(cacheBackend QuotaCache, size int, ttl time.Duration) *LRU {
+	if ttl == 0 {
+		ttl = time.Minute * 5
+	}
+	lruCache := expirable.NewLRU[string, *proto.AccessQuota](size, nil, ttl)
 	return &LRU{
 		mem:     lruCache,
 		backend: cacheBackend,
