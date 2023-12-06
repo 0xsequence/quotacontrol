@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/httprate"
 )
 
 const (
@@ -106,6 +108,39 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 			}
 
 			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func httprateKey(r *http.Request) (string, error) {
+	q := GetAccessQuota(r.Context())
+	if q == nil {
+		return "", nil
+	}
+	return fmt.Sprintf("rl:project:%d", q.AccessKey.ProjectID), nil
+}
+
+func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = _DefaultErrorHandler
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			quota, cu := GetAccessQuota(ctx), GetComputeUnits(ctx)
+
+			if quota == nil || cu == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ctx = httprate.WithIncrement(ctx, int(cu))
+			options := []httprate.Option{
+				httprate.WithKeyFuncs(httprateKey),
+				httprate.WithLimitCounter(limitCounter),
+			}
+			limiter := httprate.NewRateLimiter(int(quota.Limit.RateLimit), time.Minute, options...)
+			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

@@ -52,9 +52,8 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 			client:      http.DefaultClient,
 			bearerToken: cfg.AccessKey,
 		}),
-		rateLimiter: NewRateLimiter(redisClient),
-		ticker:      ticker,
-		logger:      logger,
+		ticker: ticker,
+		logger: logger,
 	}
 }
 
@@ -68,7 +67,6 @@ type Client struct {
 	quotaCache  QuotaCache
 	permCache   PermissionCache
 	quotaClient proto.QuotaControl
-	rateLimiter RateLimiter
 
 	running int32
 	ticker  *time.Ticker
@@ -163,17 +161,6 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 
 	// spend compute units
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
-
-	// check rate limit
-	if !middleware.IsSkipRateLimit(ctx) {
-		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
-		if err != nil {
-			return false, fmt.Errorf("spendQuota rate limit error: %w", err)
-		}
-		if result.Allowed == 0 {
-			return false, fmt.Errorf("spendQuota: %w", proto.ErrLimitExceeded)
-		}
-	}
 
 	for i := time.Duration(0); i < 3; i++ {
 		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)

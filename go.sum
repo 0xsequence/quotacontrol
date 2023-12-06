@@ -17,12 +17,10 @@ github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/r
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
 github.com/go-chi/chi/v5 v5.0.10 h1:rLz5avzKpjqxrYwXNfmjkrYYXOyLJd37pz53UFHC6vk=
 github.com/go-chi/chi/v5 v5.0.10/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
-github.com/go-chi/httprate v0.7.4 h1:a2GIjv8he9LRf3712zxxnRdckQCm7I8y8yQhkJ84V6M=
-github.com/go-chi/httprate v0.7.4/go.mod h1:6GOYBSwnpra4CQfAKXu8sQZg+nZ0M1g9QnyFvxrAB8A=
-github.com/go-chi/httprate-redis v0.2.1 h1:nlnc2ApD4+rPU1XenqOCDqXRTdMgLrQG2eKrO6HnTuk=
-github.com/go-chi/httprate-redis v0.2.1/go.mod h1:yyYLQsn1M3BbxOE/QBH7oMrqCLwVvWePLmnWNR461bI=
-github.com/go-redis/redis_rate/v10 v10.0.1 h1:calPxi7tVlxojKunJwQ72kwfozdy25RjA0bCj1h0MUo=
-github.com/go-redis/redis_rate/v10 v10.0.1/go.mod h1:EMiuO9+cjRkR7UvdvwMO7vbgqJkltQHtwbdIQvaBKIU=
+github.com/go-chi/httprate v0.8.0 h1:CyKng28yhGnlGXH9EDGC/Qizj29afJQSNW15W/yj34o=
+github.com/go-chi/httprate v0.8.0/go.mod h1:6GOYBSwnpra4CQfAKXu8sQZg+nZ0M1g9QnyFvxrAB8A=
+github.com/go-chi/httprate-redis v0.3.0 h1:aGE1YEZJf2gBHaD/UDkIUscrX994Hso0R51YfkbOlPU=
+github.com/go-chi/httprate-redis v0.3.0/go.mod h1:coxmdYJ2Zm3ZqeAm3BVDKQcld27wVgcWGfOcTTUqs2M=
 github.com/goware/cachestore v0.8.1 h1:UjSjFiB27vjGq4JK8aBMqsAI4sa7cbrHToFDsM0cjHw=
 github.com/goware/cachestore v0.8.1/go.mod h1:ikiO2RmxIt4cVqEBII6yR+V4Z7pH+y8bMQHpd1MvG1Y=
 github.com/goware/logger v0.3.0 h1:pdgnsqj2rSDXtfdu+UuAFuBuOapxeDYNETY39227LMM=
