@@ -3,6 +3,7 @@ package quotacontrol
 import (
 	"time"
 
+	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/goware/cachestore/redis"
 )
 
@@ -25,6 +26,16 @@ type Config struct {
 	Redis         redis.Config      `toml:"redis"`
 	LRUSize       int               `toml:"lru_size"`
 	LRUExpiration Duration          `toml:"lru_expiration"`
+}
+
+func (cfg Config) RedisRateLimitConfig() *httprateredis.Config {
+	return &httprateredis.Config{
+		Host:      cfg.Redis.Host,
+		Port:      cfg.Redis.Port,
+		MaxIdle:   cfg.Redis.MaxIdle,
+		MaxActive: cfg.Redis.MaxActive,
+		DBIndex:   cfg.Redis.DBIndex,
+	}
 }
 
 type RateLimiterConfig struct {

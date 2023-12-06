@@ -22,13 +22,7 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler
 	// httprate limit counter
 	const _DefaultRPM = 120
 
-	limitCounter, _ := httprateredis.NewRedisLimitCounter(&httprateredis.Config{
-		Host:      cfg.Redis.Host,
-		Port:      cfg.Redis.Port,
-		MaxIdle:   cfg.Redis.MaxIdle,
-		MaxActive: cfg.Redis.MaxActive,
-		DBIndex:   cfg.Redis.DBIndex,
-	})
+	limitCounter, _ := httprateredis.NewRedisLimitCounter(cfg.RedisRateLimitConfig())
 
 	limitErr := proto.ErrLimitExceeded
 	if cfg.RateLimiter.ErrorMessage != "" {
