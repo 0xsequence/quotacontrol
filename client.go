@@ -166,14 +166,13 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 
 	// check rate limit
 	if !middleware.IsSkipRateLimit(ctx) {
-		// NOTE: c.rateLimiter.RateLimit is broken, so going to omit it.
-		// result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
-		// if err != nil {
-		// 	return false, fmt.Errorf("spendQuota rate limit error: %w", err)
-		// }
-		// if result.Allowed == 0 {
-		// 	return false, fmt.Errorf("spendQuota: %w", proto.ErrLimitExceeded)
-		// }
+		result, err := c.rateLimiter.RateLimit(ctx, key, int(computeUnits), RateLimit{Rate: cfg.RateLimit, Period: time.Minute})
+		if err != nil {
+			return false, fmt.Errorf("spendQuota rate limit error: %w", err)
+		}
+		if result.Allowed == 0 {
+			return false, fmt.Errorf("spendQuota: %w", proto.ErrLimitExceeded)
+		}
 	}
 
 	for i := time.Duration(0); i < 3; i++ {
