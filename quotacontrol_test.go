@@ -2,6 +2,10 @@ package quotacontrol_test
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/json"
+	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -14,6 +18,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
+	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -47,13 +52,12 @@ func middlewareCU(i int64) func(http.Handler) http.Handler {
 	}
 }
 
-func SetupRedis(t *testing.T, cfg *Config) *redisclient.Client {
+func SetupRedis(t *testing.T, cfg *Config) (*redisclient.Client, func()) {
 	s := miniredis.NewMiniRedis()
 	s.Start()
-	t.Cleanup(s.Close)
 	cfg.Redis.Host = s.Host()
 	cfg.Redis.Port = uint16(s.Server().Addr().Port)
-	return redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+	return redisclient.NewClient(&redisclient.Options{Addr: s.Addr()}), s.Close
 }
 
 func TestMiddlewareUseAccessKey(t *testing.T) {
@@ -64,7 +68,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	cfg := _Config
 	cfg.LRUSize = 100
-	redisClient := SetupRedis(t, &cfg)
+	redisClient, close := SetupRedis(t, &cfg)
+	t.Cleanup(close)
 
 	cache := NewRedisCache(redisClient, time.Minute)
 	store := NewMemoryStore()
@@ -102,13 +107,17 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
 	defer server.Close()
 
+	limitCounter, err := httprateredis.NewRedisLimitCounter(_Config.RedisRateLimitConfig())
+	require.NoError(t, err)
+
 	router := chi.NewRouter()
 
 	// we set the compute units to 2, then in another handler we remove 1 before spending
 	router.Use(middlewareCU(2))
 	router.Use(middleware.SetAccessKey)
 	router.Use(middleware.VerifyAccessKey(client, nil))
-	router.Use(NewHTTPRateLimiter(cfg, nil))
+
+	router.Use(middleware.RateLimit(limitCounter, nil, nil, nil))
 	router.Use(middlewareCU(-1))
 	router.Use(middleware.SpendUsage(client, nil))
 
@@ -291,13 +300,10 @@ func TestDefaultKey(t *testing.T) {
 
 	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
 
-	s := miniredis.NewMiniRedis()
-	s.Start()
-	t.Cleanup(s.Close)
-
 	cfg := _Config
 
-	redisClient := SetupRedis(t, &cfg)
+	redisClient, close := SetupRedis(t, &cfg)
+	t.Cleanup(close)
 
 	cache := NewRedisCache(redisClient, time.Minute)
 	store := NewMemoryStore()
@@ -371,4 +377,44 @@ func TestDefaultKey(t *testing.T) {
 	aq, err = client.FetchQuota(ctx, newAccess.AccessKey, "", _Now)
 	require.NoError(t, err)
 	assert.Equal(t, &newAccess, aq.AccessKey)
+}
+
+func TestRateLimiter(t *testing.T) {
+	const _CustomErrorMessage = "Custom error message"
+
+	cfg := _Config
+
+	_, close := SetupRedis(t, &cfg)
+	t.Cleanup(close)
+
+	lc, err := httprateredis.NewRedisLimitCounter(cfg.RedisRateLimitConfig())
+	require.NoError(t, err)
+
+	rl := middleware.RateLimit(lc, nil, &middleware.RateConfig{
+		Rate:         10,
+		Interval:     time.Minute,
+		ErrorMessage: _CustomErrorMessage,
+	}, nil)
+	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	buf := make([]byte, 4)
+	for i := 0; i < 10; i++ {
+		ip := rand.Uint32()
+		binary.LittleEndian.PutUint32(buf, ip)
+	}
+	ipAddress := net.IP(buf).String()
+	for i := 0; i < 20; i++ {
+		req, _ := http.NewRequest("GET", "/", nil)
+		req.RemoteAddr = ipAddress
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if i < 10 {
+			assert.Equal(t, http.StatusOK, w.Code)
+			continue
+		}
+		assert.Equal(t, http.StatusTooManyRequests, w.Code, i)
+		err := proto.WebRPCError{}
+		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
+		assert.Equal(t, err.Message, _CustomErrorMessage)
+	}
 }

@@ -2,12 +2,10 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/go-chi/httprate"
 )
 
 const (
@@ -27,6 +25,11 @@ type Client interface {
 
 // ErrorHandler is a function that handles errors.
 type ErrorHandler func(w http.ResponseWriter, r *http.Request, next http.Handler, err error)
+
+// handler returns a http.HandlerFunc that handles the error.
+func (e ErrorHandler) handler(next http.Handler, err error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) { e(w, r, next, err) }
+}
 
 // SetAccessKey get the access key from the header and sets it in the context.
 func SetAccessKey(next http.Handler) http.Handler {
@@ -72,105 +75,6 @@ func VerifyAccessKey(client Client, eh ErrorHandler) func(next http.Handler) htt
 			// set access quota in context
 			ctx = withAccessQuota(ctx, quota)
 			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-// EnsureUsage is a middleware that checks if the access key has enough usage left.
-func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = _DefaultErrorHandler
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-
-			quota := GetAccessQuota(ctx)
-			if quota == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			cu := GetComputeUnits(ctx)
-			if cu == 0 {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			usage, err := client.FetchUsage(ctx, quota, getTime(ctx))
-			if err != nil {
-				eh(w, r, next, err)
-				return
-			}
-			if usage+cu > quota.Limit.HardQuota {
-				eh(w, r, next, proto.ErrLimitExceeded)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func httprateKey(r *http.Request) (string, error) {
-	q := GetAccessQuota(r.Context())
-	if q == nil {
-		return "", nil
-	}
-	return fmt.Sprintf("rl:project:%d", q.AccessKey.ProjectID), nil
-}
-
-func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = _DefaultErrorHandler
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			quota, cu := GetAccessQuota(ctx), GetComputeUnits(ctx)
-
-			if quota == nil || cu == 0 {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			ctx = httprate.WithIncrement(ctx, int(cu))
-			options := []httprate.Option{
-				httprate.WithKeyFuncs(httprateKey),
-				httprate.WithLimitCounter(limitCounter),
-			}
-			limiter := httprate.NewRateLimiter(int(quota.Limit.RateLimit), time.Minute, options...)
-			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = _DefaultErrorHandler
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			quota, cu := GetAccessQuota(ctx), GetComputeUnits(ctx)
-
-			if quota == nil || cu == 0 {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			ok, err := client.SpendQuota(ctx, quota, cu, getTime(ctx))
-			if err != nil {
-				eh(w, r, next, err)
-				return
-			}
-
-			if !ok {
-				eh(w, r, next, proto.ErrLimitExceeded)
-				return
-			}
-
-			next.ServeHTTP(w, r.WithContext(withResult(ctx)))
 		})
 	}
 }

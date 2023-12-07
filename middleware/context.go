@@ -24,6 +24,7 @@ var (
 	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
 	ctxKeyTime          = &contextKey{"Time"}
 	ctxKeyResult        = &contextKey{"Result"}
+	ctxKeyRateLimitKey  = &contextKey{"rateLimitKey"}
 )
 
 // WithAccessKey adds the access key to the context.
@@ -129,4 +130,18 @@ func withResult(ctx context.Context) context.Context {
 func GetResult(ctx context.Context) bool {
 	_, ok := ctx.Value(ctxKeyResult).(struct{})
 	return ok
+}
+
+// withRateKey sets the rate limit key in the context.
+func withRateKey(ctx context.Context, key string) context.Context {
+	return context.WithValue(ctx, ctxKeyRateLimitKey, key)
+}
+
+// getRateKey returns the rate limit key from the context.
+func getRateKey(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyRateLimitKey).(string)
+	if !ok {
+		return ""
+	}
+	return v
 }
