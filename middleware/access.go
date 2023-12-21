@@ -112,12 +112,16 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 	}
 }
 
-func httprateKey(r *http.Request) (string, error) {
+func ProjectRateKey(projectID uint64) string {
+	return fmt.Sprintf("rl:project:%d", projectID)
+}
+
+func HTTPRateKey(r *http.Request) (string, error) {
 	q := GetAccessQuota(r.Context())
 	if q == nil {
 		return "", nil
 	}
-	return fmt.Sprintf("rl:project:%d", q.AccessKey.ProjectID), nil
+	return ProjectRateKey(q.AccessKey.ProjectID), nil
 }
 
 func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next http.Handler) http.Handler {
@@ -136,7 +140,7 @@ func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next ht
 
 			ctx = httprate.WithIncrement(ctx, int(cu))
 			options := []httprate.Option{
-				httprate.WithKeyFuncs(httprateKey),
+				httprate.WithKeyFuncs(HTTPRateKey),
 				httprate.WithLimitCounter(limitCounter),
 			}
 			limiter := httprate.NewRateLimiter(int(quota.Limit.RateLimit), time.Minute, options...)

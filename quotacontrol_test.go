@@ -92,7 +92,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	}
 
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore),
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{
@@ -323,7 +323,7 @@ func TestDefaultKey(t *testing.T) {
 	}
 
 	qc := quotaControl{
-		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore),
+		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
 	server := http.Server{

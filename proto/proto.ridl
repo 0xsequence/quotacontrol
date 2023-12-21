@@ -75,6 +75,12 @@ enum UserPermission: uint16
   - READ_WRITE
   - ADMIN
 
+struct ProjectStatus
+  - projectId: uint64
+    + go.field.name = ProjectID
+  - limit: Limit
+  - usageCounter: int64
+  - ratelimitCounter: int64
 
 error 1001 Timeout            "Request timed out" HTTP 408
 error 1002 LimitExceeded      "Request limit exceeded" HTTP 429
@@ -87,6 +93,9 @@ error 1008 NoDefaultKey       "No default access key found" HTTP 403
 error 1009 AtLeastOneKey      "There should be at least one active accessKey per project" HTTP 403
 
 service QuotaControl
+  # Project
+  - GetProjectStatus(projectId: uint64) => (projectStatus: ProjectStatus)
+
   # Access Key
   - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
   - GetDefaultAccessKey(projectID: uint64) => (accessKey: AccessKey)
