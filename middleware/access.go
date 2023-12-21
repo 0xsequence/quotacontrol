@@ -116,7 +116,7 @@ func ProjectRateKey(projectID uint64) string {
 	return fmt.Sprintf("rl:project:%d", projectID)
 }
 
-func HTTPRateKey(r *http.Request) (string, error) {
+func httprateKey(r *http.Request) (string, error) {
 	q := GetAccessQuota(r.Context())
 	if q == nil {
 		return "", nil
@@ -140,7 +140,7 @@ func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next ht
 
 			ctx = httprate.WithIncrement(ctx, int(cu))
 			options := []httprate.Option{
-				httprate.WithKeyFuncs(HTTPRateKey),
+				httprate.WithKeyFuncs(httprateKey),
 				httprate.WithLimitCounter(limitCounter),
 			}
 			limiter := httprate.NewRateLimiter(int(quota.Limit.RateLimit), time.Minute, options...)
