@@ -439,7 +439,7 @@ func (q qcHandler) GetProjectStatus(ctx context.Context, projectID uint64) (*pro
 	status.UsageCounter = usage
 
 	limiter := httprate.NewRateLimiter(int(limit.RateLimit), time.Minute, httprate.WithLimitCounter(q.limitCounter))
-	_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID))
+	_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
 	if err != nil {
 		return nil, err
 	}
