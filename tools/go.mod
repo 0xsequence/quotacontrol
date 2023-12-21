@@ -1,6 +1,6 @@
 module tools
 
-go 1.20
+go 1.21
 
 require github.com/webrpc/webrpc v0.13.0
 
