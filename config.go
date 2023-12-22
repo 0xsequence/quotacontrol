@@ -5,7 +5,7 @@ import (
 
 	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/goware/cachestore/redis"
-	"github.com/lestrrat-go/jwx/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
