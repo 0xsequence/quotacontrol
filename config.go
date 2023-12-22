@@ -5,6 +5,8 @@ import (
 
 	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/goware/cachestore/redis"
+	"github.com/lestrrat-go/jwx/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 type Duration struct {
@@ -36,6 +38,18 @@ func (cfg Config) RedisRateLimitConfig() *httprateredis.Config {
 		MaxActive: cfg.Redis.MaxActive,
 		DBIndex:   cfg.Redis.DBIndex,
 	}
+}
+
+func (cfg *Config) SetAccessToken(secret, service string) error {
+	token := jwt.New()
+	token.Set("service", service)
+	token.Set("iat", time.Now().Unix())
+	payload, err := jwt.Sign(token, jwt.WithKey(jwa.HS256, []byte(secret)))
+	if err != nil {
+		return err
+	}
+	cfg.AccessKey = string(payload)
+	return nil
 }
 
 type RateLimiterConfig struct {
