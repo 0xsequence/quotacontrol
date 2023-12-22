@@ -40,11 +40,11 @@ func (cfg Config) RedisRateLimitConfig() *httprateredis.Config {
 	}
 }
 
-func (cfg *Config) SetAccessToken(secret, service string) error {
+func (cfg *Config) SetAccessToken(alg jwa.SignatureAlgorithm, secret, service string) error {
 	token := jwt.New()
 	token.Set("service", service)
 	token.Set("iat", time.Now().Unix())
-	payload, err := jwt.Sign(token, jwt.WithKey(jwa.HS256, []byte(secret)))
+	payload, err := jwt.Sign(token, jwt.WithKey(alg, []byte(secret)))
 	if err != nil {
 		return err
 	}
