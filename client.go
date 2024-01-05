@@ -50,7 +50,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		permCache:  permCache,
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
-			bearerToken: cfg.AccessKey,
+			bearerToken: cfg.AuthToken,
 		}),
 		ticker: ticker,
 		logger: logger,

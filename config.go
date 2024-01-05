@@ -22,7 +22,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 type Config struct {
 	Enabled       bool              `toml:"enabled"`
 	URL           string            `toml:"url"`
-	AccessKey     string            `toml:"access_key"`
+	AuthToken     string            `toml:"auth_token"`
 	UpdateFreq    Duration          `toml:"update_freq"`
 	RateLimiter   RateLimiterConfig `toml:"rate_limiter"`
 	Redis         redis.Config      `toml:"redis"`
@@ -48,7 +48,7 @@ func (cfg *Config) SetAccessToken(alg jwa.SignatureAlgorithm, secret, service st
 	if err != nil {
 		return err
 	}
-	cfg.AccessKey = string(payload)
+	cfg.AuthToken = string(payload)
 	return nil
 }
 
