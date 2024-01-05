@@ -14,34 +14,28 @@ struct Limit
   - maxKeys: int64
     + go.tag.json = maxKeys,omitempty
   - rateLimit: int64
-  - freeCU: int64
-  - softQuota: int64
-  - hardQuota: int64
+  - freeWarn: int64
+  - freeMax: int64
+  - overWarn: int64
+  - overMax: int64 
 
 struct AccessKey
   - projectId: uint64
     + go.field.name = ProjectID
     + go.tag.db = project_id
-
   - displayName: string
     + go.tag.db = display_name
-
   - accessKey: string
     + go.tag.db = access_key
-
   - active: bool
     + go.tag.db = active
-
   - default: bool
     + go.field.name = Default
     + go.tag.db = is_default
-
   - allowedOrigins: []string
     + go.tag.db = allowed_origins
-
   - allowedServices: []Service
     + go.tag.db = allowed_services
-
   - createdAt?: timestamp
     + json = createdAt
     + go.tag.json = createdAt,omitempty
@@ -65,9 +59,10 @@ struct AccessQuota
   - accessKey: AccessKey
 
 enum EventType: uint16
-  - FreeCU # Project runs out of free compute units
-  - SoftQuota # Project goes over the soft quota
-  - HardQuota # Project goes reached the hard quota
+  - FreeWarn
+  - FreeMax
+  - OverWarn
+  - OverMax
 
 enum UserPermission: uint16
   - UNAUTHORIZED

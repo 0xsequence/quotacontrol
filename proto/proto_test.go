@@ -5,6 +5,7 @@ import (
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAccessKeyValidateOrigin(t *testing.T) {
@@ -33,11 +34,14 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 func TestGetSpendResult(t *testing.T) {
 	const (
-		_CU   = 5
-		_Free = _CU * 2
-		_Soft = _CU * 4
-		_Hard = _CU * 8
+		_CU = 5
 	)
+	limit := proto.Limit{
+		FreeWarn: 10,
+		FreeMax:  20,
+		OverWarn: 30,
+		OverMax:  40,
+	}
 
 	type TestCase struct {
 		Name  string
@@ -48,73 +52,143 @@ func TestGetSpendResult(t *testing.T) {
 	}
 
 	for _, tc := range []TestCase{
+		// Include Alert
 		{
-			Name:  "WithinFreeCU",
-			Total: _Free - 1,
+			Name:  "Within_IncludedAlert",
+			Total: limit.FreeWarn - 1,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: nil,
 		}, {
-			Name:  "WithinFreeCUExact",
-			Total: _Free,
+			Name:  "Within_IncludedAlert_Exact",
+			Total: limit.FreeWarn,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: proto.Ptr(proto.EventType_FreeCU),
+			Event: proto.Ptr(proto.EventType_FreeWarn),
 		}, {
-			Name:  "OverFreeCU",
-			Total: _Free + 2,
-			Usage: proto.AccessUsage{ValidCompute: _CU - 2, OverCompute: 2},
-			Event: proto.Ptr(proto.EventType_FreeCU),
+			Name:  "Above_IncludedAlert",
+			Total: limit.FreeWarn + 1,
+			Usage: proto.AccessUsage{ValidCompute: _CU},
+			Event: proto.Ptr(proto.EventType_FreeWarn),
 		}, {
-			Name:  "OverFreeCUExact",
-			Total: _Free + _CU,
+			Name:  "Above_IncludedAlert_Exact",
+			Total: limit.FreeWarn + _CU,
+			Usage: proto.AccessUsage{ValidCompute: _CU},
+			Event: nil,
+		},
+		// Include Limit
+		{
+			Name:  "Within_IncludedLimit",
+			Total: limit.FreeWarn - 1,
+			Usage: proto.AccessUsage{ValidCompute: _CU},
+			Event: nil,
+		}, {
+			Name:  "Within_IncludedLimit_Exact",
+			Total: limit.FreeMax,
+			Usage: proto.AccessUsage{ValidCompute: _CU},
+			Event: proto.Ptr(proto.EventType_FreeMax),
+		}, {
+			Name:  "Above_IncludedLimit",
+			Total: limit.FreeMax + 1,
+			Usage: proto.AccessUsage{ValidCompute: _CU - 1, OverCompute: 1},
+			Event: proto.Ptr(proto.EventType_FreeMax),
+		}, {
+			Name:  "Above_IncludedLimit_Exact",
+			Total: limit.FreeMax + _CU,
+			Usage: proto.AccessUsage{OverCompute: _CU},
+			Event: nil,
+		},
+		// Overage Alert
+		{
+			Name:  "Within_OverageAlert",
+			Total: limit.OverWarn - 1,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
 		}, {
-			Name:  "WithinSoft",
-			Total: _Soft - 1,
+			Name:  "Within_OverageAlert_Exact",
+			Total: limit.OverWarn,
+			Usage: proto.AccessUsage{OverCompute: _CU},
+			Event: proto.Ptr(proto.EventType_OverWarn),
+		}, {
+			Name:  "Above_OverageAlert",
+			Total: limit.OverWarn + 2,
+			Usage: proto.AccessUsage{OverCompute: _CU},
+			Event: proto.Ptr(proto.EventType_OverWarn),
+		}, {
+			Name:  "Above_OverageAlert_Exact",
+			Total: limit.OverWarn + _CU,
+			Usage: proto.AccessUsage{OverCompute: _CU},
+			Event: nil,
+		},
+		// Overage Limit
+		{
+			Name:  "Within_OverageLimit",
+			Total: limit.OverMax - 1,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
 		}, {
-			Name:  "WithinSoftExact",
-			Total: _Soft,
+			Name:  "Above_OverageLimit_Exact",
+			Total: limit.OverMax,
 			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.Ptr(proto.EventType_SoftQuota),
+			Event: proto.Ptr(proto.EventType_OverMax),
 		}, {
-			Name:  "OverSoft",
-			Total: _Soft + 2,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.Ptr(proto.EventType_SoftQuota),
-		}, {
-			Name:  "OverSoftExact",
-			Total: _Soft + _CU,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: nil,
-		}, {
-			Name:  "WithinHard",
-			Total: _Hard - 1,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: nil,
-		}, {
-			Name:  "OverHardExact",
-			Total: _Hard,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.Ptr(proto.EventType_HardQuota),
-		}, {
-			Name:  "OverHard",
-			Total: _Hard + 2,
+			Name:  "Above_OverageLimit",
+			Total: limit.OverMax + 2,
 			Usage: proto.AccessUsage{OverCompute: _CU - 2, LimitedCompute: 2},
-			Event: proto.Ptr(proto.EventType_HardQuota),
+			Event: proto.Ptr(proto.EventType_OverMax),
+		}, {
+			Name:  "Above_OverageLimit_Exact",
+			Total: limit.OverMax + _CU,
+			Usage: proto.AccessUsage{LimitedCompute: _CU},
+			Event: nil,
 		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
-			limit := proto.Limit{
-				FreeCU:    _Free,
-				SoftQuota: _Soft,
-				HardQuota: _Hard,
-			}
 			u, evt := limit.GetSpendResult(_CU, tc.Total)
 			assert.Equal(t, tc.Usage, u)
-			assert.Equal(t, tc.Event, evt)
+			if tc.Event == nil {
+				assert.Nil(t, evt)
+				return
+			}
+			require.NotNil(t, evt)
+			assert.Equal(t, tc.Event.String(), evt.String())
 		})
 	}
 
+	// edge cases
+	t.Run("EdgeCase", func(t *testing.T) {
+		t.Run("NoFreeWarn", func(t *testing.T) {
+			// it works for freeMax and 0
+			limit.FreeWarn = limit.FreeMax
+			u, evt := limit.GetSpendResult(1, limit.FreeMax)
+			assert.Equal(t, proto.AccessUsage{ValidCompute: 1}, u)
+			assert.Equal(t, proto.EventType_FreeMax.String(), evt.String())
+			limit.FreeWarn = 0
+			u, evt = limit.GetSpendResult(1, limit.FreeMax)
+			assert.Equal(t, proto.AccessUsage{ValidCompute: 1}, u)
+			assert.Equal(t, proto.EventType_FreeMax.String(), evt.String())
+		})
+		t.Run("NoOverWarn", func(t *testing.T) {
+			// it works for overMax and 0
+			limit.OverWarn = limit.OverMax
+			u, evt := limit.GetSpendResult(1, limit.OverMax)
+			assert.Equal(t, proto.AccessUsage{OverCompute: 1}, u)
+			assert.Equal(t, proto.EventType_OverMax.String(), evt.String())
+			limit.OverWarn = 0
+			u, evt = limit.GetSpendResult(1, limit.OverMax)
+			assert.Equal(t, proto.AccessUsage{OverCompute: 1}, u)
+			assert.Equal(t, proto.EventType_OverMax.String(), evt.String())
+		})
+	})
+}
+
+func TestValidateLimit(t *testing.T) {
+	assert.NoError(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 2}.Validate())
+	assert.NoError(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 4}.Validate())
+	assert.NoError(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 3, OverMax: 4}.Validate())
+
+	assert.Error(t, proto.Limit{}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 1}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
 }
