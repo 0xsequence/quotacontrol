@@ -102,7 +102,7 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 				eh(w, r, next, err)
 				return
 			}
-			if usage+cu > quota.Limit.HardQuota {
+			if usage+cu > quota.Limit.OverMax {
 				eh(w, r, next, proto.ErrLimitExceeded)
 				return
 			}

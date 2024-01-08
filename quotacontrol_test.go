@@ -57,7 +57,13 @@ func SetupRedis(t *testing.T, cfg *Config) *redisclient.Client {
 }
 
 func TestMiddlewareUseAccessKey(t *testing.T) {
-	limit := proto.Limit{RateLimit: 100, FreeCU: 5, SoftQuota: 7, HardQuota: 10}
+	limit := proto.Limit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
+	}
 	access := proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
 	expectedCounter := proto.AccessUsage{}
 	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
@@ -129,7 +135,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		qc.notifications = make(map[uint64][]proto.EventType)
 
 		// Spend Free CU
-		for i := int64(1); i < limit.FreeCU; i++ {
+		for i := int64(1); i < limit.FreeWarn; i++ {
 			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
@@ -141,11 +147,11 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_FreeCU)
+		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_FreeMax)
 		expectedCounter.Add(proto.AccessUsage{ValidCompute: 1})
 
 		// Get close to soft quota
-		for i := limit.FreeCU + 1; i < limit.SoftQuota; i++ {
+		for i := limit.FreeWarn + 1; i < limit.OverWarn; i++ {
 			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
@@ -157,11 +163,11 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_SoftQuota)
+		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_OverWarn)
 		expectedCounter.Add(proto.AccessUsage{OverCompute: 1})
 
 		// Get close to hard quota
-		for i := limit.SoftQuota + 1; i < limit.HardQuota; i++ {
+		for i := limit.OverWarn + 1; i < limit.OverMax; i++ {
 			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
@@ -173,7 +179,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_HardQuota)
+		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_OverMax)
 		expectedCounter.Add(proto.AccessUsage{OverCompute: 1})
 
 		// Denied
@@ -195,8 +201,12 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	t.Run("ChangeLimits", func(t *testing.T) {
 		// Change limits
 		//
-		// Increase HardQuota which should still allow requests to go through, etc.
-		err = store.SetAccessLimit(ctx, _ProjectID, &proto.Limit{RateLimit: 100, SoftQuota: 5, HardQuota: 110})
+		// Increase CreditsOverageLimit which should still allow requests to go through, etc.
+		err = store.SetAccessLimit(ctx, _ProjectID, &proto.Limit{
+			RateLimit: 100,
+			OverWarn:  5,
+			OverMax:   110,
+		})
 		assert.NoError(t, err)
 		err = client.ClearQuotaCacheByAccessKey(ctx, _AccessKeys[0])
 		assert.NoError(t, err)
@@ -286,7 +296,12 @@ func (q *quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventT
 func TestDefaultKey(t *testing.T) {
 	service := proto.Ptr(proto.Service_Metadata)
 
-	limit := proto.Limit{RateLimit: 100, FreeCU: 5, SoftQuota: 7, HardQuota: 10}
+	limit := proto.Limit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		OverWarn:  7,
+		OverMax:   10,
+	}
 	access := &proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
 
 	wlog := logger.NewLogger(logger.LogLevel_DEBUG)
