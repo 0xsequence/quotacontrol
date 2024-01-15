@@ -28,12 +28,21 @@ func matchDomain(domain, pattern string) bool {
 		return true
 	}
 
-	prefix, suffix, found := strings.Cut(pattern, "*")
-	if found {
-		return len(domain) >= len(prefix+suffix) && strings.HasPrefix(domain, prefix) && strings.HasSuffix(domain, suffix)
+	prefix, suffix, hasWildcard := strings.Cut(pattern, "*")
+	if !hasWildcard {
+		return domain == pattern
 	}
 
-	return domain == pattern
+	if len(domain) < len(prefix+suffix) {
+		return false
+	}
+	if !strings.HasPrefix(domain, prefix) {
+		return false
+	}
+	if !strings.HasSuffix(domain, suffix) {
+		return false
+	}
+	return true
 }
 
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
