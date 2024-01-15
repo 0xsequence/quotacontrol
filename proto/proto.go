@@ -2,7 +2,6 @@ package proto
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -28,22 +27,32 @@ func matchDomain(domain, pattern string) bool {
 	if pattern == "*" {
 		return true
 	}
-	if strings.HasPrefix(pattern, "*.") {
-		return strings.HasSuffix(domain, pattern[1:])
+
+	prefix, suffix, hasWildcard := strings.Cut(pattern, "*")
+	if !hasWildcard {
+		return domain == pattern
 	}
-	return domain == pattern
+
+	if len(domain) < len(prefix+suffix) {
+		return false
+	}
+	if !strings.HasPrefix(domain, prefix) {
+		return false
+	}
+	if !strings.HasSuffix(domain, suffix) {
+		return false
+	}
+	return true
 }
 
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	if len(t.AllowedOrigins) == 0 {
 		return true
 	}
-	origin, err := url.Parse(rawOrigin)
-	if err != nil {
-		return false
-	}
+
+	origin := strings.ToLower(rawOrigin)
 	for _, o := range t.AllowedOrigins {
-		if matchDomain(origin.Host, o) {
+		if matchDomain(origin, o) {
 			return true
 		}
 	}
