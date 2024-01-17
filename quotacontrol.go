@@ -59,7 +59,7 @@ func NewQuotaControlHandler(log logger.Logger, cache Cache, store Store, limitco
 		cache:        cache,
 		store:        store,
 		limitCounter: limitcounter,
-		accessKeyGen: DefaultAccessKey,
+		accessKeyGen: GenerateAccessKey,
 	}
 }
 
