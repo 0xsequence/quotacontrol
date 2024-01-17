@@ -163,7 +163,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	for i := time.Duration(0); i < 3; i++ {
-		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.HardQuota)
+		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.OverMax)
 		switch err {
 		case nil:
 			usage, event := cfg.GetSpendResult(computeUnits, total)
