@@ -27,6 +27,8 @@ github.com/go-chi/httprate-redis v0.3.0 h1:aGE1YEZJf2gBHaD/UDkIUscrX994Hso0R51Yf
 github.com/go-chi/httprate-redis v0.3.0/go.mod h1:coxmdYJ2Zm3ZqeAm3BVDKQcld27wVgcWGfOcTTUqs2M=
 github.com/goccy/go-json v0.10.2 h1:CrxCmQqYDkv1z7lO7Wbh2HN93uovUHgrECaO5ZrCXAU=
 github.com/goccy/go-json v0.10.2/go.mod h1:6MelG93GURQebXPDq3khkgXZkazVtN9CRI+MGFi0w8I=
+github.com/goware/base64 v0.1.0 h1:ehxtbkFiMMqfjh+WQ9jBKnpBXywuZfw3gePMr19MgWo=
+github.com/goware/base64 v0.1.0/go.mod h1:8stO8YzeBOn5KTtFI4yBaQ2ZewlNUgSG1QGyWbNsPvw=
 github.com/goware/cachestore v0.8.1 h1:UjSjFiB27vjGq4JK8aBMqsAI4sa7cbrHToFDsM0cjHw=
 github.com/goware/cachestore v0.8.1/go.mod h1:ikiO2RmxIt4cVqEBII6yR+V4Z7pH+y8bMQHpd1MvG1Y=
 github.com/goware/logger v0.3.0 h1:pdgnsqj2rSDXtfdu+UuAFuBuOapxeDYNETY39227LMM=

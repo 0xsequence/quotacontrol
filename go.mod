@@ -1,12 +1,13 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.21
+go 1.21.5
 
 require (
 	github.com/alicebob/miniredis/v2 v2.30.3
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-chi/httprate v0.8.0
 	github.com/go-chi/httprate-redis v0.3.0
+	github.com/goware/base64 v0.1.0
 	github.com/goware/cachestore v0.8.1
 	github.com/goware/logger v0.3.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
