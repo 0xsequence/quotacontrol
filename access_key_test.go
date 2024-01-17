@@ -15,6 +15,10 @@ func TestAccessKeyV1Encoding(t *testing.T) {
 	outID, err := quotacontrol.DecodeProjectID(accessKey)
 	require.NoError(t, err)
 	require.Equal(t, projectID, outID)
+
+	outID, err = quotacontrol.GetProjectID(accessKey)
+	require.NoError(t, err)
+	require.Equal(t, projectID, outID)
 }
 
 func TestAccessKeyLegacyEncoding(t *testing.T) {
@@ -23,6 +27,10 @@ func TestAccessKeyLegacyEncoding(t *testing.T) {
 	// fmt.Println("=> k", accessKey)
 
 	outID, err := quotacontrol.LegacyDecodeProjectID(accessKey)
+	require.NoError(t, err)
+	require.Equal(t, projectID, outID)
+
+	outID, err = quotacontrol.GetProjectID(accessKey)
 	require.NoError(t, err)
 	require.Equal(t, projectID, outID)
 }
