@@ -20,6 +20,7 @@ type QuotaCache interface {
 
 type UsageCache interface {
 	SetComputeUnits(ctx context.Context, redisKey string, amount int64) error
+	ClearComputeUnits(ctx context.Context, redisKey string) (bool, error)
 	PeekComputeUnits(ctx context.Context, redisKey string) (int64, error)
 	SpendComputeUnits(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
 }
@@ -88,6 +89,14 @@ func (s *RedisCache) SetAccessQuota(ctx context.Context, quota *proto.AccessQuot
 func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amount int64) error {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	return s.client.Set(ctx, cacheKey, amount, s.ttl).Err()
+}
+func (s *RedisCache) ClearComputeUnits(ctx context.Context, redisKey string) (bool, error) {
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
+	count, err := s.client.Del(ctx, cacheKey).Result()
+	if err != nil {
+		return false, err
+	}
+	return count != 0, nil
 }
 
 func (s *RedisCache) PeekComputeUnits(ctx context.Context, redisKey string) (int64, error) {

@@ -138,6 +138,20 @@ func (q qcHandler) PrepareUsage(ctx context.Context, projectID uint64, cycle *pr
 	return true, nil
 }
 
+func (q qcHandler) ClearUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
+	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	if err != nil {
+		return false, err
+	}
+
+	key := getQuotaKey(projectID, cycle, now)
+	ok, err := q.cache.UsageCache.ClearComputeUnits(ctx, key)
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := q.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
