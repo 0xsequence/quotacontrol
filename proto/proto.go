@@ -29,8 +29,11 @@ func matchDomain(domain, pattern string) bool {
 		return true
 	}
 
-	prefix, suffix, found := strings.Cut(pattern, "*")
-	if found {
+	i := strings.Index(pattern, "*")
+	if i != -1 {
+		prefix := pattern[0:i]
+		suffix := pattern[i+1:]
+
 		return len(domain) >= len(prefix+suffix) && strings.HasPrefix(domain, prefix) && strings.HasSuffix(domain, suffix)
 	}
 
