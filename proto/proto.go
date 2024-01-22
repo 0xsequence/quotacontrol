@@ -72,39 +72,57 @@ func (t *AccessKey) ValidateService(service *Service) bool {
 	return false
 }
 
-type (
-	_LimitAlias Limit
-	_Limit      struct {
-		_LimitAlias
-		FreeCU    int64 `json:"freeCU"`
-		SoftQuota int64 `json:"softQuota"`
-		HardQuota int64 `json:"hardQuota"`
-	}
-)
-
 // MarshalJSON adds freeCU, softQuota and hardQuota fields to the json.
 // This keeps compatibility with older versions of QuotaControl.
 // TODO: remove this once all services have migrated to newer version.
 func (l Limit) MarshalJSON() ([]byte, error) {
-	var v = _Limit{
-		_LimitAlias: (_LimitAlias)(l),
-		FreeCU:      l.FreeWarn,
-		SoftQuota:   l.OverWarn,
-		HardQuota:   l.OverMax,
+	// Alias is used to avoid infinite recursion when marshaling Limit.
+	type Alias Limit
+
+	var v = struct {
+		Alias
+		FreeCU    int64 `json:"freeCU"`
+		SoftQuota int64 `json:"softQuota"`
+		HardQuota int64 `json:"hardQuota"`
+	}{
+		Alias:     (Alias)(l),
+		FreeCU:    l.FreeWarn,
+		SoftQuota: l.OverWarn,
+		HardQuota: l.OverMax,
 	}
 	return json.Marshal(v)
 }
 
+// UnmarshalJSON parses the json and checks if the older version fields are set
+// and the newer ones are empty. If so, it uses the older fields to populate the new ones.
 func (l *Limit) UnmarshalJSON(b []byte) error {
-	v := _Limit{}
+	// Alias is used to avoid infinite recursion when marshaling Limit.
+	type Alias Limit
+
+	v := struct {
+		Alias
+		FreeCU    int64 `json:"freeCU"`
+		SoftQuota int64 `json:"softQuota"`
+		HardQuota int64 `json:"hardQuota"`
+	}{}
 	if err := json.Unmarshal(b, &v); err != nil {
 		return err
 	}
-	*l = Limit(v._LimitAlias)
-	l.FreeWarn = v.FreeCU
-	l.FreeMax = v.FreeCU
-	l.OverWarn = v.SoftQuota
-	l.OverMax = v.HardQuota
+	*l = Limit(v.Alias)
+	if v.FreeCU != 0 {
+		if l.FreeWarn == 0 {
+			l.FreeWarn = v.FreeCU
+		}
+		if l.FreeMax == 0 {
+			l.FreeMax = v.FreeCU
+		}
+	}
+	if v.SoftQuota != 0 && l.OverWarn == 0 {
+		l.OverWarn = v.SoftQuota
+	}
+	if v.HardQuota != 0 && l.OverMax == 0 {
+		l.OverMax = v.HardQuota
+	}
 	return nil
 }
 
