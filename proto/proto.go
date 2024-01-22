@@ -29,24 +29,10 @@ func matchDomain(domain, pattern string) bool {
 	if pattern == "*" {
 		return true
 	}
-
-	// switch to http scheme by default
-	if !strings.HasPrefix(pattern, "http") {
-		pattern = fmt.Sprintf("http://%s", pattern)
+	if strings.HasPrefix(pattern, "*.") {
+		return strings.HasSuffix(domain, pattern[1:])
 	}
-
-	u, err := url.Parse(pattern)
-	if err != nil {
-		return false
-	}
-
-	// match pattern with wildcard
-	if strings.Contains(pattern, "*.") {
-		schemePrefix := fmt.Sprintf("%s://", u.Scheme)
-		return strings.HasPrefix(domain, u.Scheme) && strings.HasSuffix(domain[len(schemePrefix):], pattern[strings.Index(pattern, "*")+1:])
-	}
-
-	return domain == u.String()
+	return domain == pattern
 }
 
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
@@ -58,7 +44,7 @@ func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 		return false
 	}
 	for _, o := range t.AllowedOrigins {
-		if matchDomain(origin.String(), o) {
+		if matchDomain(origin.Host, o) {
 			return true
 		}
 	}
