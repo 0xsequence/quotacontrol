@@ -1,6 +1,8 @@
 package proto_test
 
 import (
+	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -210,4 +212,51 @@ func TestValidateLimit(t *testing.T) {
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
+}
+
+func TestLimitJSON(t *testing.T) {
+	expected := proto.Limit{
+		RateLimit: 2000000000,
+		FreeWarn:  20000000000,
+		FreeMax:   20000000000,
+		OverWarn:  2000000000000,
+		OverMax:   math.MaxInt64,
+	}
+	expectedJson := `{
+		"rateLimit": 2000000000,
+		"freeWarn": 20000000000,
+		"freeMax": 20000000000,
+		"overWarn": 2000000000000,
+		"overMax": 9223372036854775807,
+		"freeCU": 20000000000,
+		"softQuota": 2000000000000,
+		"hardQuota": 9223372036854775807
+	}`
+
+	rawJson, err := json.Marshal(&expected)
+	require.NoError(t, err)
+	assert.JSONEq(t, expectedJson, string(rawJson))
+
+	limit := proto.Limit{}
+	err = json.Unmarshal(rawJson, &limit)
+	require.NoError(t, err)
+	assert.Equal(t, expected, limit)
+
+	type LegacyLimit struct {
+		RateLimit int64 `json:"rateLimit"`
+		FreeCU    int64 `json:"freeCU"`
+		SoftQuota int64 `json:"softQuota"`
+		HardQuota int64 `json:"hardQuota"`
+	}
+
+	legacyExpected := LegacyLimit{
+		RateLimit: 2000000000,
+		FreeCU:    20000000000,
+		SoftQuota: 2000000000000,
+		HardQuota: math.MaxInt64,
+	}
+	legacyLimit := LegacyLimit{}
+	err = json.Unmarshal(rawJson, &legacyLimit)
+	require.NoError(t, err)
+	assert.Equal(t, legacyExpected, legacyLimit)
 }

@@ -55,6 +55,11 @@ func shouldErrorContinue(log logger.Logger, err error) bool {
 		return true
 	}
 
+	// QuotaControl access key not found
+	if errors.Is(w, proto.ErrAccessKeyNotFound) {
+		return true
+	}
+
 	// QuotaControl server down
 	if errors.Is(w, proto.ErrWebrpcRequestFailed) {
 		return true
