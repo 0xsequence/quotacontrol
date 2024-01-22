@@ -76,9 +76,9 @@ type (
 	_LimitAlias Limit
 	_Limit      struct {
 		_LimitAlias
-		CreditsIncluded int64 `json:"freeCU"`
-		SoftQuota       int64 `json:"softQuota"`
-		HardQuota       int64 `json:"hardQuota"`
+		FreeCU    int64 `json:"freeCU"`
+		SoftQuota int64 `json:"softQuota"`
+		HardQuota int64 `json:"hardQuota"`
 	}
 )
 
@@ -87,10 +87,10 @@ type (
 // TODO: remove this once all services have migrated to newer version.
 func (l Limit) MarshalJSON() ([]byte, error) {
 	var v = _Limit{
-		_LimitAlias:     (_LimitAlias)(l),
-		CreditsIncluded: l.FreeWarn,
-		SoftQuota:       l.OverWarn,
-		HardQuota:       l.OverMax,
+		_LimitAlias: (_LimitAlias)(l),
+		FreeCU:      l.FreeWarn,
+		SoftQuota:   l.OverWarn,
+		HardQuota:   l.OverMax,
 	}
 	return json.Marshal(v)
 }
@@ -101,8 +101,8 @@ func (l *Limit) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	*l = Limit(v._LimitAlias)
-	l.FreeWarn = v.CreditsIncluded
-	l.FreeMax = v.CreditsIncluded
+	l.FreeWarn = v.FreeCU
+	l.FreeMax = v.FreeCU
 	l.OverWarn = v.SoftQuota
 	l.OverMax = v.HardQuota
 	return nil
