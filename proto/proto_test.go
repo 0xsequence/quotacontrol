@@ -18,12 +18,30 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 	t.Run("allowed origins", func(t *testing.T) {
 		tk := &proto.AccessKey{
-			AllowedOrigins: []string{"localhost:8080", "localhost:8081"},
+			AllowedOrigins: []string{"http://localhost:8080", "http://localhost:8081"},
 		}
 		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
 		assert.True(t, tk.ValidateOrigin("http://localhost:8081"))
 		assert.False(t, tk.ValidateOrigin("http://localhost:8082"))
 	})
+
+	t.Run("match any", func(t *testing.T) {
+		tk := &proto.AccessKey{
+			AllowedOrigins: []string{"*"},
+		}
+		assert.True(t, tk.ValidateOrigin("http://sequence.xyz"))
+		assert.True(t, tk.ValidateOrigin("https://localhost:8080"))
+	})
+
+	t.Run("match http scheme", func(t *testing.T) {
+		tk := &proto.AccessKey{
+			AllowedOrigins: []string{"https://localhost:8080", "https://*.sequence.xyz"},
+		}
+		assert.True(t, tk.ValidateOrigin("https://local.sequence.xyz"))
+		assert.True(t, tk.ValidateOrigin("https://localhost:8080"))
+		assert.False(t, tk.ValidateOrigin("http://localhost:8080"))
+	})
+
 	t.Run("wildcards", func(t *testing.T) {
 		tk := &proto.AccessKey{
 			AllowedOrigins: []string{"*.sequence.xyz"},
@@ -31,6 +49,7 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 		assert.False(t, tk.ValidateOrigin("http://sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("http://docs.sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("http://test.sequence.xyz"))
+		assert.True(t, tk.ValidateOrigin("http://dev.test.sequence.xyz"))
 	})
 }
 
