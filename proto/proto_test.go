@@ -240,4 +240,12 @@ func TestLimitJSON(t *testing.T) {
 	err = json.Unmarshal(rawJson, &legacyLimit)
 	require.NoError(t, err)
 	assert.Equal(t, legacyExpected, legacyLimit)
+
+	legacyJson, err := json.Marshal(&legacyExpected)
+	require.NoError(t, err)
+
+	limit = proto.Limit{}
+	err = json.Unmarshal(legacyJson, &limit)
+	require.NoError(t, err)
+	assert.Equal(t, expected, limit)
 }

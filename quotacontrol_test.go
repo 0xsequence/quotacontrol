@@ -298,7 +298,7 @@ func TestDefaultKey(t *testing.T) {
 
 	limit := proto.Limit{
 		RateLimit: 100,
-		FreeWarn:  5,
+		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
