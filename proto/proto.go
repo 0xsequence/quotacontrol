@@ -72,23 +72,40 @@ func (t *AccessKey) ValidateService(service *Service) bool {
 	return false
 }
 
-// MarshalJSON adds freeCU, softQuota and hardQuota fields to the json.
-// This keeps compatibility with older versions of QuotaControl.
-// TODO: remove this once all services have migrated to newer version.
-func (l *Limit) MarshalJSON() ([]byte, error) {
-	type Alias Limit
-	var v = struct {
-		*Alias
+type (
+	_LimitAlias Limit
+	_Limit      struct {
+		_LimitAlias
 		CreditsIncluded int64 `json:"freeCU"`
 		SoftQuota       int64 `json:"softQuota"`
 		HardQuota       int64 `json:"hardQuota"`
-	}{
-		Alias:           (*Alias)(l),
+	}
+)
+
+// MarshalJSON adds freeCU, softQuota and hardQuota fields to the json.
+// This keeps compatibility with older versions of QuotaControl.
+// TODO: remove this once all services have migrated to newer version.
+func (l Limit) MarshalJSON() ([]byte, error) {
+	var v = _Limit{
+		_LimitAlias:     (_LimitAlias)(l),
 		CreditsIncluded: l.FreeWarn,
 		SoftQuota:       l.OverWarn,
 		HardQuota:       l.OverMax,
 	}
 	return json.Marshal(v)
+}
+
+func (l *Limit) UnmarshalJSON(b []byte) error {
+	v := _Limit{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*l = Limit(v._LimitAlias)
+	l.FreeWarn = v.CreditsIncluded
+	l.FreeMax = v.CreditsIncluded
+	l.OverWarn = v.SoftQuota
+	l.OverMax = v.HardQuota
+	return nil
 }
 
 func (l Limit) Validate() error {
