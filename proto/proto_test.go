@@ -1,11 +1,11 @@
 package proto_test
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -255,7 +255,8 @@ func TestLimitJSON(t *testing.T) {
 		SoftQuota: 2000000000000,
 		HardQuota: math.MaxInt64,
 	}
-	err = json.Unmarshal(rawJson, &legacyExpected)
+	legacyLimit := LegacyLimit{}
+	err = json.Unmarshal(rawJson, &legacyLimit)
 	require.NoError(t, err)
-	assert.Equal(t, legacyExpected.RateLimit, expected.RateLimit)
+	assert.Equal(t, legacyExpected, legacyLimit)
 }
