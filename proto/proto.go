@@ -3,7 +3,6 @@ package proto
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -30,35 +29,25 @@ func matchDomain(domain, pattern string) bool {
 		return true
 	}
 
-	// switch to http scheme by default
-	if !strings.HasPrefix(pattern, "http") {
-		pattern = fmt.Sprintf("http://%s", pattern)
+	i := strings.Index(pattern, "*")
+	if i != -1 {
+		prefix := pattern[0:i]
+		suffix := pattern[i+1:]
+
+		return len(domain) >= len(prefix+suffix) && strings.HasPrefix(domain, prefix) && strings.HasSuffix(domain, suffix)
 	}
 
-	u, err := url.Parse(pattern)
-	if err != nil {
-		return false
-	}
-
-	// match pattern with wildcard
-	if strings.Contains(pattern, "*.") {
-		schemePrefix := fmt.Sprintf("%s://", u.Scheme)
-		return strings.HasPrefix(domain, u.Scheme) && strings.HasSuffix(domain[len(schemePrefix):], pattern[strings.Index(pattern, "*")+1:])
-	}
-
-	return domain == u.String()
+	return domain == pattern
 }
 
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	if len(t.AllowedOrigins) == 0 {
 		return true
 	}
-	origin, err := url.Parse(rawOrigin)
-	if err != nil {
-		return false
-	}
+
+	origin := strings.ToLower(rawOrigin)
 	for _, o := range t.AllowedOrigins {
-		if matchDomain(origin.String(), o) {
+		if matchDomain(origin, o) {
 			return true
 		}
 	}
