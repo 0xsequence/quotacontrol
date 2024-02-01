@@ -76,7 +76,7 @@ var _ middleware.Client = &Client{}
 
 // IsEnabled tells us if the service is running with quotacontrol enabled.
 func (c *Client) IsEnabled() bool {
-	return c.cfg.Enabled //&& c.isRunning()
+	return c != nil && c.cfg.Enabled //&& c.isRunning()
 }
 
 // FetchQuota fetches and validates the accessKey from cache or from the quota server.
