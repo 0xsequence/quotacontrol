@@ -23,7 +23,7 @@ import (
 var (
 	_Host       = "localhost:8080"
 	_ProjectID  = uint64(777)
-	_AccessKeys = []string{"abc", "cde"}
+	_AccessKeys = []string{GenerateAccessKey(_ProjectID), GenerateAccessKey(_ProjectID)}
 	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 
 	_Config = Config{
