@@ -26,7 +26,7 @@ type AccessKeyStore interface {
 type UsageStore interface {
 	GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
 	GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
-	UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
+	UpdateAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
 
 type CycleStore interface {
@@ -182,20 +182,44 @@ func (q qcHandler) NotifyEvent(ctx context.Context, projectID uint64, eventType 
 	return true, nil
 }
 
-func (q qcHandler) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+func (q qcHandler) UpdateProjectUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error) {
 	var errs []error
-	m := make(map[string]bool, len(usage))
-	for accessKey, accessUsage := range usage {
-		err := q.store.UsageStore.UpdateAccessUsage(ctx, accessKey, *service, now, *accessUsage)
+	m := make(map[uint64]bool, len(usage))
+	for projectID, accessUsage := range usage {
+		err := q.store.UsageStore.UpdateAccessUsage(ctx, projectID, "", *service, now, *accessUsage)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", accessKey, err))
+			errs = append(errs, fmt.Errorf("%d: %w", projectID, err))
 		}
-		m[accessKey] = err == nil
+		m[projectID] = err == nil
 	}
 	if len(errs) > 0 {
 		return m, errors.Join(errs...)
 	}
 	return m, nil
+}
+
+func (q qcHandler) UpdateKeyUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+	var errs []error
+	m := make(map[string]bool, len(usage))
+	for key, u := range usage {
+		projectID, err := GetProjectID(key)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", key, err))
+			continue
+		}
+		if err = q.store.UsageStore.UpdateAccessUsage(ctx, projectID, key, *service, now, *u); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", key, err))
+		}
+		m[key] = err == nil
+	}
+	if len(errs) > 0 {
+		return m, errors.Join(errs...)
+	}
+	return m, nil
+}
+
+func (q qcHandler) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+	return q.UpdateKeyUsage(ctx, service, now, usage)
 }
 
 func (q qcHandler) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bool, error) {

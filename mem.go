@@ -13,7 +13,10 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		limits:     map[uint64]*proto.Limit{},
 		accessKeys: map[string]*proto.AccessKey{},
-		usage:      map[string]*proto.AccessUsage{},
+		usage: usageRecord{
+			ByProjectID: map[uint64]*proto.AccessUsage{},
+			ByAccessKey: map[string]*proto.AccessUsage{},
+		},
 	}
 }
 
@@ -23,7 +26,7 @@ type MemoryStore struct {
 	limits     map[uint64]*proto.Limit
 	cycles     map[uint64]*proto.Cycle
 	accessKeys map[string]*proto.AccessKey
-	usage      map[string]*proto.AccessUsage
+	usage      usageRecord
 }
 
 func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error {
@@ -104,9 +107,12 @@ func (m *MemoryStore) GetAccountUsage(ctx context.Context, projectID uint64, ser
 	m.Lock()
 	defer m.Unlock()
 	usage := proto.AccessUsage{}
+	if m.usage.ByProjectID[projectID] != nil {
+		usage.Add(*m.usage.ByProjectID[projectID])
+	}
 	for _, v := range m.accessKeys {
 		if v.ProjectID == projectID {
-			u, ok := m.usage[v.AccessKey]
+			u, ok := m.usage.ByAccessKey[v.AccessKey]
 			if !ok {
 				continue
 			}
@@ -122,27 +128,27 @@ func (m *MemoryStore) GetAccessKeyUsage(ctx context.Context, accessKey string, s
 	if _, ok := m.accessKeys[accessKey]; !ok {
 		return proto.AccessUsage{}, proto.ErrAccessKeyNotFound
 	}
-	usage, ok := m.usage[accessKey]
+	usage, ok := m.usage.ByAccessKey[accessKey]
 	if !ok {
 		return proto.AccessUsage{}, nil
 	}
 	return *usage, nil
 }
 
-func (m *MemoryStore) UpdateAccessUsage(ctx context.Context, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error {
+func (m *MemoryStore) UpdateAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error {
 	m.Lock()
 	defer m.Unlock()
-	if _, ok := m.usage[accessKey]; !ok {
-		m.usage[accessKey] = &usage
+	if _, ok := m.usage.ByAccessKey[accessKey]; !ok {
+		m.usage.ByAccessKey[accessKey] = &usage
 		return nil
 	}
-	m.usage[accessKey].Add(usage)
+	m.usage.ByAccessKey[accessKey].Add(usage)
 	return nil
 }
 
 func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string, service proto.Service) error {
 	m.Lock()
-	m.usage[accessKey] = &proto.AccessUsage{}
+	m.usage.ByAccessKey[accessKey] = &proto.AccessUsage{}
 	m.Unlock()
 	return nil
 }

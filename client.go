@@ -43,7 +43,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		cfg:     cfg,
 		service: service,
 		usage: &usageTracker{
-			Usage: make(map[time.Time]map[string]*proto.AccessUsage),
+			Usage: make(map[time.Time]usageRecord),
 		},
 		usageCache: UsageCache(cache),
 		quotaCache: quotaCache,
@@ -167,7 +167,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 		switch err {
 		case nil:
 			usage, event := cfg.GetSpendResult(computeUnits, total)
-			c.usage.AddUsage(accessKey, now, usage)
+			c.usage.AddKeyUsage(accessKey, now, usage)
 			if usage.LimitedCompute != 0 {
 				return false, proto.ErrLimitExceeded
 			}
@@ -178,7 +178,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			}
 			return true, nil
 		case proto.ErrLimitExceeded:
-			c.usage.AddUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
+			c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
 			return false, err
 		case ErrCachePing:
 			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
