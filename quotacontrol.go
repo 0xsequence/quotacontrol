@@ -152,6 +152,27 @@ func (q qcHandler) ClearUsage(ctx context.Context, projectID uint64, now time.Ti
 	return ok, nil
 }
 
+func (q qcHandler) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	if err != nil {
+		return nil, err
+	}
+	record := proto.AccessQuota{
+		Limit:     limit,
+		Cycle:     cycle,
+		AccessKey: &proto.AccessKey{ProjectID: projectID},
+	}
+
+	if err := q.cache.QuotaCache.SetProjectQuota(ctx, &record); err != nil {
+		q.log.With("err", err).Error("quotacontrol: failed to set access quota in cache")
+	}
+
+	return &record, nil
+}
 func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := q.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
@@ -228,8 +249,11 @@ func (q qcHandler) ClearAccessQuotaCache(ctx context.Context, projectID uint64) 
 		q.log.With("err", err).Error("quotacontrol: failed to list access keys")
 		return true, nil
 	}
+	if err := q.cache.QuotaCache.DeleteProjectQuota(ctx, projectID); err != nil {
+		q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
+	}
 	for _, access := range accessKeys {
-		if err := q.cache.QuotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
+		if err := q.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
 			q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
 		}
 	}
@@ -437,7 +461,7 @@ func (q qcHandler) updateAccessKey(ctx context.Context, access *proto.AccessKey)
 		return nil, err
 	}
 
-	if err := q.cache.QuotaCache.DeleteAccessKey(ctx, access.AccessKey); err != nil {
+	if err := q.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
 		q.log.With("err", err).Error("quotacontrol: failed to delete access quota from cache")
 	}
 

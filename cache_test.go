@@ -19,11 +19,22 @@ func (s *mockCache) GetAccessQuota(ctx context.Context, accessKey string) (*prot
 	return &proto.AccessQuota{AccessKey: &proto.AccessKey{AccessKey: accessKey}}, nil
 }
 
-func (s *mockCache) SetAccessQuota(ctx context.Context, accessKey *proto.AccessQuota) error {
+func (s *mockCache) SetAccessQuota(context.Context, *proto.AccessQuota) error {
 	return nil
 }
 
-func (s *mockCache) DeleteAccessKey(ctx context.Context, accessKey string) error {
+func (s *mockCache) DeleteAccessQuota(context.Context, string) error {
+	return nil
+}
+
+func (s *mockCache) GetProjectQuota(context.Context, uint64) (*proto.AccessQuota, error) {
+	return nil, nil
+}
+func (s *mockCache) SetProjectQuota(context.Context, *proto.AccessQuota) error {
+	return nil
+}
+
+func (s *mockCache) DeleteProjectQuota(context.Context, uint64) error {
 	return nil
 }
 
