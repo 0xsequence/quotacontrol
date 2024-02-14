@@ -182,7 +182,11 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 		switch err {
 		case nil:
 			usage, event := cfg.GetSpendResult(computeUnits, total)
-			c.usage.AddKeyUsage(accessKey, now, usage)
+			if quota.AccessKey.AccessKey == "" {
+				c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
+			} else {
+				c.usage.AddKeyUsage(accessKey, now, usage)
+			}
 			if usage.LimitedCompute != 0 {
 				return false, proto.ErrLimitExceeded
 			}
