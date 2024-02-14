@@ -102,8 +102,8 @@ service QuotaControl
   - DisableAccessKey(accessKey: string) => (ok: bool)
 
   # Usage
-  - GetProjectQuota(projectId: uint64, now: timestamp) => (cycle: Cycle, limit: Limit)
-  - GetAccessQuota(accessKey: string, now: timestamp) => (accessQuota: AccessQuota, accessKey: AccessKey, cycle: Cycle, limit: Limit)
+  - GetProjectQuota(projectId: uint64, now: timestamp) => (accessQuota: AccessQuota)
+  - GetAccessQuota(accessKey: string, now: timestamp) => (accessQuota: AccessQuota)
   - ClearAccessQuotaCache(projectID: uint64) => (ok: bool)
   - GetAccountUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)

@@ -79,8 +79,23 @@ func (c *Client) IsEnabled() bool {
 	return c != nil && c.cfg.Enabled //&& c.isRunning()
 }
 
-// FetchQuota fetches and validates the accessKey from cache or from the quota server.
-func (c *Client) FetchQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
+// FetchProjectQuota fetches the project quota from cache or from the quota server.
+func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+	// fetch access quota
+	quota, err := c.quotaCache.GetProjectQuota(ctx, projectID)
+	if err != nil {
+		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
+			return nil, err
+		}
+		if quota, err = c.quotaClient.GetProjectQuota(ctx, projectID, now); err != nil {
+			return nil, err
+		}
+	}
+	return quota, nil
+}
+
+// FetchKeyQuota fetches and validates the accessKey from cache or from the quota server.
+func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
@@ -200,7 +215,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 }
 
 func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey string) error {
-	return c.quotaCache.DeleteAccessKey(ctx, accessKey)
+	return c.quotaCache.DeleteAccessQuota(ctx, accessKey)
 }
 
 func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {

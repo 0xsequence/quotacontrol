@@ -350,12 +350,12 @@ func TestDefaultKey(t *testing.T) {
 
 	client := NewClient(wlog.With("client", "client"), *service, cfg)
 
-	aq, err := client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	aq, err := client.FetchKeyQuota(ctx, access.AccessKey, "", _Now)
 	require.NoError(t, err)
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
 
-	aq, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	aq, err = client.FetchKeyQuota(ctx, access.AccessKey, "", _Now)
 	require.NoError(t, err)
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
@@ -363,7 +363,7 @@ func TestDefaultKey(t *testing.T) {
 	access, err = qc.UpdateAccessKey(ctx, access.AccessKey, proto.Ptr("new name"), nil, []*proto.Service{service})
 	require.NoError(t, err)
 
-	aq, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	aq, err = client.FetchKeyQuota(ctx, access.AccessKey, "", _Now)
 	require.NoError(t, err)
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
@@ -379,11 +379,11 @@ func TestDefaultKey(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	_, err = client.FetchQuota(ctx, access.AccessKey, "", _Now)
+	_, err = client.FetchKeyQuota(ctx, access.AccessKey, "", _Now)
 	require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
 
 	newAccess.Default = true
-	aq, err = client.FetchQuota(ctx, newAccess.AccessKey, "", _Now)
+	aq, err = client.FetchKeyQuota(ctx, newAccess.AccessKey, "", _Now)
 	require.NoError(t, err)
 	assert.Equal(t, &newAccess, aq.AccessKey)
 }

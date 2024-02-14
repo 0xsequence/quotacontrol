@@ -13,9 +13,12 @@ import (
 )
 
 type QuotaCache interface {
+	GetProjectQuota(ctx context.Context, projectID uint64) (*proto.AccessQuota, error)
+	SetProjectQuota(ctx context.Context, quota *proto.AccessQuota) error
+	DeleteProjectQuota(ctx context.Context, projectID uint64) error
 	GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error)
 	SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error
-	DeleteAccessKey(ctx context.Context, accessKey string) error
+	DeleteAccessQuota(ctx context.Context, accessKey string) error
 }
 
 type UsageCache interface {
@@ -57,39 +60,67 @@ type RedisCache struct {
 }
 
 func (s *RedisCache) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
-	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, accessKey)
+	return s.getQuota(ctx, accessKey)
+}
+
+func (s *RedisCache) DeleteAccessQuota(ctx context.Context, accessKey string) error {
+	return s.deleteQuota(ctx, accessKey)
+}
+
+func (s *RedisCache) SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error {
+	return s.setQuota(ctx, quota.AccessKey.AccessKey, quota)
+}
+
+func (s *RedisCache) GetProjectQuota(ctx context.Context, projectID uint64) (*proto.AccessQuota, error) {
+	return s.getQuota(ctx, getProjectKey(projectID))
+}
+
+func (s *RedisCache) DeleteProjectQuota(ctx context.Context, projectID uint64) error {
+	return s.deleteQuota(ctx, getProjectKey(projectID))
+}
+
+func (s *RedisCache) SetProjectQuota(ctx context.Context, quota *proto.AccessQuota) error {
+	return s.setQuota(ctx, getProjectKey(quota.AccessKey.ProjectID), quota)
+}
+
+func (s *RedisCache) getQuota(ctx context.Context, key string) (*proto.AccessQuota, error) {
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, key)
 	raw, err := s.client.Get(ctx, cacheKey).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, proto.ErrAccessKeyNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("get quota: %w", err)
 	}
 	var quota proto.AccessQuota
 	if err := json.Unmarshal(raw, &quota); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal quota: %w", err)
 	}
 	return &quota, nil
 }
 
-func (s *RedisCache) DeleteAccessKey(ctx context.Context, accessKey string) error {
-	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, accessKey)
+func (s *RedisCache) deleteQuota(ctx context.Context, key string) error {
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, key)
 	return s.client.Del(ctx, cacheKey).Err()
 }
 
-func (s *RedisCache) SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error {
+func (s *RedisCache) setQuota(ctx context.Context, key string, quota *proto.AccessQuota) error {
 	raw, err := json.Marshal(quota)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal quota: %w", err)
 	}
-	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, quota.AccessKey.AccessKey)
-	return s.client.Set(ctx, cacheKey, raw, s.ttl).Err()
+	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, key)
+	if err := s.client.Set(ctx, cacheKey, raw, s.ttl).Err(); err != nil {
+		return fmt.Errorf("set quota: %w", err)
+	}
+	return nil
 }
 
 func (s *RedisCache) SetComputeUnits(ctx context.Context, redisKey string, amount int64) error {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	return s.client.Set(ctx, cacheKey, amount, s.ttl).Err()
 }
+
 func (s *RedisCache) ClearComputeUnits(ctx context.Context, redisKey string) (bool, error) {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	count, err := s.client.Del(ctx, cacheKey).Result()
@@ -200,25 +231,53 @@ func NewLRU(cacheBackend QuotaCache, size int, ttl time.Duration) *LRU {
 }
 
 func (s *LRU) GetAccessQuota(ctx context.Context, accessKey string) (*proto.AccessQuota, error) {
-	if aq, ok := s.mem.Get(accessKey); ok {
+	return s.getQuota(ctx, accessKey)
+}
+
+func (s *LRU) SetAccessQuota(ctx context.Context, quota *proto.AccessQuota) error {
+	return s.setQuota(ctx, quota.AccessKey.AccessKey, quota)
+}
+
+func (s *LRU) DeleteAccessQuota(ctx context.Context, accessKey string) error {
+	return s.deleteQuota(ctx, accessKey)
+}
+
+func (s *LRU) GetProjectQuota(ctx context.Context, projectID uint64) (*proto.AccessQuota, error) {
+	return s.getQuota(ctx, getProjectKey(projectID))
+}
+
+func (s *LRU) SetProjectQuota(ctx context.Context, quota *proto.AccessQuota) error {
+	return s.setQuota(ctx, getProjectKey(quota.AccessKey.ProjectID), quota)
+}
+
+func (s *LRU) DeleteProjectQuota(ctx context.Context, projectID uint64) error {
+	return s.deleteQuota(ctx, getProjectKey(projectID))
+}
+
+func (s *LRU) getQuota(ctx context.Context, key string) (*proto.AccessQuota, error) {
+	if aq, ok := s.mem.Get(key); ok {
 		return aq, nil
 	}
-	aq, err := s.backend.GetAccessQuota(ctx, accessKey)
+	aq, err := s.backend.GetAccessQuota(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	s.mem.Add(accessKey, aq)
+	s.mem.Add(key, aq)
 	return aq, nil
 }
 
-func (s *LRU) SetAccessQuota(ctx context.Context, aq *proto.AccessQuota) error {
-	s.mem.Add(aq.AccessKey.AccessKey, aq)
+func (s *LRU) setQuota(ctx context.Context, key string, aq *proto.AccessQuota) error {
+	s.mem.Add(key, aq)
 	return s.backend.SetAccessQuota(ctx, aq)
 }
 
-func (s *LRU) DeleteAccessKey(ctx context.Context, accessKey string) error {
-	s.mem.Remove(accessKey)
-	return s.backend.DeleteAccessKey(ctx, accessKey)
+func (s *LRU) deleteQuota(ctx context.Context, key string) error {
+	s.mem.Remove(key)
+	return s.backend.DeleteAccessQuota(ctx, key)
+}
+
+func getProjectKey(projectID uint64) string {
+	return fmt.Sprintf("project:%d", projectID)
 }
 
 func getUserPermKey(projectID uint64, userID string) string {
