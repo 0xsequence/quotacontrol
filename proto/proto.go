@@ -51,13 +51,19 @@ func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 		return true
 	}
 
-	origin := strings.ToLower(rawOrigin)
+	origin := normalizeOrigin(rawOrigin)
 	for _, o := range t.AllowedOrigins {
-		if matchDomain(origin, o) {
+		if matchDomain(origin, normalizeOrigin(o)) {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizeOrigin(rawOrigin string) string {
+	origin := strings.ToLower(rawOrigin)
+	origin = strings.TrimRight(origin, "/")
+	return origin
 }
 
 func (t *AccessKey) ValidateService(service *Service) bool {
