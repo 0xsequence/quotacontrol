@@ -18,11 +18,12 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 	t.Run("allowed origins", func(t *testing.T) {
 		tk := &proto.AccessKey{
-			AllowedOrigins: []string{"http://localhost:8080", "http://localhost:8081"},
+			AllowedOrigins: []string{"http://localhost:8080", "http://localhost:8081", "http://localhost:8082/"},
 		}
 		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
 		assert.True(t, tk.ValidateOrigin("http://localhost:8081"))
-		assert.False(t, tk.ValidateOrigin("http://localhost:8082"))
+		assert.True(t, tk.ValidateOrigin("http://localhost:8082"))
+		assert.False(t, tk.ValidateOrigin("http://localhost:8083"))
 	})
 
 	t.Run("match any", func(t *testing.T) {
