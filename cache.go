@@ -159,7 +159,7 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	if err != nil {
 		return 0, err
 	}
-	if v > limit {
+	if v >= limit {
 		return v, proto.ErrLimitExceeded
 	}
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
