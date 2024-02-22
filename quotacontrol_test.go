@@ -2,6 +2,7 @@ package quotacontrol_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -21,14 +22,12 @@ import (
 )
 
 var (
-	_Host       = "localhost:8080"
 	_ProjectID  = uint64(777)
 	_AccessKeys = []string{GenerateAccessKey(_ProjectID), GenerateAccessKey(_ProjectID)}
 	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 
 	_Config = Config{
 		Enabled:    true,
-		URL:        `http://` + _Host,
 		UpdateFreq: Duration{time.Minute},
 		RateLimiter: RateLimiterConfig{
 			Enabled:                 true,
@@ -54,6 +53,13 @@ func SetupRedis(t *testing.T, cfg *Config) *redisclient.Client {
 	cfg.Redis.Host = s.Host()
 	cfg.Redis.Port = uint16(s.Server().Addr().Port)
 	return redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+}
+
+func setupListener(t *testing.T) net.Listener {
+	var err error
+	l, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	return l
 }
 
 func TestMiddlewareUseAccessKey(t *testing.T) {
@@ -82,8 +88,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	err = store.InsertAccessKey(ctx, &access)
 	require.NoError(t, err)
 
-	client := NewClient(wlog.With("client", "client"), proto.Service_Indexer, cfg)
-
 	qcCache := Cache{
 		QuotaCache:      cache,
 		UsageCache:      cache,
@@ -101,12 +105,16 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
-	server := http.Server{
-		Addr:    _Host,
-		Handler: proto.NewQuotaControlServer(&qc),
-	}
-	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
-	defer server.Close()
+
+	listener := setupListener(t)
+	defer listener.Close()
+
+	cfg.URL = "http://" + listener.Addr().String()
+	go func() {
+		http.Serve(listener, proto.NewQuotaControlServer(&qc))
+	}()
+
+	client := NewClient(wlog.With("client", "client"), proto.Service_Indexer, cfg)
 
 	router := chi.NewRouter()
 
@@ -341,12 +349,14 @@ func TestDefaultKey(t *testing.T) {
 		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
-	server := http.Server{
-		Addr:    _Host,
-		Handler: proto.NewQuotaControlServer(&qc),
-	}
-	go func() { require.ErrorIs(t, server.ListenAndServe(), http.ErrServerClosed) }()
-	defer server.Close()
+
+	listener := setupListener(t)
+	defer listener.Close()
+
+	cfg.URL = "http://" + listener.Addr().String()
+	go func() {
+		http.Serve(listener, proto.NewQuotaControlServer(&qc))
+	}()
 
 	client := NewClient(wlog.With("client", "client"), *service, cfg)
 
