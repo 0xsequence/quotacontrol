@@ -21,6 +21,7 @@ var (
 	ctxKeyAccessKey     = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota   = &contextKey{"AccessQuota"}
 	ctxKeyComputeUnits  = &contextKey{"ComputeUnits"}
+	ctxKeyRateLimitType = &contextKey{"RateLimitType"}
 	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
 	ctxKeyTime          = &contextKey{"Time"}
 	ctxKeyResult        = &contextKey{"Result"}
@@ -73,6 +74,17 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 	projectID := accessQuota.GetProjectID()
 	active := accessQuota.IsActive()
 	return projectID, active
+}
+
+// WithRateLimitType adds the rate limit type to the context.
+func WithRateLimitType(ctx context.Context, t RateType) context.Context {
+	return context.WithValue(ctx, ctxKeyRateLimitType, t)
+}
+
+// GetRateLimitType returns the rate limit type from the context.
+func GetRateLimitType(ctx context.Context) RateType {
+	v, _ := ctx.Value(ctxKeyRateLimitType).(RateType)
+	return v
 }
 
 // WithSkipRateLimit adds the skip rate limit flag to the context.
