@@ -14,7 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRateLimit(t *testing.T) {
+func FixedKey(k string) func(*http.Request) (string, error) {
+	return func(_ *http.Request) (string, error) {
+		return string(k), nil
+	}
+}
+
+func TestRateLimitSameKey(t *testing.T) {
 	const (
 		RateLimitTypePublic1 middleware.RateType = "public1"
 		RateLimitTypePublic2 middleware.RateType = "public2"
@@ -51,6 +57,49 @@ func TestRateLimit(t *testing.T) {
 		expected := http.StatusOK
 		// req 10-20 and 30-40 should be limited
 		if (i >= 10 && i < 20) || i >= 30 {
+			expected = http.StatusTooManyRequests
+		}
+		assert.Equal(t, expected, w.Code, "i=%d", i)
+	}
+}
+
+func TestRateLimitDifferentKey(t *testing.T) {
+	const (
+		RateLimitTypePublic1 middleware.RateType = "public1"
+		RateLimitTypePublic2 middleware.RateType = "public2"
+	)
+
+	rl := middleware.NewRateLimitSettings(
+		&localCounter{
+			counters:     make(map[uint64]*count),
+			windowLength: time.Minute,
+		},
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			proto.RespondWithError(w, proto.ErrLimitExceeded)
+		}),
+	)
+	rl.RegisterRateLimit(RateLimitTypePublic1, 10, httprate.WithKeyFuncs(httprate.KeyByRealIP, FixedKey("one")))
+	rl.RegisterRateLimit(RateLimitTypePublic2, 20, httprate.WithKeyFuncs(httprate.KeyByRealIP, FixedKey("two")))
+
+	handler := middleware.NewRateLimit(rl, 1*time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+
+	ip := net.IPv4(192, 168, 0, 1)
+
+	for i := 0; i < 40; i++ {
+		req, _ := http.NewRequest("GET", "/", nil)
+		req.RemoteAddr = ip.String()
+		// req 1-20 are type 1, req 21-40 are type 2
+		rlType := RateLimitTypePublic1
+		if i >= 20 {
+			rlType = RateLimitTypePublic2
+		}
+		req = req.WithContext(middleware.WithRateLimitType(req.Context(), rlType))
+
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		expected := http.StatusOK
+		// req 10-20 should be limited
+		if i >= 10 && i < 20 {
 			expected = http.StatusTooManyRequests
 		}
 		assert.Equal(t, expected, w.Code, "i=%d", i)
