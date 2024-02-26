@@ -2,6 +2,8 @@ module github.com/0xsequence/quotacontrol
 
 go 1.21.5
 
+replace github.com/go-chi/httprate => github.com/LukasJenicek/httprate v0.0.0-20240227091200-f8c004e4baab
+
 require (
 	github.com/alicebob/miniredis/v2 v2.30.3
 	github.com/go-chi/chi/v5 v5.0.10

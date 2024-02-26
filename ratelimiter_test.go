@@ -1,8 +1,10 @@
 package quotacontrol
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
+	"github.com/go-chi/httprate"
 	"math/rand"
 	"net"
 	"net/http"
@@ -43,5 +45,35 @@ func TestRateLimiter(t *testing.T) {
 		err := proto.WebRPCError{}
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
 		assert.Equal(t, err.Message, _CustomErrorMessage)
+	}
+}
+
+func TestOverridePublicRateLimiting(t *testing.T) {
+	rl := NewHTTPRateLimiter(Config{
+		RateLimiter: RateLimiterConfig{
+			Enabled:                 true,
+			PublicRequestsPerMinute: 10,
+			ErrorMessage:            "Custom error",
+		},
+	}, nil)
+	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	buf := make([]byte, 4)
+	for i := 11; i < 20; i++ {
+		ip := rand.Uint32()
+		binary.LittleEndian.PutUint32(buf, ip)
+	}
+	ipAddress := net.IP(buf).String()
+	srv := httptest.NewServer(handler)
+	for i := 0; i < 5; i++ {
+		ctx := httprate.WithRequestLimit(context.Background(), 2)
+		req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL, nil)
+		req.RemoteAddr = ipAddress
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		code := http.StatusOK
+		if i >= 2 {
+			code = http.StatusTooManyRequests
+		}
+		assert.Equal(t, code, w.Code, "call #%d", i)
 	}
 }
