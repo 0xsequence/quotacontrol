@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/0xsequence/quotacontrol/ratelimit"
 )
 
 var DefaultCreditsUsagePerCall int64 = 1
@@ -77,13 +78,13 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 }
 
 // WithRateLimitType adds the rate limit type to the context.
-func WithRateLimitType(ctx context.Context, t RateType) context.Context {
+func WithRateLimitType(ctx context.Context, t ratelimit.Type) context.Context {
 	return context.WithValue(ctx, ctxKeyRateLimitType, t)
 }
 
 // GetRateLimitType returns the rate limit type from the context.
-func GetRateLimitType(ctx context.Context) RateType {
-	v, _ := ctx.Value(ctxKeyRateLimitType).(RateType)
+func GetRateLimitType(ctx context.Context) ratelimit.Type {
+	v, _ := ctx.Value(ctxKeyRateLimitType).(ratelimit.Type)
 	return v
 }
 

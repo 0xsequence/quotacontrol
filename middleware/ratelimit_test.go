@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/middleware"
-	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/0xsequence/quotacontrol/ratelimit"
 	"github.com/go-chi/httprate"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,21 +20,17 @@ func FixedKey(k string) func(*http.Request) (string, error) {
 	}
 }
 
-func TestRateLimitSameKey(t *testing.T) {
-	const (
-		RateLimitTypePublic1 middleware.RateType = "public1"
-		RateLimitTypePublic2 middleware.RateType = "public2"
-	)
+const (
+	RateLimitTypePublic1 ratelimit.Type = "public1"
+	RateLimitTypePublic2 ratelimit.Type = "public2"
+)
 
-	rl := middleware.NewRateLimitSettings(
-		&localCounter{
-			counters:     make(map[uint64]*count),
-			windowLength: time.Minute,
-		},
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, proto.ErrLimitExceeded)
-		}),
-	)
+func TestRateLimitSameKey(t *testing.T) {
+	counter := localCounter{
+		counters:     make(map[uint64]*count),
+		windowLength: time.Minute,
+	}
+	rl := ratelimit.NewSettings(&counter)
 	rl.RegisterRateLimit(RateLimitTypePublic1, 10, httprate.WithKeyFuncs(httprate.KeyByRealIP))
 	rl.RegisterRateLimit(RateLimitTypePublic2, 20, httprate.WithKeyFuncs(httprate.KeyByRealIP))
 
@@ -64,20 +60,11 @@ func TestRateLimitSameKey(t *testing.T) {
 }
 
 func TestRateLimitDifferentKey(t *testing.T) {
-	const (
-		RateLimitTypePublic1 middleware.RateType = "public1"
-		RateLimitTypePublic2 middleware.RateType = "public2"
-	)
-
-	rl := middleware.NewRateLimitSettings(
-		&localCounter{
-			counters:     make(map[uint64]*count),
-			windowLength: time.Minute,
-		},
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, proto.ErrLimitExceeded)
-		}),
-	)
+	counter := localCounter{
+		counters:     make(map[uint64]*count),
+		windowLength: time.Minute,
+	}
+	rl := ratelimit.NewSettings(&counter)
 	rl.RegisterRateLimit(RateLimitTypePublic1, 10, httprate.WithKeyFuncs(httprate.KeyByRealIP, FixedKey("one")))
 	rl.RegisterRateLimit(RateLimitTypePublic2, 20, httprate.WithKeyFuncs(httprate.KeyByRealIP, FixedKey("two")))
 
