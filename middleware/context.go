@@ -111,8 +111,8 @@ func WithTime(ctx context.Context, now time.Time) context.Context {
 	return context.WithValue(ctx, ctxKeyTime, now)
 }
 
-// getTime returns the time from the context. If the time is not set, it returns the current time.
-func getTime(ctx context.Context) time.Time {
+// GetTime returns the time from the context. If the time is not set, it returns the current time.
+func GetTime(ctx context.Context) time.Time {
 	v, ok := ctx.Value(ctxKeyTime).(time.Time)
 	if !ok {
 		return time.Now().Truncate(time.Hour * 24)
