@@ -36,7 +36,7 @@ func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, conf
 	return nil
 }
 
-func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
+func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error) {
 	m.Lock()
 	limit, ok := m.limits[projectID]
 	m.Unlock()

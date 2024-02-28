@@ -63,7 +63,7 @@ func VerifyAccessKey(client Client, eh ErrorHandler) func(next http.Handler) htt
 				return
 			}
 
-			quota, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), getTime(ctx))
+			quota, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), GetTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return
@@ -97,7 +97,7 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 				return
 			}
 
-			usage, err := client.FetchUsage(ctx, quota, getTime(ctx))
+			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return
@@ -163,7 +163,7 @@ func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Han
 				return
 			}
 
-			ok, err := client.SpendQuota(ctx, quota, cu, getTime(ctx))
+			ok, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil {
 				eh(w, r, next, err)
 				return

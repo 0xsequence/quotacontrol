@@ -13,7 +13,7 @@ import (
 )
 
 type LimitStore interface {
-	GetAccessLimit(ctx context.Context, projectID uint64) (*proto.Limit, error)
+	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error)
 }
 
 type AccessKeyStore interface {
@@ -78,7 +78,7 @@ func (q qcHandler) GetTimeRange(ctx context.Context, projectID uint64, from, to 
 	if from != nil && to != nil {
 		return *from, *to, nil
 	}
-	now := time.Now()
+	now := middleware.GetTime(ctx)
 	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
@@ -153,14 +153,16 @@ func (q qcHandler) ClearUsage(ctx context.Context, projectID uint64, now time.Ti
 }
 
 func (q qcHandler) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
-	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
 	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
 		return nil, err
 	}
+
+	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
+	if err != nil {
+		return nil, err
+	}
+
 	record := proto.AccessQuota{
 		Limit:     limit,
 		Cycle:     cycle,
@@ -178,11 +180,11 @@ func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now tim
 	if err != nil {
 		return nil, err
 	}
-	limit, err := q.store.LimitStore.GetAccessLimit(ctx, access.ProjectID)
+	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, access.ProjectID, now)
 	if err != nil {
 		return nil, err
 	}
-	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, access.ProjectID, now)
+	limit, err := q.store.LimitStore.GetAccessLimit(ctx, access.ProjectID, cycle)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +281,11 @@ func (q qcHandler) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*
 }
 
 func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
-	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID)
+	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
+	if err != nil {
+		return nil, err
+	}
+	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
 	if err != nil {
 		return nil, err
 	}
@@ -472,17 +478,18 @@ func (q qcHandler) GetProjectStatus(ctx context.Context, projectID uint64) (*pro
 	status := proto.ProjectStatus{
 		ProjectID: projectID,
 	}
-	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-	status.Limit = limit
 
-	now := time.Now()
+	now := middleware.GetTime(ctx)
 	cycle, err := q.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
 		return nil, err
 	}
+
+	limit, err := q.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
+	if err != nil {
+		return nil, err
+	}
+	status.Limit = limit
 
 	key := getQuotaKey(projectID, cycle, now)
 
