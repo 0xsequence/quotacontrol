@@ -139,9 +139,9 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	return 0, proto.ErrTimeout
 }
 
-func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, map[string]any, error) {
+func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error) {
 	var userPerm *proto.UserPermission
-	var resourceAccess map[string]interface{}
+	var resourceAccess *proto.ResourceAccess
 	var err error
 
 	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.

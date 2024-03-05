@@ -29,8 +29,8 @@ type UsageCache interface {
 }
 
 type PermissionCache interface {
-	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
-	SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess map[string]interface{}) error
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error)
+	SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess *proto.ResourceAccess) error
 	DeleteUserPermission(ctx context.Context, projectID uint64, userID string) error
 }
 
@@ -171,11 +171,11 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 }
 
 type cacheUserPermission struct {
-	UserPermission *proto.UserPermission  `json:"userPerm"`
-	ResourceAccess map[string]interface{} `json:"resourceAccess"`
+	UserPermission *proto.UserPermission `json:"userPerm"`
+	ResourceAccess *proto.ResourceAccess `json:"resourceAccess"`
 }
 
-func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
+func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, getUserPermKey(projectID, userID))
 	raw, err := s.client.Get(ctx, cacheKey).Bytes()
 	if err != nil {
@@ -191,7 +191,7 @@ func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, us
 	return v.UserPermission, v.ResourceAccess, nil
 }
 
-func (s *RedisCache) SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess map[string]interface{}) error {
+func (s *RedisCache) SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess *proto.ResourceAccess) error {
 	v := cacheUserPermission{
 		UserPermission: userPerm,
 		ResourceAccess: resourceAccess,
