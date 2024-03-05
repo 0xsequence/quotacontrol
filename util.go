@@ -16,7 +16,11 @@ const (
 	UserPermission_ADMIN        = proto.UserPermission_ADMIN
 )
 
-type ResourceAccess = proto.ResourceAccess
+type (
+	ResourceAccess = proto.ResourceAccess
+	Subscription   = proto.Subscription
+	Minter         = proto.Minter
+)
 
 type DefaultCycleStore struct{}
 
