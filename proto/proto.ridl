@@ -77,6 +77,20 @@ struct ProjectStatus
   - usageCounter: int64
   - ratelimitCounter: int64
 
+struct Subscription
+  - Tier: string
+    + go.tag.json = tier
+
+struct Minter
+  - Contracts: []string
+    + go.tag.json = contracts
+
+struct ResourceAccess
+  - projectId: uint64
+    + go.field.name = ProjectID
+  - subscription: Subscription
+  - minter: Minter
+
 error 1001 Timeout            "Request timed out" HTTP 408
 error 1002 LimitExceeded      "Request limit exceeded" HTTP 429
 error 1003 InvalidOrigin      "Invalid origin" HTTP 403
@@ -116,4 +130,4 @@ service QuotaControl
   - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
   # User permissions for a projectId
-  - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: map<string,any>)
+  - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: ResourceAccess)

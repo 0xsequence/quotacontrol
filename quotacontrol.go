@@ -34,7 +34,7 @@ type CycleStore interface {
 }
 
 type PermissionStore interface {
-	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error)
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error)
 }
 
 type Cache struct {
@@ -445,7 +445,7 @@ func (q qcHandler) DisableAccessKey(ctx context.Context, accessKey string) (bool
 	return true, nil
 }
 
-func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, map[string]interface{}, error) {
+func (q qcHandler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
 	perm, access, err := q.store.PermissionStore.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
 		return perm, access, proto.ErrUnauthorizedUser

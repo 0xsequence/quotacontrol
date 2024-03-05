@@ -16,6 +16,8 @@ const (
 	UserPermission_ADMIN        = proto.UserPermission_ADMIN
 )
 
+type ResourceAccess = proto.ResourceAccess
+
 type DefaultCycleStore struct{}
 
 func (s DefaultCycleStore) GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error) {
