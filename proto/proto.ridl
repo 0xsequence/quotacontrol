@@ -78,12 +78,10 @@ struct ProjectStatus
   - ratelimitCounter: int64
 
 struct Subscription
-  - Tier: string
-    + go.tag.json = tier
+  - tier: string
 
 struct Minter
-  - Contracts: []string
-    + go.tag.json = contracts
+  - contracts: []string
 
 struct ResourceAccess
   - projectId: uint64
