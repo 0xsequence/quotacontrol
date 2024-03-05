@@ -79,9 +79,11 @@ struct ProjectStatus
 
 struct Subscription
   - Tier: string
+    + go.tag.json = tier
 
 struct Minter
   - Contracts: []string
+    + go.tag.json = contracts
 
 struct ResourceAccess
   - projectId: uint64
