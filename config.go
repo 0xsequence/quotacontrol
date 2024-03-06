@@ -28,6 +28,7 @@ type Config struct {
 	Redis         redis.Config      `toml:"redis"`
 	LRUSize       int               `toml:"lru_size"`
 	LRUExpiration Duration          `toml:"lru_expiration"`
+	DebugMode     bool              `toml:"debug_mode"`
 }
 
 func (cfg Config) RedisRateLimitConfig() *httprateredis.Config {
