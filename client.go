@@ -79,6 +79,12 @@ func (c *Client) IsEnabled() bool {
 	return c != nil && c.cfg.Enabled //&& c.isRunning()
 }
 
+// IsDebugMode tells us if the quotacontrol client is configured in debug mode.
+// This is useful for testing and debugging purposes.
+func (c *Client) IsDebugMode() bool {
+	return c != nil && c.cfg.DebugMode
+}
+
 // FetchProjectQuota fetches the project quota from cache or from the quota server.
 func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
