@@ -231,7 +231,8 @@ func TestLimitJSON(t *testing.T) {
 		"overMax": 9223372036854775807,
 		"freeCU": 20000000000,
 		"softQuota": 2000000000000,
-		"hardQuota": 9223372036854775807
+		"hardQuota": 9223372036854775807,
+		"allowTransactions": false
 	}`
 
 	rawJson, err := json.Marshal(&expected)
