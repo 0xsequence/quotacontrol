@@ -7,8 +7,6 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
-type UserPermission = proto.UserPermission
-
 const (
 	UserPermission_UNAUTHORIZED = proto.UserPermission_UNAUTHORIZED
 	UserPermission_READ         = proto.UserPermission_READ
@@ -18,8 +16,10 @@ const (
 
 type (
 	ResourceAccess = proto.ResourceAccess
-	Subscription   = proto.Subscription
-	Minter         = proto.Minter
+	UserPermission = proto.UserPermission
+
+	Subscription = proto.Subscription
+	Minter       = proto.Minter
 )
 
 type DefaultCycleStore struct{}
