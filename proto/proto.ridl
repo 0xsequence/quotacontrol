@@ -18,6 +18,7 @@ struct Limit
   - freeMax: int64
   - overWarn: int64
   - overMax: int64 
+  - allowTransactions: bool
 
 struct AccessKey
   - projectId: uint64
