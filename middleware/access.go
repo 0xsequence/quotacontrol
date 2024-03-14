@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	HeaderAccessKey       = "X-Access-Key"
-	HeaderAccessKeyLegacy = "X-Sequence-Token-Key"
-	HeaderOrigin          = "Origin"
+	HeaderAccessKey = "X-Access-Key"
+	HeaderOrigin    = "Origin"
 )
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
@@ -32,12 +31,6 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, next http.Handler
 func SetAccessKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		accessKey := r.Header.Get(HeaderAccessKey)
-
-		// TODO: remove legacy header support
-		if accessKey == "" {
-			accessKey = r.Header.Get(HeaderAccessKeyLegacy)
-		}
-		//--
 
 		ctx := r.Context()
 		if accessKey != "" {
