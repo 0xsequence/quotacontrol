@@ -10,6 +10,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	"github.com/goware/logger"
+	"github.com/goware/validation"
 )
 
 type LimitStore interface {
@@ -301,13 +302,22 @@ func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displa
 		}
 	}
 
+	origins := make([]validation.Origin, len(allowedOrigins))
+	for i, o := range allowedOrigins {
+		origin, err := validation.NewOrigin(o)
+		if err != nil {
+			return nil, err
+		}
+		origins[i] = origin
+	}
+
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
 		AccessKey:       q.accessKeyGen(projectID),
 		Active:          true,
 		Default:         len(list) == 0,
-		AllowedOrigins:  allowedOrigins,
+		AllowedOrigins:  origins,
 		AllowedServices: allowedServices,
 	}
 	if err := q.store.AccessKeyStore.InsertAccessKey(ctx, &access); err != nil {
@@ -330,7 +340,13 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 	if _, err := q.updateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
-	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+
+	origins := make([]string, len(access.AllowedOrigins))
+	for i, origin := range access.AllowedOrigins {
+		origins[i] = string(origin)
+	}
+
+	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, origins, access.AllowedServices)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +370,15 @@ func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displa
 		access.DisplayName = *displayName
 	}
 	if allowedOrigins != nil {
-		access.AllowedOrigins = allowedOrigins
+		origins := make([]validation.Origin, len(allowedOrigins))
+		for i, o := range allowedOrigins {
+			origin, err := validation.NewOrigin(o)
+			if err != nil {
+				return nil, err
+			}
+			origins[i] = origin
+		}
+		access.AllowedOrigins = origins
 	}
 	if allowedServices != nil {
 		access.AllowedServices = allowedServices

@@ -3,8 +3,9 @@ package proto
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
+
+	"github.com/goware/validation"
 )
 
 //go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.7 -pkg=proto -server -client -out=./proto.gen.go
@@ -24,46 +25,19 @@ func (u *AccessUsage) GetTotalUsage() int64 {
 	return u.ValidCompute + u.OverCompute
 }
 
-func matchDomain(domain, pattern string) bool {
-	if pattern == "*" {
-		return true
-	}
-
-	prefix, suffix, hasWildcard := strings.Cut(pattern, "*")
-	if !hasWildcard {
-		return domain == pattern
-	}
-
-	if len(domain) < len(prefix+suffix) {
-		return false
-	}
-	if !strings.HasPrefix(domain, prefix) {
-		return false
-	}
-	if !strings.HasSuffix(domain, suffix) {
-		return false
-	}
-	return true
-}
-
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	if len(t.AllowedOrigins) == 0 {
 		return true
 	}
 
-	origin := normalizeOrigin(rawOrigin)
+	origin := validation.Origin(rawOrigin).Normalize().String()
+
 	for _, o := range t.AllowedOrigins {
-		if matchDomain(origin, normalizeOrigin(o)) {
+		if o.Normalize().Matches(origin) {
 			return true
 		}
 	}
 	return false
-}
-
-func normalizeOrigin(rawOrigin string) string {
-	origin := strings.ToLower(rawOrigin)
-	origin = strings.TrimRight(origin, "/")
-	return origin
 }
 
 func (t *AccessKey) ValidateService(service *Service) bool {
