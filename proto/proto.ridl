@@ -34,7 +34,7 @@ struct AccessKey
     + go.field.name = Default
     + go.tag.db = is_default
   - allowedOrigins: []string
-    + go.field.type = []validation.Origin
+    + go.field.type = validation.Origins
     + go.tag.db = allowed_origins
   - allowedServices: []Service
     + go.tag.db = allowed_services

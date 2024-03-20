@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/goware/validation"
 )
 
 //go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.7 -pkg=proto -server -client -out=./proto.gen.go
@@ -26,18 +24,7 @@ func (u *AccessUsage) GetTotalUsage() int64 {
 }
 
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
-	if len(t.AllowedOrigins) == 0 {
-		return true
-	}
-
-	origin := validation.Origin(rawOrigin).Normalize().String()
-
-	for _, o := range t.AllowedOrigins {
-		if o.Normalize().Matches(origin) {
-			return true
-		}
-	}
-	return false
+	return t.AllowedOrigins.MatchAny(rawOrigin)
 }
 
 func (t *AccessKey) ValidateService(service *Service) bool {

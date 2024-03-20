@@ -302,13 +302,9 @@ func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displa
 		}
 	}
 
-	origins := make([]validation.Origin, len(allowedOrigins))
-	for i, o := range allowedOrigins {
-		origin, err := validation.NewOrigin(o)
-		if err != nil {
-			return nil, err
-		}
-		origins[i] = origin
+	origins, err := validation.NewOrigins(allowedOrigins...)
+	if err != nil {
+		return nil, err
 	}
 
 	access := proto.AccessKey{
@@ -341,12 +337,7 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 		return nil, err
 	}
 
-	origins := make([]string, len(access.AllowedOrigins))
-	for i, origin := range access.AllowedOrigins {
-		origins[i] = string(origin)
-	}
-
-	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, origins, access.AllowedServices)
+	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins.ToStrings(), access.AllowedServices)
 	if err != nil {
 		return nil, err
 	}
@@ -370,13 +361,9 @@ func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displa
 		access.DisplayName = *displayName
 	}
 	if allowedOrigins != nil {
-		origins := make([]validation.Origin, len(allowedOrigins))
-		for i, o := range allowedOrigins {
-			origin, err := validation.NewOrigin(o)
-			if err != nil {
-				return nil, err
-			}
-			origins[i] = origin
+		origins, err := validation.NewOrigins(allowedOrigins...)
+		if err != nil {
+			return nil, err
 		}
 		access.AllowedOrigins = origins
 	}
