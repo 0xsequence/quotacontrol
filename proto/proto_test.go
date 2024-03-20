@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 	t.Run("allowed origins", func(t *testing.T) {
 		tk := &proto.AccessKey{
-			AllowedOrigins: []string{"http://localhost:8080", "http://localhost:8081", "http://localhost:8082/"},
+			AllowedOrigins: []validation.Origin{"http://localhost:8080", "http://localhost:8081", "http://localhost:8082/"},
 		}
 		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
 		assert.True(t, tk.ValidateOrigin("http://localhost:8081"))
@@ -28,7 +29,7 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 	t.Run("match any", func(t *testing.T) {
 		tk := &proto.AccessKey{
-			AllowedOrigins: []string{"*"},
+			AllowedOrigins: []validation.Origin{"*"},
 		}
 		assert.True(t, tk.ValidateOrigin("http://sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("https://localhost:8080"))
@@ -36,7 +37,7 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 	t.Run("match http scheme", func(t *testing.T) {
 		tk := &proto.AccessKey{
-			AllowedOrigins: []string{"https://localhost:8080", "https://*.sequence.xyz"},
+			AllowedOrigins: []validation.Origin{"https://localhost:8080", "https://*.sequence.xyz"},
 		}
 		assert.True(t, tk.ValidateOrigin("https://local.sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("https://localhost:8080"))
@@ -45,7 +46,7 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 
 	t.Run("wildcards", func(t *testing.T) {
 		tk := &proto.AccessKey{
-			AllowedOrigins: []string{"*.sequence.xyz"},
+			AllowedOrigins: []validation.Origin{"*.sequence.xyz"},
 		}
 		assert.False(t, tk.ValidateOrigin("http://sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("http://docs.sequence.xyz"))

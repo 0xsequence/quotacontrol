@@ -10,6 +10,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	"github.com/goware/logger"
+	"github.com/goware/validation"
 )
 
 type LimitStore interface {
@@ -301,13 +302,18 @@ func (q qcHandler) CreateAccessKey(ctx context.Context, projectID uint64, displa
 		}
 	}
 
+	origins, err := validation.NewOrigins(allowedOrigins...)
+	if err != nil {
+		return nil, err
+	}
+
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
 		AccessKey:       q.accessKeyGen(projectID),
 		Active:          true,
 		Default:         len(list) == 0,
-		AllowedOrigins:  allowedOrigins,
+		AllowedOrigins:  origins,
 		AllowedServices: allowedServices,
 	}
 	if err := q.store.AccessKeyStore.InsertAccessKey(ctx, &access); err != nil {
@@ -330,7 +336,8 @@ func (q qcHandler) RotateAccessKey(ctx context.Context, accessKey string) (*prot
 	if _, err := q.updateAccessKey(ctx, access); err != nil {
 		return nil, err
 	}
-	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins, access.AllowedServices)
+
+	newAccess, err := q.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.AllowedOrigins.ToStrings(), access.AllowedServices)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +361,11 @@ func (q qcHandler) UpdateAccessKey(ctx context.Context, accessKey string, displa
 		access.DisplayName = *displayName
 	}
 	if allowedOrigins != nil {
-		access.AllowedOrigins = allowedOrigins
+		origins, err := validation.NewOrigins(allowedOrigins...)
+		if err != nil {
+			return nil, err
+		}
+		access.AllowedOrigins = origins
 	}
 	if allowedServices != nil {
 		access.AllowedServices = allowedServices

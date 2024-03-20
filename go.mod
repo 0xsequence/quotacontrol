@@ -1,6 +1,6 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.21.5
+go 1.22.1
 
 require (
 	github.com/alicebob/miniredis/v2 v2.30.3
@@ -10,11 +10,12 @@ require (
 	github.com/goware/base64 v0.1.0
 	github.com/goware/cachestore v0.8.1
 	github.com/goware/logger v0.3.0
+	github.com/goware/validation v0.1.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jxskiss/base62 v1.1.0
 	github.com/lestrrat-go/jwx/v2 v2.0.18
 	github.com/redis/go-redis/v9 v9.3.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 )
 
 require (
