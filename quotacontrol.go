@@ -25,7 +25,7 @@ type AccessKeyStore interface {
 }
 
 type UsageStore interface {
-	GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
+	GetAccessKeyUsage(ctx context.Context, projectID uint64, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
 	GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
 	UpdateAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
 }
@@ -108,6 +108,19 @@ func (q qcHandler) GetAccountUsage(ctx context.Context, projectID uint64, servic
 	return &usage, nil
 }
 
+func (q qcHandler) GetAsyncUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+	min, max, err := q.GetTimeRange(ctx, projectID, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	usage, err := q.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, min, max)
+	if err != nil {
+		return nil, err
+	}
+	return &usage, nil
+}
+
 func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	projectID, err := GetProjectID(accessKey)
 	if err != nil {
@@ -119,7 +132,7 @@ func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, serv
 		return nil, err
 	}
 
-	usage, err := q.store.UsageStore.GetAccessKeyUsage(ctx, accessKey, service, min, max)
+	usage, err := q.store.UsageStore.GetAccessKeyUsage(ctx, projectID, accessKey, service, min, max)
 	if err != nil {
 		return nil, err
 	}

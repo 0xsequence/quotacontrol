@@ -121,6 +121,7 @@ service QuotaControl
   - ClearAccessQuotaCache(projectID: uint64) => (ok: bool)
   - GetAccountUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
+  - GetAsyncUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   - PrepareUsage(projectID: uint64, cycle: Cycle, now: timestamp) => (ok: bool)
   - ClearUsage(projectID: uint64, now: timestamp) => (ok: bool)
   - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)

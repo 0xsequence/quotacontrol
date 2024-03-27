@@ -1,3 +1,5 @@
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.7 -pkg=proto -server -client -out=./proto.gen.go
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/quotacontrol.gen.ts
 package proto
 
 import (
@@ -5,9 +7,6 @@ import (
 	"fmt"
 	"time"
 )
-
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.7 -pkg=proto -server -client -out=./proto.gen.go
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/quotacontrol.gen.ts
 
 func Ptr[T any](v T) *T {
 	return &v
@@ -200,5 +199,4 @@ func (c *Cycle) Advance(now time.Time) {
 		c.Start = c.Start.AddDate(0, 1, 0)
 		c.End = c.End.AddDate(0, 1, 0)
 	}
-
 }

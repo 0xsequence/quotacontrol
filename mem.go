@@ -122,7 +122,7 @@ func (m *MemoryStore) GetAccountUsage(ctx context.Context, projectID uint64, ser
 	return usage, nil
 }
 
-func (m *MemoryStore) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error) {
+func (m *MemoryStore) GetAccessKeyUsage(ctx context.Context, projectID uint64, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error) {
 	m.Lock()
 	defer m.Unlock()
 	if _, ok := m.accessKeys[accessKey]; !ok {
