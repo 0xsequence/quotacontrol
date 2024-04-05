@@ -27,20 +27,10 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		DB:           cfg.Redis.DBIndex,
 		MaxIdleConns: cfg.Redis.MaxIdle,
 	}
-	if cfg.TLS.Required {
-		fmt.Println("redis: using TLS")
+	if cfg.Redis.TLS {
 		redisOpts.TLSConfig = &tls.Config{}
 	}
 	redisClient := redisclient.NewClient(redisOpts)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	s, err := redisClient.Get(ctx, "a").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("RESULT=", s)
 
 	ticker := (*time.Ticker)(nil)
 	if cfg.UpdateFreq.Duration > 0 {

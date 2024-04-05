@@ -25,10 +25,9 @@ type Config struct {
 	AuthToken     string            `toml:"auth_token"`
 	UpdateFreq    Duration          `toml:"update_freq"`
 	RateLimiter   RateLimiterConfig `toml:"rate_limiter"`
-	Redis         redis.Config      `toml:"redis"`
+	Redis         RedisConfig       `toml:"redis"`
 	LRUSize       int               `toml:"lru_size"`
 	LRUExpiration Duration          `toml:"lru_expiration"`
-	TLS           TLSConfig         `toml:"tls"`
 
 	// DangerMode is used for debugging
 	DangerMode bool `toml:"danger_mode"`
@@ -64,7 +63,7 @@ type RateLimiterConfig struct {
 	ErrorMessage             string `toml:"error_message"`
 }
 
-type TLSConfig struct {
-	Required   bool   `toml:"required"`
-	ServerName string `toml:"server_name"`
+type RedisConfig struct {
+	redis.Config
+	TLS bool `toml:"tls"`
 }
