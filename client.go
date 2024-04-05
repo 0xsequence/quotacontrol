@@ -2,16 +2,18 @@ package quotacontrol
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
 	"sync/atomic"
 	"time"
 
-	"github.com/0xsequence/quotacontrol/middleware"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
+
+	"github.com/0xsequence/quotacontrol/middleware"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 type Notifier interface {
@@ -20,11 +22,18 @@ type Notifier interface {
 
 func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client {
 	// TODO: set other options too...
-	redisClient := redisclient.NewClient(&redisclient.Options{
+	redisOpts := &redisclient.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
 		MaxIdleConns: cfg.Redis.MaxIdle,
-	})
+	}
+	if cfg.TLS.Required {
+		redisOpts.TLSConfig = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ServerName: cfg.TLS.ServerName,
+		}
+	}
+	redisClient := redisclient.NewClient(redisOpts)
 
 	ticker := (*time.Ticker)(nil)
 	if cfg.UpdateFreq.Duration > 0 {

@@ -28,6 +28,7 @@ type Config struct {
 	Redis         redis.Config      `toml:"redis"`
 	LRUSize       int               `toml:"lru_size"`
 	LRUExpiration Duration          `toml:"lru_expiration"`
+	TLS           TLSConfig         `toml:"tls"`
 
 	// DangerMode is used for debugging
 	DangerMode bool `toml:"danger_mode"`
@@ -61,4 +62,9 @@ type RateLimiterConfig struct {
 	UserRequestsPerMinute    int    `toml:"user_requests_per_minute"`
 	ServiceRequestsPerMinute int    `toml:"service_requests_per_minute"`
 	ErrorMessage             string `toml:"error_message"`
+}
+
+type TLSConfig struct {
+	Required   bool   `toml:"required"`
+	ServerName string `toml:"server_name"`
 }
