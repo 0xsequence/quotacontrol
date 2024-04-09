@@ -5,10 +5,11 @@ import (
 	"math"
 	"testing"
 
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 func TestAccessKeyValidateOrigin(t *testing.T) {
@@ -52,6 +53,13 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 		assert.True(t, tk.ValidateOrigin("http://docs.sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("http://test.sequence.xyz"))
 		assert.True(t, tk.ValidateOrigin("http://dev.test.sequence.xyz"))
+	})
+
+	t.Run("empty origin", func(t *testing.T) {
+		tk := &proto.AccessKey{
+			AllowedOrigins: []validation.Origin{"http://localhost:8080", "*.sequence.xyz"},
+		}
+		assert.True(t, tk.ValidateOrigin(""))
 	})
 }
 

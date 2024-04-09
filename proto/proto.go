@@ -23,6 +23,9 @@ func (u *AccessUsage) GetTotalUsage() int64 {
 }
 
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
+	if rawOrigin == "" {
+		return true
+	}
 	return t.AllowedOrigins.MatchAny(rawOrigin)
 }
 
