@@ -9,6 +9,7 @@ enum Service: uint16
   - Indexer
   - Relayer
   - Metadata
+  - Marketplace
 
 struct Limit
   - maxKeys: int64
@@ -17,7 +18,7 @@ struct Limit
   - freeWarn: int64
   - freeMax: int64
   - overWarn: int64
-  - overMax: int64 
+  - overMax: int64
   - blockTransactions: bool
 
 struct AccessKey
@@ -91,15 +92,15 @@ struct ResourceAccess
   - subscription: Subscription
   - minter: Minter
 
-error 1001 Timeout            "Request timed out" HTTP 408
-error 1002 LimitExceeded      "Request limit exceeded" HTTP 429
-error 1003 InvalidOrigin      "Invalid origin" HTTP 403
-error 1004 InvalidService     "Access key is not configured for this service" HTTP 403
-error 1005 AccessKeyNotFound  "Access key not found" HTTP 401
-error 1006 UnauthorizedUser   "Unauthorized user" HTTP 403
-error 1007 MaxAccessKeys      "Access keys limit reached" HTTP 403
-error 1008 NoDefaultKey       "No default access key found" HTTP 403
-error 1009 AtLeastOneKey      "There should be at least one active accessKey per project" HTTP 403
+error 1001 Timeout           "Request timed out"                                         HTTP 408
+error 1002 LimitExceeded     "Request limit exceeded"                                    HTTP 429
+error 1003 InvalidOrigin     "Invalid origin"                                            HTTP 403
+error 1004 InvalidService    "Access key is not configured for this service"             HTTP 403
+error 1005 AccessKeyNotFound "Access key not found"                                      HTTP 401
+error 1006 UnauthorizedUser  "Unauthorized user"                                         HTTP 403
+error 1007 MaxAccessKeys     "Access keys limit reached"                                 HTTP 403
+error 1008 NoDefaultKey      "No default access key found"                               HTTP 403
+error 1009 AtLeastOneKey     "There should be at least one active accessKey per project" HTTP 403
 
 service QuotaControl
   # Project
