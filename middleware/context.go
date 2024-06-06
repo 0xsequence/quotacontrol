@@ -18,12 +18,12 @@ func (k *contextKey) String() string {
 }
 
 var (
-	ctxKeyAccessKey     = &contextKey{"AccessKey"}
-	ctxKeyAccessQuota   = &contextKey{"AccessQuota"}
-	ctxKeyComputeUnits  = &contextKey{"ComputeUnits"}
-	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
-	ctxKeyTime          = &contextKey{"Time"}
-	ctxKeyResult        = &contextKey{"Result"}
+	ctxKeyAccessKey    = &contextKey{"AccessKey"}
+	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
+	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
+	ctxKeyRateLimit    = &contextKey{"RateLimit"}
+	ctxKeyTime         = &contextKey{"Time"}
+	ctxKeyResult       = &contextKey{"Result"}
 )
 
 // WithAccessKey adds the access key to the context.
@@ -70,20 +70,24 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 	if accessQuota == nil {
 		return 0, false
 	}
-	projectID := accessQuota.GetProjectID()
-	active := accessQuota.IsActive()
-	return projectID, active
+	return accessQuota.GetProjectID(), accessQuota.IsActive()
 }
 
-// WithSkipRateLimit adds the skip rate limit flag to the context.
-func WithSkipRateLimit(ctx context.Context) context.Context {
-	return context.WithValue(ctx, ctxKeyRateLimitSkip, struct{}{})
+// WithRateLimit adds a rate limit value to the context.
+func WithRateLimit(ctx context.Context, rateLimit int) context.Context {
+	return context.WithValue(ctx, ctxKeyRateLimit, rateLimit)
 }
 
-// IsSkipRateLimit returns true if the skip rate limit flag is set in the context.
-func IsSkipRateLimit(ctx context.Context) bool {
-	_, ok := ctx.Value(ctxKeyRateLimitSkip).(struct{})
-	return ok
+// getRateLimit returns the rate limit from the context or the access quota.
+func getRateLimit(ctx context.Context) (int, bool) {
+	rl, ok := ctx.Value(ctxKeyRateLimit).(int)
+	if ok {
+		return rl, true
+	}
+	if quota := GetAccessQuota(ctx); quota != nil {
+		return int(quota.Limit.RateLimit), true
+	}
+	return 0, false
 }
 
 // WithComputeUnits sets the compute units to the context.

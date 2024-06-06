@@ -10,18 +10,19 @@ import (
 	"testing"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/httprate"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRateLimiter(t *testing.T) {
 	const _CustomErrorMessage = "Custom error message"
-	rl := NewHTTPRateLimiter(Config{
+	rl := NewRateLimiter(Config{
 		RateLimiter: RateLimiterConfig{
-			Enabled:                 true,
-			PublicRequestsPerMinute: 10,
-			ErrorMessage:            _CustomErrorMessage,
+			Enabled:    true,
+			DefaultRPM: 10,
+			ErrorMsg:   _CustomErrorMessage,
 		},
-	}, nil)
+	}, httprate.KeyByRealIP, nil)
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

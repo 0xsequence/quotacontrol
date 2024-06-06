@@ -15,6 +15,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -30,8 +31,8 @@ var (
 		Enabled:    true,
 		UpdateFreq: Duration{time.Minute},
 		RateLimiter: RateLimiterConfig{
-			Enabled:                 true,
-			PublicRequestsPerMinute: 10,
+			Enabled:    true,
+			DefaultRPM: 10,
 		},
 	}
 )
@@ -122,7 +123,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	router.Use(middlewareCU(2))
 	router.Use(middleware.SetAccessKey)
 	router.Use(middleware.VerifyAccessKey(client, nil))
-	router.Use(NewHTTPRateLimiter(cfg, nil))
+	router.Use(NewRateLimiter(cfg, httprate.KeyByRealIP, nil))
 	router.Use(middlewareCU(-1))
 	router.Use(middleware.SpendUsage(client, nil))
 
@@ -144,7 +145,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Spend Free CU
 		for i := int64(1); i < limit.FreeWarn; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0])
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Empty(t, qc.getEvents(_ProjectID), i)
@@ -152,7 +153,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		// Go over free CU
-		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err := executeRequest(ctx, router, _AccessKeys[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_FreeMax)
@@ -160,7 +161,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Get close to soft quota
 		for i := limit.FreeWarn + 1; i < limit.OverWarn; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0])
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Len(t, qc.getEvents(_ProjectID), 1)
@@ -168,7 +169,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		// Go over soft quota
-		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err = executeRequest(ctx, router, _AccessKeys[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_OverWarn)
@@ -176,7 +177,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Get close to hard quota
 		for i := limit.OverWarn + 1; i < limit.OverMax; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0])
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Len(t, qc.getEvents(_ProjectID), 2)
@@ -184,7 +185,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		// Go over hard quota
-		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err = executeRequest(ctx, router, _AccessKeys[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_OverMax)
@@ -192,7 +193,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Denied
 		for i := 0; i < 10; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, _AccessKeys[0])
 			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 			assert.False(t, ok)
 			expectedCounter.Add(proto.AccessUsage{LimitedCompute: 1})
@@ -224,7 +225,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ctx := middleware.WithTime(context.Background(), _Now)
 		qc.notifications = make(map[uint64][]proto.EventType)
 
-		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err := executeRequest(ctx, router, _AccessKeys[0])
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
@@ -241,9 +242,9 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		ctx := middleware.WithTime(context.Background(), _Now)
 
-		for i, max := 0, cfg.RateLimiter.PublicRequestsPerMinute*2; i < max; i++ {
-			ok, err := executeRequest(ctx, router, "", "")
-			if i < cfg.RateLimiter.PublicRequestsPerMinute {
+		for i, max := 0, cfg.RateLimiter.DefaultRPM*2; i < max; i++ {
+			ok, err := executeRequest(ctx, router, "")
+			if i < cfg.RateLimiter.DefaultRPM {
 				assert.NoError(t, err, i)
 				assert.True(t, ok, i)
 			} else {
@@ -261,7 +262,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 }
 
-func executeRequest(ctx context.Context, handler http.Handler, accessKey, origin string) (bool, error) {
+func executeRequest(ctx context.Context, handler http.Handler, accessKey string) (bool, error) {
 	req, err := http.NewRequest("POST", "/", nil)
 	if err != nil {
 		return false, err
