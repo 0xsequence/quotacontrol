@@ -156,20 +156,30 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 
 	for i := time.Duration(0); i < 3; i++ {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
-		switch err {
-		case nil:
-			return usage, nil
-		case ErrCachePing:
-			if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
-				logger.Error("operation failed", slog.Any("err", err))
-				return 0, err
+		if err != nil {
+			// ping the server to prepare usage
+			if errors.Is(err, ErrCachePing) {
+				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
+					logger.Error("unexpected client error", slog.Any("err", err))
+					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
+						logger.Error("unexpected cache error", slog.Any("err", err))
+					}
+					return 0, nil
+				}
+				continue
 			}
-			fallthrough
-		case ErrCacheWait:
-			time.Sleep(time.Millisecond * 100 * (i + 1))
-		default:
+
+			// wait for cache to be ready
+			if errors.Is(err, ErrCacheWait) {
+				time.Sleep(time.Millisecond * 100 * (i + 1))
+				continue
+			}
+
+			logger.Error("unexpected cache error", slog.Any("err", err))
 			return 0, err
 		}
+
+		return usage, nil
 	}
 	logger.Error("operation timed out")
 	return 0, nil
