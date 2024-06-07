@@ -103,7 +103,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 			logger.Warn("unexpected cache error", slog.Any("err", err))
-			return nil, err
+			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetProjectQuota(ctx, projectID, now); err != nil {
 			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
@@ -127,7 +127,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 			logger.Warn("unexpected cache error", slog.Any("err", err))
-			return nil, err
+			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
 			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
