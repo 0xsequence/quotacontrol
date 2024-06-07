@@ -18,6 +18,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
+	"github.com/goware/cachestore/redis"
 	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,9 @@ var (
 	_Config = Config{
 		Enabled:    true,
 		UpdateFreq: Duration{time.Minute},
+		Redis: redis.Config{
+			Enabled: true,
+		},
 		RateLimiter: RateLimiterConfig{
 			Enabled:    true,
 			DefaultRPM: 10,
