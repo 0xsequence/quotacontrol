@@ -23,9 +23,6 @@ type Client interface {
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
-// ErrorHandler is a function that handles errors.
-type ErrorHandler func(w http.ResponseWriter, r *http.Request, next http.Handler, err error)
-
 // SetAccessKey get the access key from the header and sets it in the context.
 func SetAccessKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,10 +37,7 @@ func SetAccessKey(next http.Handler) http.Handler {
 }
 
 // VerifyAccessKey verifies the accessKey and adds the AccessQuota to the request context.
-func VerifyAccessKey(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = _DefaultErrorHandler
-	}
+func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -57,22 +51,21 @@ func VerifyAccessKey(client Client, eh ErrorHandler) func(next http.Handler) htt
 
 			quota, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), GetTime(ctx))
 			if err != nil {
-				eh(w, r, next, err)
+				proto.RespondWithError(w, err)
 				return
 			}
 
 			// set access quota in context
-			ctx = withAccessQuota(ctx, quota)
+			if quota != nil {
+				ctx = withAccessQuota(ctx, quota)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
 // EnsureUsage is a middleware that checks if the access key has enough usage left.
-func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = _DefaultErrorHandler
-	}
+func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -91,11 +84,11 @@ func EnsureUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Ha
 
 			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
-				eh(w, r, next, err)
+				proto.RespondWithError(w, err)
 				return
 			}
 			if usage+cu > quota.Limit.OverMax {
-				eh(w, r, next, proto.ErrLimitExceeded)
+				proto.RespondWithError(w, proto.ErrLimitExceeded)
 				return
 			}
 
@@ -108,10 +101,7 @@ func ProjectRateKey(projectID uint64) string {
 	return fmt.Sprintf("rl:project:%d", projectID)
 }
 
-func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = _DefaultErrorHandler
-	}
+func SpendUsage(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -124,16 +114,15 @@ func SpendUsage(client Client, eh ErrorHandler) func(next http.Handler) http.Han
 
 			ok, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil {
-				eh(w, r, next, err)
+				proto.RespondWithError(w, err)
 				return
 			}
 
-			if !ok {
-				eh(w, r, next, proto.ErrLimitExceeded)
-				return
+			if ok {
+				ctx = withResult(ctx)
 			}
 
-			next.ServeHTTP(w, r.WithContext(withResult(ctx)))
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

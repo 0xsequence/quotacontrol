@@ -146,7 +146,7 @@ func (m *MemoryStore) UpdateAccessUsage(ctx context.Context, projectID uint64, a
 	return nil
 }
 
-func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string, service proto.Service) error {
+func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string) error {
 	m.Lock()
 	m.usage.ByAccessKey[accessKey] = &proto.AccessUsage{}
 	m.Unlock()

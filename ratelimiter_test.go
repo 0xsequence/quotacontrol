@@ -22,7 +22,7 @@ func TestRateLimiter(t *testing.T) {
 			DefaultRPM: 10,
 			ErrorMsg:   _CustomErrorMessage,
 		},
-	}, httprate.KeyByRealIP, nil)
+	}, httprate.KeyByRealIP)
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

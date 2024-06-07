@@ -189,6 +189,7 @@ func (q qcHandler) GetProjectQuota(ctx context.Context, projectID uint64, now ti
 
 	return &record, nil
 }
+
 func (q qcHandler) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := q.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {

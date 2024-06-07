@@ -2,6 +2,8 @@ package quotacontrol_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -102,7 +104,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		PermissionStore: nil,
 	}
 
-	qc := quotaControl{
+	qc := &qcTest{
 		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
@@ -112,7 +114,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	cfg.URL = "http://" + listener.Addr().String()
 	go func() {
-		http.Serve(listener, proto.NewQuotaControlServer(&qc))
+		http.Serve(listener, proto.NewQuotaControlServer(qc))
 	}()
 
 	client := NewClient(wlog.With("client", "client"), proto.Service_Indexer, cfg)
@@ -122,10 +124,10 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	// we set the compute units to 2, then in another handler we remove 1 before spending
 	router.Use(middlewareCU(2))
 	router.Use(middleware.SetAccessKey)
-	router.Use(middleware.VerifyAccessKey(client, nil))
-	router.Use(NewRateLimiter(cfg, httprate.KeyByRealIP, nil))
+	router.Use(middleware.VerifyAccessKey(client))
+	router.Use(NewRateLimiter(cfg, httprate.KeyByRealIP))
 	router.Use(middlewareCU(-1))
-	router.Use(middleware.SpendUsage(client, nil))
+	router.Use(middleware.SpendUsage(client))
 
 	var counter int64
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +142,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		go client.Run(context.Background())
 
 		ctx := middleware.WithTime(context.Background(), _Now)
-		qc.notifications = make(map[uint64][]proto.EventType)
 		qc.notifications = make(map[uint64][]proto.EventType)
 
 		// Spend Free CU
@@ -203,7 +204,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		client.Stop(context.Background())
 		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
-		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
+		assert.Equal(t, int64(expectedCounter.GetTotalUsage()), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
 	})
 
@@ -233,7 +234,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
 		expectedCounter.Add(proto.AccessUsage{ValidCompute: 0, OverCompute: 1, LimitedCompute: 0})
-		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
+		assert.Equal(t, int64(expectedCounter.GetTotalUsage()), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
 	})
 
@@ -256,7 +257,64 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		client.Stop(context.Background())
 		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
 		assert.NoError(t, err)
-		assert.Equal(t, int64(expectedCounter.ValidCompute+expectedCounter.OverCompute), atomic.LoadInt64(&counter))
+		assert.Equal(t, int64(expectedCounter.GetTotalUsage()), atomic.LoadInt64(&counter))
+		assert.Equal(t, &expectedCounter, &usage)
+	})
+
+	t.Run("ServerErrors", func(t *testing.T) {
+		redisClient.FlushAll(ctx)
+
+		go client.Run(context.Background())
+
+		errList := []error{
+			errors.New("unexpected error"),
+			proto.ErrWebrpcBadRoute,
+			proto.ErrTimeout,
+		}
+
+		ctx := middleware.WithTime(context.Background(), _Now)
+
+		for _, err := range errList {
+			qc.ErrGetAccessQuota = err
+			ok, err := executeRequest(ctx, router, access.AccessKey)
+			assert.True(t, ok)
+			assert.NoError(t, err)
+		}
+		qc.ErrGetAccessQuota = nil
+
+		redisClient.FlushAll(ctx)
+
+		for _, err := range errList {
+			qc.ErrPrepareUsage = err
+			ok, err := executeRequest(ctx, router, access.AccessKey)
+			assert.True(t, ok)
+			assert.NoError(t, err)
+		}
+		qc.ErrPrepareUsage = nil
+
+		client.Stop(context.Background())
+		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(expectedCounter.GetTotalUsage()), atomic.LoadInt64(&counter))
+		assert.Equal(t, &expectedCounter, &usage)
+	})
+
+	t.Run("ServerTimeout", func(t *testing.T) {
+		redisClient.FlushAll(ctx)
+
+		go client.Run(context.Background())
+
+		ctx := middleware.WithTime(context.Background(), _Now)
+
+		qc.PrepareUsageDelay = time.Second * 3
+		ok, err := executeRequest(ctx, router, access.AccessKey)
+		assert.True(t, ok)
+		assert.NoError(t, err)
+
+		client.Stop(context.Background())
+		usage, err := store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		assert.NoError(t, err)
+		assert.Equal(t, int64(expectedCounter.GetTotalUsage()), atomic.LoadInt64(&counter))
 		assert.Equal(t, &expectedCounter, &usage)
 	})
 
@@ -275,30 +333,10 @@ func executeRequest(ctx context.Context, handler http.Handler, accessKey string)
 	handler.ServeHTTP(rr, req.WithContext(ctx))
 	status := rr.Result().StatusCode
 	if status < http.StatusOK || status >= http.StatusBadRequest {
-		return false, proto.ErrLimitExceeded
+		w := proto.WebRPCError{}
+		json.Unmarshal(rr.Body.Bytes(), &w)
+		return false, w
 	}
-	return true, nil
-}
-
-// quotaControl is a wrapper of quotacontrol
-type quotaControl struct {
-	proto.QuotaControl
-	sync.Mutex
-	notifications map[uint64][]proto.EventType
-}
-
-func (q *quotaControl) getEvents(projectID uint64) []proto.EventType {
-	q.Lock()
-	v := q.notifications[projectID]
-	q.Unlock()
-	return v
-}
-
-func (q *quotaControl) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
-	q.Lock()
-	q.notifications[projectID] = append(q.notifications[projectID], *eventType)
-	q.Unlock()
-
 	return true, nil
 }
 
@@ -346,7 +384,7 @@ func TestDefaultKey(t *testing.T) {
 		PermissionStore: nil,
 	}
 
-	qc := quotaControl{
+	qc := qcTest{
 		QuotaControl:  NewQuotaControlHandler(wlog.With("server", "server"), qcCache, qcStore, nil),
 		notifications: make(map[uint64][]proto.EventType),
 	}
@@ -397,4 +435,59 @@ func TestDefaultKey(t *testing.T) {
 	aq, err = client.FetchKeyQuota(ctx, newAccess.AccessKey, "", _Now)
 	require.NoError(t, err)
 	assert.Equal(t, &newAccess, aq.AccessKey)
+}
+
+// qcTest is a wrapper of quotacontrol that tracks the events that are notified and allows to inject errors
+type qcTest struct {
+	proto.QuotaControl
+
+	sync.Mutex
+	notifications map[uint64][]proto.EventType
+
+	ErrGetProjectQuota error
+	ErrGetAccessQuota  error
+	ErrPrepareUsage    error
+	PrepareUsageDelay  time.Duration
+}
+
+func (qc *qcTest) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+	if qc.ErrGetProjectQuota != nil {
+		return nil, qc.ErrGetProjectQuota
+	}
+	return qc.QuotaControl.GetProjectQuota(ctx, projectID, now)
+}
+
+func (qc *qcTest) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
+	if qc.ErrGetAccessQuota != nil {
+		return nil, qc.ErrGetAccessQuota
+	}
+	return qc.QuotaControl.GetAccessQuota(ctx, accessKey, now)
+}
+
+func (qc *qcTest) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
+	if qc.ErrPrepareUsage != nil {
+		return false, qc.ErrPrepareUsage
+	}
+	if qc.PrepareUsageDelay > 0 {
+		go func() {
+			time.Sleep(qc.PrepareUsageDelay)
+			qc.ClearUsage(ctx, projectID, now)
+		}()
+		return true, nil
+	}
+	return qc.QuotaControl.PrepareUsage(ctx, projectID, cycle, now)
+}
+
+func (q *qcTest) getEvents(projectID uint64) []proto.EventType {
+	q.Lock()
+	v := q.notifications[projectID]
+	q.Unlock()
+	return v
+}
+
+func (q *qcTest) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+	q.Lock()
+	q.notifications[projectID] = append(q.notifications[projectID], *eventType)
+	q.Unlock()
+	return true, nil
 }

@@ -8,13 +8,9 @@ import (
 	"github.com/go-chi/httprate"
 )
 
-func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprate.KeyFunc, errLimit error, eh ErrorHandler) func(next http.Handler) http.Handler {
+func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprate.KeyFunc, errLimit error) func(next http.Handler) http.Handler {
 	if keyFn == nil {
 		keyFn = httprate.KeyByRealIP
-	}
-
-	if eh == nil {
-		eh = _DefaultErrorHandler
 	}
 
 	if errLimit == nil {
@@ -32,7 +28,7 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 			}
 
 			// if rate limit is set to 0 skip
-			if rpm == 0 {
+			if rpm < 1 {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -46,7 +42,7 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 					return keyFn(r)
 				}),
 				httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-					eh(w, r, next, errLimit)
+					proto.RespondWithError(w, errLimit)
 				}),
 			}
 
