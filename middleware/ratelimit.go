@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -20,13 +19,6 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 		errLimit = proto.ErrLimitExceeded
 	}
 
-	if limitCounter == nil {
-		limitCounter = &localCounter{
-			counters:     make(map[uint64]*count),
-			windowLength: _RateLimitWindow,
-		}
-	}
-
 	options := []httprate.Option{
 		httprate.WithLimitCounter(limitCounter),
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
@@ -40,100 +32,22 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 		}),
 	}
 
+	limiter := httprate.NewRateLimiter(defaultRPM, _RateLimitWindow, options...)
+
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			rpm, ok := getRateLimit(ctx)
-			if !ok {
-				rpm = defaultRPM
+			if rpm, ok := getRateLimit(ctx); ok {
+				if rpm == 0 {
+					next.ServeHTTP(w, r)
+					return
+				}
+				ctx = httprate.WithRequestLimit(ctx, rpm)
 			}
 
-			// if rate limit is set to 0 skip
-			if rpm < 1 {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			httprate.Limit(rpm, _RateLimitWindow, options...)(next).ServeHTTP(w, r)
+			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 		})
-	}
-}
-
-type localCounter struct {
-	counters     map[uint64]*count
-	windowLength time.Duration
-	lastEvict    time.Time
-	mu           sync.Mutex
-}
-
-var _ httprate.LimitCounter = &localCounter{}
-
-type count struct {
-	value     int
-	updatedAt time.Time
-}
-
-func (c *localCounter) Config(requestLimit int, windowLength time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.windowLength = windowLength
-}
-
-func (c *localCounter) Increment(key string, currentWindow time.Time) error {
-	return c.IncrementBy(key, currentWindow, 1)
-}
-
-func (c *localCounter) IncrementBy(key string, currentWindow time.Time, amount int) error {
-	c.evict()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	hkey := httprate.LimitCounterKey(key, currentWindow)
-
-	v, ok := c.counters[hkey]
-	if !ok {
-		v = &count{}
-		c.counters[hkey] = v
-	}
-	v.value += amount
-	v.updatedAt = time.Now()
-
-	return nil
-}
-
-func (c *localCounter) Get(key string, currentWindow, previousWindow time.Time) (int, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	curr, ok := c.counters[httprate.LimitCounterKey(key, currentWindow)]
-	if !ok {
-		curr = &count{value: 0, updatedAt: time.Now()}
-	}
-	prev, ok := c.counters[httprate.LimitCounterKey(key, previousWindow)]
-	if !ok {
-		prev = &count{value: 0, updatedAt: time.Now()}
-	}
-
-	return curr.value, prev.value, nil
-}
-
-func (c *localCounter) evict() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	d := c.windowLength * 3
-
-	if time.Since(c.lastEvict) < d {
-		return
-	}
-	c.lastEvict = time.Now()
-
-	for k, v := range c.counters {
-		if time.Since(v.updatedAt) >= d {
-			delete(c.counters, k)
-		}
 	}
 }
