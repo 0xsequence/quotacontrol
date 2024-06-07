@@ -20,6 +20,7 @@ func (k *contextKey) String() string {
 var (
 	ctxKeyAccessKey    = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
+	ctxKeyProjectID    = &contextKey{"ProjectID"}
 	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
 	ctxKeyRateLimit    = &contextKey{"RateLimit"}
 	ctxKeyTime         = &contextKey{"Time"}
@@ -40,8 +41,8 @@ func getAccessKey(ctx context.Context) string {
 	return v
 }
 
-// withAccessQuota adds the quota to the context.
-func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Context {
+// WithAccessQuota adds the quota to the context.
+func WithAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Context {
 	return context.WithValue(ctx, ctxKeyAccessQuota, quota)
 }
 
@@ -63,9 +64,17 @@ func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
 	return v
 }
 
+// WithProjectID adds the projectID to the context.
+func WithProjectID(ctx context.Context, projectID uint64) context.Context {
+	return context.WithValue(ctx, ctxKeyProjectID, projectID)
+}
+
 // GetProjectID returns the projectID and if its active from the context.
 // In case its not set, it will return 0.
 func GetProjectID(ctx context.Context) (uint64, bool) {
+	if projectID, ok := ctx.Value(ctxKeyProjectID).(uint64); ok {
+		return projectID, true
+	}
 	accessQuota := GetAccessQuota(ctx)
 	if accessQuota == nil {
 		return 0, false

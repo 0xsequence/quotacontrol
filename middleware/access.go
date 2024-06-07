@@ -17,6 +17,7 @@ const (
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
 type Client interface {
 	IsEnabled() bool
+	FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
 	FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error)
@@ -32,6 +33,7 @@ func SetAccessKey(next http.Handler) http.Handler {
 		if accessKey != "" {
 			ctx = WithAccessKey(ctx, accessKey)
 		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -43,22 +45,45 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 			ctx := r.Context()
 
 			// skip with no access key, or quotacontrol is disabled
-			accessKey := getAccessKey(ctx)
-			if !client.IsEnabled() || accessKey == "" {
+			if !client.IsEnabled() {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			quota, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), GetTime(ctx))
-			if err != nil {
-				proto.RespondWithError(w, err)
-				return
+			now := GetTime(ctx)
+			origin := r.Header.Get(HeaderOrigin)
+
+			var (
+				quota *proto.AccessQuota
+				err   error
+			)
+
+			projectID, ok := GetProjectID(ctx)
+			if ok {
+				if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
+					proto.RespondWithError(w, err)
+					return
+				}
 			}
 
-			// set access quota in context
-			if quota != nil {
-				ctx = withAccessQuota(ctx, quota)
+			if accessKey := getAccessKey(ctx); accessKey != "" {
+				if quota, err = client.FetchKeyQuota(ctx, accessKey, origin, now); err != nil {
+					proto.RespondWithError(w, err)
+					return
+				}
+				if ok && quota.AccessKey.ProjectID != projectID {
+					// XXX: access key has probably been leaked
+					//      let's add a MarkAccessKeyLeaked method to the server
+					//      and add a method in the client to call it
+					proto.RespondWithError(w, proto.ErrAccessKeyNotFound)
+					return
+				}
 			}
+
+			if quota != nil {
+				ctx = WithAccessQuota(ctx, quota)
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
