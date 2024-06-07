@@ -67,15 +67,16 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 			}
 
 			if accessKey := getAccessKey(ctx); accessKey != "" {
-				if quota, err = client.FetchKeyQuota(ctx, accessKey, origin, now); err != nil {
+				q, err := client.FetchKeyQuota(ctx, accessKey, origin, now)
+				if err != nil {
 					proto.RespondWithError(w, err)
 					return
 				}
-				if ok && quota.AccessKey.ProjectID != projectID {
-					// XXX: access key has probably been leaked
-					//      let's add a MarkAccessKeyLeaked method to the server
-					//      and add a method in the client to call it
-					proto.RespondWithError(w, proto.ErrAccessKeyNotFound)
+				if quota == nil {
+					quota = q
+				}
+				if q.AccessKey.ProjectID != quota.AccessKey.ProjectID {
+					proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
 					return
 				}
 			}
