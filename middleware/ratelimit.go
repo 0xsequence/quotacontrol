@@ -34,7 +34,6 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 			}
 
 			options := []httprate.Option{
-				httprate.WithLimitCounter(limitCounter),
 				httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
 					if q := GetAccessQuota(r.Context()); q != nil {
 						return ProjectRateKey(q.GetProjectID()), nil
@@ -44,6 +43,10 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 				httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 					proto.RespondWithError(w, errLimit)
 				}),
+			}
+
+			if limitCounter != nil {
+				options = append(options, httprate.WithLimitCounter(limitCounter))
 			}
 
 			httprate.Limit(rpm, time.Minute, options...)(next).ServeHTTP(w, r)
