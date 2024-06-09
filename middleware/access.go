@@ -180,7 +180,7 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 			}
 
 			if ok {
-				ctx = withResult(ctx)
+				ctx = withSpending(ctx)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))

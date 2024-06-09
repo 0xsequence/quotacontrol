@@ -24,7 +24,7 @@ var (
 	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
 	ctxKeyRateLimit    = &contextKey{"RateLimit"}
 	ctxKeyTime         = &contextKey{"Time"}
-	ctxKeyResult       = &contextKey{"Result"}
+	ctxKeySpending     = &contextKey{"Spending"}
 )
 
 // WithAccessKey adds the access key to the context.
@@ -133,13 +133,13 @@ func GetTime(ctx context.Context) time.Time {
 	return v
 }
 
-// withResult sets the result of spending in the context.
-func withResult(ctx context.Context) context.Context {
-	return context.WithValue(ctx, ctxKeyResult, struct{}{})
+// withSpending sets the result of spending in the context.
+func withSpending(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeySpending, struct{}{})
 }
 
-// GetResult returns the result of spending from the context.
-func GetResult(ctx context.Context) bool {
-	_, ok := ctx.Value(ctxKeyResult).(struct{})
+// HasSpending returns the result of spending from the context.
+func HasSpending(ctx context.Context) bool {
+	_, ok := ctx.Value(ctxKeySpending).(struct{})
 	return ok
 }
