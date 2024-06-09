@@ -2,11 +2,15 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 const (
@@ -24,18 +28,56 @@ type Client interface {
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
-// SetAccessKey get the access key from the header and sets it in the context.
-func SetAccessKey(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		accessKey := r.Header.Get(HeaderAccessKey)
+// SetKey gets the access key header and sets it in the context.
+// It uses the JWT token to extract the project ID.
+// It also checks for project mmismatch between the access key and the JWT token.
+func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var (
+				ctx       = r.Context()
+				projectID = uint64(0)
+				accessKey = r.Header.Get(HeaderAccessKey)
+			)
 
-		ctx := r.Context()
-		if accessKey != "" {
-			ctx = WithAccessKey(ctx, accessKey)
-		}
+			if accessKey != "" {
+				projectID, _ = proto.GetProjectID(accessKey)
+				ctx = WithAccessKey(ctx, accessKey)
+			}
 
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			if ja == nil {
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			token, claims, err := jwtauth.FromContext(ctx)
+			if err != nil && !errors.Is(err, jwtauth.ErrNoTokenFound) {
+				proto.RespondWithError(w, err)
+				return
+			}
+
+			if token == nil {
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			if err := jwt.Validate(token, ja.ValidateOptions()...); err == nil {
+				if v, ok := claims["project"].(float64); ok {
+					if uint64(v) != projectID {
+						proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
+						return
+					}
+					projectID = uint64(v)
+				}
+			}
+
+			if projectID != 0 {
+				ctx = WithProjectID(ctx, projectID)
+			}
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // VerifyAccessKey verifies the accessKey and adds the AccessQuota to the request context.
@@ -57,7 +99,7 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 
 			projectID, ok := GetProjectID(ctx)
 			if ok {
-				q, err := client.FetchProjectQuota(ctx, projectID, now); \
+				q, err := client.FetchProjectQuota(ctx, projectID, now)
 				if err != nil {
 					proto.RespondWithError(w, err)
 					return
@@ -71,13 +113,7 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 					proto.RespondWithError(w, err)
 					return
 				}
-				if quota == nil {
-					quota = q
-				}
-				if q.AccessKey.ProjectID != quota.AccessKey.ProjectID {
-					proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
-					return
-				}
+				quota = q
 			}
 
 			if quota != nil {

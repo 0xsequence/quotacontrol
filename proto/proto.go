@@ -41,6 +41,10 @@ func (t *AccessKey) ValidateService(service *Service) bool {
 	return false
 }
 
+func (t *AccessKey) IsJWT() bool {
+	return t.AccessKey == ""
+}
+
 // MarshalJSON adds freeCU, softQuota and hardQuota fields to the json.
 // This keeps compatibility with older versions of QuotaControl.
 // TODO: remove this once all services have migrated to newer version.

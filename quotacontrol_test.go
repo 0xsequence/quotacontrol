@@ -27,7 +27,7 @@ import (
 
 var (
 	_ProjectID  = uint64(777)
-	_AccessKeys = []string{GenerateAccessKey(_ProjectID), GenerateAccessKey(_ProjectID)}
+	_AccessKeys = []string{proto.GenerateAccessKey(_ProjectID), proto.GenerateAccessKey(_ProjectID)}
 	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
 
 	_Config = Config{
@@ -127,7 +127,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	// we set the compute units to 2, then in another handler we remove 1 before spending
 	router.Use(middlewareCU(2))
-	router.Use(middleware.SetAccessKey)
+	router.Use(middleware.SetKey(nil))
 	router.Use(middleware.VerifyAccessKey(client))
 	router.Use(NewRateLimiter(cfg, httprate.KeyByRealIP))
 	router.Use(middlewareCU(-1))

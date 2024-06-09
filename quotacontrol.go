@@ -60,7 +60,7 @@ func NewQuotaControlHandler(log logger.Logger, cache Cache, store Store, limitco
 		cache:        cache,
 		store:        store,
 		limitCounter: limitcounter,
-		accessKeyGen: GenerateAccessKey,
+		accessKeyGen: proto.GenerateAccessKey,
 	}
 }
 
@@ -122,7 +122,7 @@ func (q qcHandler) GetAsyncUsage(ctx context.Context, projectID uint64, service 
 }
 
 func (q qcHandler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	projectID, err := GetProjectID(accessKey)
+	projectID, err := proto.GetProjectID(accessKey)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +240,7 @@ func (q qcHandler) UpdateKeyUsage(ctx context.Context, service *proto.Service, n
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for key, u := range usage {
-		projectID, err := GetProjectID(key)
+		projectID, err := proto.GetProjectID(key)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue

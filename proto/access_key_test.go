@@ -1,36 +1,36 @@
-package quotacontrol_test
+package proto_test
 
 import (
 	"testing"
 
-	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAccessKeyV1Encoding(t *testing.T) {
 	projectID := uint64(12345)
-	accessKey := quotacontrol.GenerateAccessKey(projectID)
+	accessKey := proto.GenerateAccessKey(projectID)
 	// fmt.Println("=> k", accessKey)
 
-	outID, err := quotacontrol.DecodeProjectID(accessKey)
+	outID, err := proto.DecodeProjectID(accessKey)
 	require.NoError(t, err)
 	require.Equal(t, projectID, outID)
 
-	outID, err = quotacontrol.GetProjectID(accessKey)
+	outID, err = proto.GetProjectID(accessKey)
 	require.NoError(t, err)
 	require.Equal(t, projectID, outID)
 }
 
 func TestAccessKeyLegacyEncoding(t *testing.T) {
 	projectID := uint64(12345)
-	accessKey := quotacontrol.LegacyGenerateAccessKey(projectID)
+	accessKey := proto.LegacyGenerateAccessKey(projectID)
 	// fmt.Println("=> k", accessKey)
 
-	outID, err := quotacontrol.LegacyDecodeProjectID(accessKey)
+	outID, err := proto.LegacyDecodeProjectID(accessKey)
 	require.NoError(t, err)
 	require.Equal(t, projectID, outID)
 
-	outID, err = quotacontrol.GetProjectID(accessKey)
+	outID, err = proto.GetProjectID(accessKey)
 	require.NoError(t, err)
 	require.Equal(t, projectID, outID)
 }
