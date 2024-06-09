@@ -128,7 +128,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	// we set the compute units to 2, then in another handler we remove 1 before spending
 	router.Use(middlewareCU(2))
 	router.Use(middleware.SetKey(nil))
-	router.Use(middleware.VerifyAccessKey(client))
+	router.Use(middleware.VerifyQuota(client))
 	router.Use(NewRateLimiter(cfg, httprate.KeyByRealIP))
 	router.Use(middlewareCU(-1))
 	router.Use(middleware.SpendUsage(client))

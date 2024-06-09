@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -50,4 +51,8 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn httprat
 			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func ProjectRateKey(projectID uint64) string {
+	return fmt.Sprintf("rl:project:%d", projectID)
 }

@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -29,8 +28,8 @@ type Client interface {
 }
 
 // SetKey gets the access key header and sets it in the context.
-// It uses the JWT token to extract the project ID.
-// It also checks for project mmismatch between the access key and the JWT token.
+// It uses JWT from `jwtauth.Verifier` to extract the project claim and sets it in the context as well.
+// When both are present, it checks project mismatch between the access key and the JWT token.
 func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,24 +50,26 @@ func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 			}
 
 			token, claims, err := jwtauth.FromContext(ctx)
-			if err != nil && !errors.Is(err, jwtauth.ErrNoTokenFound) {
+			if err != nil {
+				if errors.Is(err, jwtauth.ErrNoTokenFound) {
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
 				proto.RespondWithError(w, err)
 				return
 			}
 
-			if token == nil {
-				next.ServeHTTP(w, r.WithContext(ctx))
+			if err := jwt.Validate(token, ja.ValidateOptions()...); err != nil {
+				proto.RespondWithError(w, err)
 				return
 			}
 
-			if err := jwt.Validate(token, ja.ValidateOptions()...); err == nil {
-				if v, ok := claims["project"].(float64); ok {
-					if uint64(v) != projectID {
-						proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
-						return
-					}
-					projectID = uint64(v)
+			if v, ok := claims["project"].(float64); ok {
+				if projectID != 0 && uint64(v) != projectID {
+					proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
+					return
 				}
+				projectID = uint64(v)
 			}
 
 			if projectID != 0 {
@@ -80,25 +81,26 @@ func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 	}
 }
 
-// VerifyAccessKey verifies the accessKey and adds the AccessQuota to the request context.
-func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
+// VerifyQuota checks if the project is in the context and fetches the quota for the project.
+// If it's not, but an access key is present, it fetches the quota for the access key.
+func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			// skip with no access key, or quotacontrol is disabled
+			// skip when quotacontrol is disabled
 			if !client.IsEnabled() {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			now := GetTime(ctx)
-			origin := r.Header.Get(HeaderOrigin)
+			var (
+				quota *proto.AccessQuota
+				now   = GetTime(ctx)
+			)
 
-			var quota *proto.AccessQuota
-
-			projectID, ok := GetProjectID(ctx)
-			if ok {
+			// check if we alreayd have a project ID from the JWT
+			if projectID, ok := GetProjectID(ctx); ok {
 				q, err := client.FetchProjectQuota(ctx, projectID, now)
 				if err != nil {
 					proto.RespondWithError(w, err)
@@ -107,8 +109,9 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 				quota = q
 			}
 
+			// check if we have an access key
 			if accessKey := getAccessKey(ctx); accessKey != "" {
-				q, err := client.FetchKeyQuota(ctx, accessKey, origin, now)
+				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 				if err != nil {
 					proto.RespondWithError(w, err)
 					return
@@ -125,7 +128,7 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 	}
 }
 
-// EnsureUsage is a middleware that checks if the access key has enough usage left.
+// EnsureUsage is a middleware that checks if the quota has enough usage left.
 func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -158,10 +161,7 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 	}
 }
 
-func ProjectRateKey(projectID uint64) string {
-	return fmt.Sprintf("rl:project:%d", projectID)
-}
-
+// SpendUsage is a middleware that spends the usage from the quota.
 func SpendUsage(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
