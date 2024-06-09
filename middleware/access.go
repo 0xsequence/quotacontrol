@@ -72,7 +72,7 @@ func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 			}
 
 			if projectID != 0 {
-				ctx = WithProjectID(ctx, projectID)
+				ctx = withProjectID(ctx, projectID)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))

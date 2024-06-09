@@ -64,8 +64,8 @@ func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
 	return v
 }
 
-// WithProjectID adds the projectID to the context.
-func WithProjectID(ctx context.Context, projectID uint64) context.Context {
+// withProjectID adds the projectID to the context.
+func withProjectID(ctx context.Context, projectID uint64) context.Context {
 	return context.WithValue(ctx, ctxKeyProjectID, projectID)
 }
 
