@@ -3,6 +3,7 @@ package quotacontrol_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
@@ -22,30 +23,78 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newConfig() Config {
-	return Config{
+func newConfig() quotacontrol.Config {
+	return quotacontrol.Config{
 		Enabled:    true,
-		UpdateFreq: Duration{time.Minute},
+		UpdateFreq: quotacontrol.Duration{time.Minute},
 		Redis: redis.Config{
 			Enabled: true,
 		},
-		RateLimiter: RateLimiterConfig{
+		RateLimiter: quotacontrol.RateLimiterConfig{
 			Enabled:    true,
 			DefaultRPM: 10,
 		},
 	}
 }
 
-func newClient(cfg Config, service proto.Service) *Client {
-	return NewClient(logger.NewLogger(logger.LogLevel_DEBUG).With("client", "client"), service, cfg)
+func newQuotaClient(cfg quotacontrol.Config, service proto.Service) *quotacontrol.Client {
+	logger := logger.NewLogger(logger.LogLevel_DEBUG).With(slog.String("client", "client"))
+	return quotacontrol.NewClient(logger, service, cfg)
 }
 
-// qcTest is a wrapper of quotacontrol that tracks the events that are notified and allows to inject errors
-type qcTest struct {
+func newTestServer(t *testing.T, cfg *quotacontrol.Config) *testServer {
+	s := miniredis.NewMiniRedis()
+	s.Start()
+	t.Cleanup(s.Close)
+	cfg.Redis.Host = s.Host()
+	cfg.Redis.Port = uint16(s.Server().Addr().Port)
+	client := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+
+	store := quotacontrol.NewMemoryStore()
+
+	listener, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+	cfg.URL = "http://" + listener.Addr().String()
+
+	t.Cleanup(func() { require.NoError(t, listener.Close()) })
+
+	qc := testServer{
+		logger:        logger.NewLogger(logger.LogLevel_DEBUG),
+		listener:      listener,
+		cache:         client,
+		store:         store,
+		notifications: make(map[uint64][]proto.EventType),
+	}
+
+	qcCache := quotacontrol.Cache{
+		QuotaCache:      quotacontrol.NewRedisCache(client, time.Minute),
+		UsageCache:      quotacontrol.NewRedisCache(client, time.Minute),
+		PermissionCache: quotacontrol.NewRedisCache(client, time.Minute),
+	}
+	qcStore := quotacontrol.Store{
+		LimitStore:      store,
+		AccessKeyStore:  store,
+		UsageStore:      store,
+		CycleStore:      store,
+		PermissionStore: nil,
+	}
+
+	logger := qc.logger.With(slog.String("server", "server"))
+	qc.QuotaControl = quotacontrol.NewHandler(logger, qcCache, qcStore, nil)
+
+	go func() {
+		http.Serve(listener, proto.NewQuotaControlServer(&qc))
+	}()
+
+	return &qc
+}
+
+// testServer is a wrapper of quotacontrol that tracks the events that are notified and allows to inject errors
+type testServer struct {
 	logger   logger.Logger
 	listener net.Listener
 	cache    *redisclient.Client
-	store    *MemoryStore
+	store    *quotacontrol.MemoryStore
 
 	proto.QuotaControl
 
@@ -58,25 +107,25 @@ type qcTest struct {
 	PrepareUsageDelay  time.Duration
 }
 
-func (qc *qcTest) FlushCache() {
+func (qc *testServer) FlushCache() {
 	qc.cache.FlushAll(context.Background())
 }
 
-func (qc *qcTest) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+func (qc *testServer) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	if qc.ErrGetProjectQuota != nil {
 		return nil, qc.ErrGetProjectQuota
 	}
 	return qc.QuotaControl.GetProjectQuota(ctx, projectID, now)
 }
 
-func (qc *qcTest) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
+func (qc *testServer) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	if qc.ErrGetAccessQuota != nil {
 		return nil, qc.ErrGetAccessQuota
 	}
 	return qc.QuotaControl.GetAccessQuota(ctx, accessKey, now)
 }
 
-func (qc *qcTest) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
+func (qc *testServer) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
 	if qc.ErrPrepareUsage != nil {
 		return false, qc.ErrPrepareUsage
 	}
@@ -90,14 +139,14 @@ func (qc *qcTest) PrepareUsage(ctx context.Context, projectID uint64, cycle *pro
 	return qc.QuotaControl.PrepareUsage(ctx, projectID, cycle, now)
 }
 
-func (q *qcTest) getEvents(projectID uint64) []proto.EventType {
+func (q *testServer) getEvents(projectID uint64) []proto.EventType {
 	q.Lock()
 	v := q.notifications[projectID]
 	q.Unlock()
 	return v
 }
 
-func (q *qcTest) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+func (q *testServer) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
 	q.Lock()
 	q.notifications[projectID] = append(q.notifications[projectID], *eventType)
 	q.Unlock()
@@ -143,45 +192,10 @@ func executeRequest(ctx context.Context, handler http.Handler, accessKey, jwt st
 	return true, nil
 }
 
-func setupQuotaServer(t *testing.T, cfg *Config) *qcTest {
-	s := miniredis.NewMiniRedis()
-	s.Start()
-	t.Cleanup(s.Close)
-	cfg.Redis.Host = s.Host()
-	cfg.Redis.Port = uint16(s.Server().Addr().Port)
-	client := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+type addCredits int64
 
-	store := NewMemoryStore()
-
-	listener, err := net.Listen("tcp", "localhost:0")
-	require.NoError(t, err)
-
-	qc := qcTest{
-		logger:        logger.NewLogger(logger.LogLevel_DEBUG),
-		listener:      listener,
-		cache:         client,
-		store:         store,
-		notifications: make(map[uint64][]proto.EventType),
-	}
-
-	qcCache := Cache{
-		QuotaCache:      NewRedisCache(client, time.Minute),
-		UsageCache:      NewRedisCache(client, time.Minute),
-		PermissionCache: NewRedisCache(client, time.Minute),
-	}
-	qcStore := Store{
-		LimitStore:      store,
-		AccessKeyStore:  store,
-		UsageStore:      store,
-		CycleStore:      store,
-		PermissionStore: nil,
-	}
-
-	qc.QuotaControl = NewQuotaControlHandler(qc.logger.With("server", "server"), qcCache, qcStore, nil)
-	cfg.URL = "http://" + listener.Addr().String()
-	go func() {
-		http.Serve(listener, proto.NewQuotaControlServer(&qc))
-	}()
-
-	return &qc
+func (i addCredits) Middleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r.WithContext(middleware.AddComputeUnits(r.Context(), int64(i))))
+	})
 }

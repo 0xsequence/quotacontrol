@@ -3,7 +3,6 @@ package quotacontrol_test
 import (
 	"context"
 	"errors"
-	"net/http"
 	"testing"
 	"time"
 
@@ -17,23 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	_ProjectID  = uint64(777)
-	_AccessKeys = []string{proto.GenerateAccessKey(_ProjectID), proto.GenerateAccessKey(_ProjectID)}
-	_Now        = time.Date(2023, time.June, 26, 0, 0, 0, 0, time.Local)
-)
-
-type addCredits int64
-
-func (i addCredits) Middleware(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(w, r.WithContext(middleware.AddComputeUnits(r.Context(), int64(i))))
-	})
-}
-
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	cfg := newConfig()
-	qc := setupQuotaServer(t, &cfg)
+	qc := newTestServer(t, &cfg)
+
+	now := time.Now()
+	project := uint64(7)
+	key := proto.GenerateAccessKey(project)
+	service := proto.Service_Indexer
 
 	limit := proto.Limit{
 		RateLimit: 100,
@@ -44,12 +34,12 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := qc.store.SetAccessLimit(ctx, _ProjectID, &limit)
+	err := qc.store.SetAccessLimit(ctx, project, &limit)
 	require.NoError(t, err)
-	err = qc.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID})
+	err = qc.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
 	require.NoError(t, err)
 
-	client := newClient(cfg, proto.Service_Indexer)
+	client := newQuotaClient(cfg, service)
 
 	router := chi.NewRouter()
 
@@ -69,60 +59,60 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	t.Run("WithAccessKey", func(t *testing.T) {
 		go client.Run(context.Background())
 
-		ctx := middleware.WithTime(context.Background(), _Now)
+		ctx := middleware.WithTime(context.Background(), now)
 		qc.notifications = make(map[uint64][]proto.EventType)
 
 		// Spend Free CU
 		for i := int64(1); i < limit.FreeWarn; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			assert.Empty(t, qc.getEvents(_ProjectID), i)
+			assert.Empty(t, qc.getEvents(project), i)
 			expectedUsage.Add(proto.AccessUsage{ValidCompute: 1})
 		}
 
 		// Go over free CU
-		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err := executeRequest(ctx, router, key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_FreeMax)
+		assert.Contains(t, qc.getEvents(project), proto.EventType_FreeMax)
 		expectedUsage.Add(proto.AccessUsage{ValidCompute: 1})
 
 		// Get close to soft quota
 		for i := limit.FreeWarn + 1; i < limit.OverWarn; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			assert.Len(t, qc.getEvents(_ProjectID), 1)
+			assert.Len(t, qc.getEvents(project), 1)
 			expectedUsage.Add(proto.AccessUsage{OverCompute: 1})
 		}
 
 		// Go over soft quota
-		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err = executeRequest(ctx, router, key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_OverWarn)
+		assert.Contains(t, qc.getEvents(project), proto.EventType_OverWarn)
 		expectedUsage.Add(proto.AccessUsage{OverCompute: 1})
 
 		// Get close to hard quota
 		for i := limit.OverWarn + 1; i < limit.OverMax; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			assert.Len(t, qc.getEvents(_ProjectID), 2)
+			assert.Len(t, qc.getEvents(project), 2)
 			expectedUsage.Add(proto.AccessUsage{OverCompute: 1})
 		}
 
 		// Go over hard quota
-		ok, err = executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err = executeRequest(ctx, router, key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Contains(t, qc.getEvents(_ProjectID), proto.EventType_OverMax)
+		assert.Contains(t, qc.getEvents(project), proto.EventType_OverMax)
 		expectedUsage.Add(proto.AccessUsage{OverCompute: 1})
 
 		// Denied
 		for i := 0; i < 10; i++ {
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, key, "")
 			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 			assert.False(t, ok)
 			expectedUsage.Add(proto.AccessUsage{LimitedCompute: 1})
@@ -130,7 +120,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// check the usage
 		client.Stop(context.Background())
-		usage, err := qc.store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := qc.store.GetAccountUsage(ctx, project, proto.Ptr(service), now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), counter.GetValue())
 		assert.Equal(t, &expectedUsage, &usage)
@@ -140,26 +130,26 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		// Change limits
 		//
 		// Increase CreditsOverageLimit which should still allow requests to go through, etc.
-		err = qc.store.SetAccessLimit(ctx, _ProjectID, &proto.Limit{
+		err = qc.store.SetAccessLimit(ctx, project, &proto.Limit{
 			RateLimit: 100,
 			OverWarn:  5,
 			OverMax:   110,
 		})
 		assert.NoError(t, err)
-		err = client.ClearQuotaCacheByAccessKey(ctx, _AccessKeys[0])
+		err = client.ClearQuotaCacheByAccessKey(ctx, key)
 		assert.NoError(t, err)
 
 		go client.Run(context.Background())
 
-		ctx := middleware.WithTime(context.Background(), _Now)
+		ctx := middleware.WithTime(context.Background(), now)
 		qc.notifications = make(map[uint64][]proto.EventType)
 
-		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err := executeRequest(ctx, router, key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 
 		client.Stop(context.Background())
-		usage, err := qc.store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := qc.store.GetAccountUsage(ctx, project, proto.Ptr(service), now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
 		expectedUsage.Add(proto.AccessUsage{ValidCompute: 0, OverCompute: 1, LimitedCompute: 0})
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), counter.GetValue())
@@ -169,7 +159,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	t.Run("PublicRateLimit", func(t *testing.T) {
 		go client.Run(context.Background())
 
-		ctx := middleware.WithTime(context.Background(), _Now)
+		ctx := middleware.WithTime(context.Background(), now)
 
 		for i, max := 0, cfg.RateLimiter.DefaultRPM*2; i < max; i++ {
 			ok, err := executeRequest(ctx, router, "", "")
@@ -183,7 +173,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		client.Stop(context.Background())
-		usage, err := qc.store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := qc.store.GetAccountUsage(ctx, project, proto.Ptr(service), now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), counter.GetValue())
 		assert.Equal(t, &expectedUsage, &usage)
@@ -200,11 +190,11 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 			proto.ErrTimeout,
 		}
 
-		ctx := middleware.WithTime(context.Background(), _Now)
+		ctx := middleware.WithTime(context.Background(), now)
 
 		for _, err := range errList {
 			qc.ErrGetAccessQuota = err
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, key, "")
 			assert.True(t, ok)
 			assert.NoError(t, err)
 		}
@@ -214,14 +204,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		for _, err := range errList {
 			qc.ErrPrepareUsage = err
-			ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+			ok, err := executeRequest(ctx, router, key, "")
 			assert.True(t, ok)
 			assert.NoError(t, err)
 		}
 		qc.ErrPrepareUsage = nil
 
 		client.Stop(context.Background())
-		usage, err := qc.store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := qc.store.GetAccountUsage(ctx, project, proto.Ptr(service), now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), counter.GetValue())
 		assert.Equal(t, &expectedUsage, &usage)
@@ -232,15 +222,15 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		go client.Run(context.Background())
 
-		ctx := middleware.WithTime(context.Background(), _Now)
+		ctx := middleware.WithTime(context.Background(), now)
 
 		qc.PrepareUsageDelay = time.Second * 3
-		ok, err := executeRequest(ctx, router, _AccessKeys[0], "")
+		ok, err := executeRequest(ctx, router, key, "")
 		assert.True(t, ok)
 		assert.NoError(t, err)
 
 		client.Stop(context.Background())
-		usage, err := qc.store.GetAccountUsage(ctx, _ProjectID, proto.Ptr(proto.Service_Indexer), _Now.Add(-time.Hour), _Now.Add(time.Hour))
+		usage, err := qc.store.GetAccountUsage(ctx, project, proto.Ptr(service), now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), counter.GetValue())
 		assert.Equal(t, &expectedUsage, &usage)
@@ -250,7 +240,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 func TestDefaultKey(t *testing.T) {
 	cfg := newConfig()
-	qc := setupQuotaServer(t, &cfg)
+	qc := newTestServer(t, &cfg)
+
+	now := time.Now()
+	project := uint64(7)
+	keys := []string{
+		proto.GenerateAccessKey(project),
+		proto.GenerateAccessKey(project),
+	}
 
 	service := proto.Ptr(proto.Service_Metadata)
 	limit := proto.Limit{
@@ -259,51 +256,56 @@ func TestDefaultKey(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	access := &proto.AccessKey{Active: true, AccessKey: _AccessKeys[0], ProjectID: _ProjectID}
+
+	access := &proto.AccessKey{
+		Active:    true,
+		AccessKey: keys[0],
+		ProjectID: project,
+	}
 
 	// populate store
 	ctx := context.Background()
-	err := qc.store.SetAccessLimit(ctx, _ProjectID, &limit)
+	err := qc.store.SetAccessLimit(ctx, project, &limit)
 	require.NoError(t, err)
-	err = qc.store.InsertAccessKey(ctx, access)
+	err = qc.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: project})
 	require.NoError(t, err)
 
-	client := newClient(cfg, *service)
+	client := newQuotaClient(cfg, *service)
 
-	aq, err := client.FetchKeyQuota(ctx, _AccessKeys[0], "", _Now)
-	require.NoError(t, err)
-	assert.Equal(t, access, aq.AccessKey)
-	assert.Equal(t, &limit, aq.Limit)
-
-	aq, err = client.FetchKeyQuota(ctx, _AccessKeys[0], "", _Now)
+	aq, err := client.FetchKeyQuota(ctx, keys[0], "", now)
 	require.NoError(t, err)
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
 
-	access, err = qc.UpdateAccessKey(ctx, _AccessKeys[0], proto.Ptr("new name"), nil, []*proto.Service{service})
-	require.NoError(t, err)
-
-	aq, err = client.FetchKeyQuota(ctx, _AccessKeys[0], "", _Now)
+	aq, err = client.FetchKeyQuota(ctx, keys[0], "", now)
 	require.NoError(t, err)
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
 
-	ok, err := qc.DisableAccessKey(ctx, _AccessKeys[0])
+	access, err = qc.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, []*proto.Service{service})
+	require.NoError(t, err)
+
+	aq, err = client.FetchKeyQuota(ctx, keys[0], "", now)
+	require.NoError(t, err)
+	assert.Equal(t, access, aq.AccessKey)
+	assert.Equal(t, &limit, aq.Limit)
+
+	ok, err := qc.DisableAccessKey(ctx, keys[0])
 	require.ErrorIs(t, err, proto.ErrAtLeastOneKey)
 	assert.False(t, ok)
-	newAccess := proto.AccessKey{Active: true, AccessKey: _AccessKeys[1], ProjectID: _ProjectID}
+	newAccess := proto.AccessKey{Active: true, AccessKey: keys[1], ProjectID: project}
 	err = qc.store.InsertAccessKey(ctx, &newAccess)
 	require.NoError(t, err)
 
-	ok, err = qc.DisableAccessKey(ctx, _AccessKeys[0])
+	ok, err = qc.DisableAccessKey(ctx, keys[0])
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	_, err = client.FetchKeyQuota(ctx, _AccessKeys[0], "", _Now)
+	_, err = client.FetchKeyQuota(ctx, keys[0], "", now)
 	require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
 
 	newAccess.Default = true
-	aq, err = client.FetchKeyQuota(ctx, newAccess.AccessKey, "", _Now)
+	aq, err = client.FetchKeyQuota(ctx, newAccess.AccessKey, "", now)
 	require.NoError(t, err)
 	assert.Equal(t, &newAccess, aq.AccessKey)
 }
@@ -313,12 +315,14 @@ func TestJWT(t *testing.T) {
 	auth := jwtauth.New("HS256", []byte(secret), nil)
 
 	project := uint64(7)
-	accessKey := proto.GenerateAccessKey(project)
+	key := proto.GenerateAccessKey(project)
+	service := proto.Service_Indexer
+
 	counter := spendingCounter(0)
 
 	cfg := newConfig()
-	server := setupQuotaServer(t, &cfg)
-	client := newClient(cfg, proto.Service_Indexer)
+	server := newTestServer(t, &cfg)
+	client := newQuotaClient(cfg, service)
 
 	_ = server
 
@@ -330,7 +334,7 @@ func TestJWT(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	ok, err := executeRequest(ctx, r, accessKey, token)
+	ok, err := executeRequest(ctx, r, key, token)
 	require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
 	assert.False(t, ok)
 
