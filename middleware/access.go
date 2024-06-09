@@ -53,17 +53,16 @@ func VerifyAccessKey(client Client) func(next http.Handler) http.Handler {
 			now := GetTime(ctx)
 			origin := r.Header.Get(HeaderOrigin)
 
-			var (
-				quota *proto.AccessQuota
-				err   error
-			)
+			var quota *proto.AccessQuota
 
 			projectID, ok := GetProjectID(ctx)
 			if ok {
-				if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
+				q, err := client.FetchProjectQuota(ctx, projectID, now); \
+				if err != nil {
 					proto.RespondWithError(w, err)
 					return
 				}
+				quota = q
 			}
 
 			if accessKey := getAccessKey(ctx); accessKey != "" {
