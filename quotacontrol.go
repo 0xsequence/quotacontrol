@@ -52,8 +52,7 @@ type Store struct {
 	PermissionStore
 }
 
-// NewHandler returns server implementation for proto.QuotaControl which is used
-// by the Builder (aka quotacontrol backend).
+// NewHandler returns server implementation for proto.QuotaControl.
 func NewHandler(log logger.Logger, cache Cache, store Store, limitcounter httprate.LimitCounter) proto.QuotaControl {
 	return &qcHandler{
 		log:          log,
