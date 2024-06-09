@@ -348,24 +348,31 @@ func TestJWT(t *testing.T) {
 	_, token, err := auth.Encode(map[string]any{"project": project})
 	require.NoError(t, err)
 
-	ok, err := executeRequest(ctx, r, key, token)
-	require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
-	assert.False(t, ok)
+	var expectedHits int64
 
-	ok, err = executeRequest(ctx, r, "", token)
-	require.NoError(t, err)
-	assert.True(t, ok)
-
+	t.Run("TokenOnly", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, "", token)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		expectedHits++
+	})
+	t.Run("AccessKeyNotFound", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, key, token)
+		require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
+		assert.False(t, ok)
+	})
 	server.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
+	t.Run("AccessKeyFound", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, key, token)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		expectedHits++
+	})
+	t.Run("AccessKeyMismatch", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, proto.GenerateAccessKey(project+1), token)
+		require.ErrorIs(t, err, proto.ErrAccessKeyMismatch)
+		assert.False(t, ok)
+	})
 
-	ok, err = executeRequest(ctx, r, key, token)
-	require.NoError(t, err)
-	assert.True(t, ok)
-
-	ok, err = executeRequest(ctx, r, proto.GenerateAccessKey(project+1), token)
-	require.ErrorIs(t, err, proto.ErrAccessKeyMismatch)
-	assert.False(t, ok)
-
-	assert.Equal(t, int64(2), counter.GetValue())
-
+	assert.Equal(t, expectedHits, counter.GetValue())
 }

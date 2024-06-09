@@ -58,7 +58,7 @@ func (m *MemoryStore) GetAccessCycle(ctx context.Context, projectID uint64, now 
 	cycle := m.cycles[projectID]
 	m.Unlock()
 	if cycle == nil {
-		return DefaultCycleStore.GetAccessCycle(ctx, projectID, now)
+		return DefaultCycleStore{}.GetAccessCycle(ctx, projectID, now)
 	}
 	return cycle, nil
 }
