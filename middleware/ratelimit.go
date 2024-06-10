@@ -70,3 +70,14 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn RateLim
 func ProjectRateKey(projectID uint64) string {
 	return fmt.Sprintf("rl:project:%d", projectID)
 }
+
+type RateLimitCfg interface {
+	GetKey(r *http.Request) string
+	GetRate(r *http.Request) *int
+}
+
+func NewRateLimitFunc(rl RateLimitCfg) RateLimitFunc {
+	return func(r *http.Request) (key string, rpm *int) {
+		return rl.GetKey(r), rl.GetRate(r)
+	}
+}

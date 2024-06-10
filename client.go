@@ -218,8 +218,8 @@ func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, user
 
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
 	// quota is nil only on unexpected errors from quota fetch
-	if quota == nil {
-		return true, nil
+	if quota == nil || computeUnits == 0 {
+		return false, nil
 	}
 
 	logger := c.logger.With(
