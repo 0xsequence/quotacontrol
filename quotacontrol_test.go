@@ -376,3 +376,78 @@ func TestJWT(t *testing.T) {
 
 	assert.Equal(t, expectedHits, counter.GetValue())
 }
+
+func TestJWTAccess(t *testing.T) {
+	const secret = "secret"
+	auth := jwtauth.New("HS256", []byte(secret), nil)
+
+	project := uint64(7)
+	service := proto.Service_Indexer
+	account := "account"
+
+	counter := hitCounter(0)
+
+	cfg := newConfig()
+	server := newTestServer(t, &cfg)
+	client := newQuotaClient(cfg, service)
+
+	r := chi.NewRouter()
+	r.Use(
+		jwtauth.Verifier(auth),
+		middleware.SetKey(auth),
+		middleware.VerifyQuota(client),
+		middleware.EnsurePermission(client, UserPermission_READ_WRITE),
+	)
+	r.Handle("/*", &counter)
+
+	ctx := context.Background()
+
+	server.store.SetAccessLimit(ctx, project, &proto.Limit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
+	})
+
+	_, token, err := auth.Encode(map[string]any{
+		"account": account,
+		"project": project,
+	})
+	require.NoError(t, err)
+
+	var expectedHits int64
+
+	t.Run("NoPermission", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, "", token)
+		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
+		assert.False(t, ok)
+	})
+
+	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
+	t.Run("LowPermission", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, "", token)
+		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
+		assert.False(t, ok)
+	})
+
+	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: project})
+	server.FlushCache()
+	t.Run("EnoughPermission", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, "", token)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		expectedHits++
+	})
+
+	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_ADMIN, proto.ResourceAccess{ProjectID: project})
+	server.FlushCache()
+	t.Run("MorePermission", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, "", token)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		expectedHits++
+	})
+
+	assert.Equal(t, expectedHits, counter.GetValue())
+}

@@ -76,6 +76,10 @@ func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 				ctx = withProjectID(ctx, projectID)
 			}
 
+			if account, ok := claims["account"].(string); ok {
+				ctx = withAccount(ctx, account)
+			}
+
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -86,13 +90,12 @@ func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-
-			// skip when quotacontrol is disabled
 			if !client.IsEnabled() {
 				next.ServeHTTP(w, r)
 				return
 			}
+
+			ctx := r.Context()
 
 			var (
 				quota *proto.AccessQuota
@@ -120,7 +123,7 @@ func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 			}
 
 			if quota != nil {
-				ctx = WithAccessQuota(ctx, quota)
+				ctx = withAccessQuota(ctx, quota)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -184,6 +187,39 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func EnsurePermission(client Client, minPermission proto.UserPermission) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !client.IsEnabled() {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ctx := r.Context()
+
+			// check if we alreayd have a project ID from the JWT
+			q := GetAccessQuota(ctx)
+			if q == nil || !q.IsJWT() {
+				proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+				return
+			}
+
+			perm, _, err := client.FetchUserPermission(ctx, q.GetProjectID(), getAccount(ctx), true)
+			if err != nil {
+				proto.RespondWithError(w, err)
+				return
+			}
+
+			if perm == nil || *perm < minPermission {
+				proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+				return
+			}
+
+			next.ServeHTTP(w, r)
 		})
 	}
 }

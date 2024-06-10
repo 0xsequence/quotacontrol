@@ -21,6 +21,7 @@ var (
 	ctxKeyAccessKey    = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
 	ctxKeyProjectID    = &contextKey{"ProjectID"}
+	ctxKeyAccount      = &contextKey{"Account"}
 	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
 	ctxKeyRateLimit    = &contextKey{"RateLimit"}
 	ctxKeyTime         = &contextKey{"Time"}
@@ -41,18 +42,9 @@ func getAccessKey(ctx context.Context) string {
 	return v
 }
 
-// WithAccessQuota adds the quota to the context.
-func WithAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Context {
+// withAccessQuota adds the quota to the context.
+func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Context {
 	return context.WithValue(ctx, ctxKeyAccessQuota, quota)
-}
-
-// GetAccessKey returns the access key from the context.
-func GetAccessKey(ctx context.Context) string {
-	v, ok := ctx.Value(ctxKeyAccessKey).(string)
-	if !ok {
-		return ""
-	}
-	return v
 }
 
 // GetAccessQuota returns the access quota from the context.
@@ -80,6 +72,20 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 		return 0, false
 	}
 	return accessQuota.GetProjectID(), accessQuota.IsActive()
+}
+
+// WithAccount adds the account to the context.
+func withAccount(ctx context.Context, account string) context.Context {
+	return context.WithValue(ctx, ctxKeyAccount, account)
+}
+
+// getAccount returns the account from the context.
+func getAccount(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyAccount).(string)
+	if !ok {
+		return ""
+	}
+	return v
 }
 
 // WithRateLimit adds a rate limit value to the context.

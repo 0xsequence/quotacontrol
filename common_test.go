@@ -76,7 +76,7 @@ func newTestServer(t *testing.T, cfg *quotacontrol.Config) *testServer {
 		AccessKeyStore:  store,
 		UsageStore:      store,
 		CycleStore:      store,
-		PermissionStore: nil,
+		PermissionStore: store,
 	}
 
 	logger := qc.logger.With(slog.String("server", "server"))
@@ -151,6 +151,17 @@ func (q *testServer) NotifyEvent(ctx context.Context, projectID uint64, eventTyp
 	q.notifications[projectID] = append(q.notifications[projectID], *eventType)
 	q.Unlock()
 	return true, nil
+}
+
+type hitCounter int64
+
+func (c *hitCounter) GetValue() int64 {
+	return atomic.LoadInt64((*int64)(c))
+}
+
+func (c *hitCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64((*int64)(c), 1)
+	w.WriteHeader(http.StatusOK)
 }
 
 type spendingCounter int64
