@@ -23,7 +23,6 @@ var (
 	ctxKeyProjectID    = &contextKey{"ProjectID"}
 	ctxKeyAccount      = &contextKey{"Account"}
 	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
-	ctxKeyRateLimit    = &contextKey{"RateLimit"}
 	ctxKeyTime         = &contextKey{"Time"}
 	ctxKeySpending     = &contextKey{"Spending"}
 )
@@ -86,23 +85,6 @@ func getAccount(ctx context.Context) string {
 		return ""
 	}
 	return v
-}
-
-// WithRateLimit adds a rate limit value to the context.
-func WithRateLimit(ctx context.Context, rateLimit int) context.Context {
-	return context.WithValue(ctx, ctxKeyRateLimit, rateLimit)
-}
-
-// getRateLimit returns the rate limit from the context or the access quota.
-func getRateLimit(ctx context.Context) (int, bool) {
-	rl, ok := ctx.Value(ctxKeyRateLimit).(int)
-	if ok {
-		return rl, true
-	}
-	if quota := GetAccessQuota(ctx); quota != nil {
-		return int(quota.Limit.RateLimit), true
-	}
-	return 0, false
 }
 
 // WithComputeUnits sets the compute units to the context.

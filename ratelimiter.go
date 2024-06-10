@@ -9,7 +9,7 @@ import (
 	httprateredis "github.com/go-chi/httprate-redis"
 )
 
-func NewRateLimiter(cfg Config, keyFn httprate.KeyFunc) func(next http.Handler) http.Handler {
+func RateLimiter(cfg Config, keyFn middleware.RateLimitFunc) func(next http.Handler) http.Handler {
 	// Short-cut the middleware if the rate limiter is disabled
 	if !cfg.RateLimiter.Enabled {
 		return func(next http.Handler) http.Handler {

@@ -10,7 +10,6 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httprate"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,7 +48,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		middleware.VerifyQuota(client),
 		addCredits(2).Middleware,
 		addCredits(-1).Middleware,
-		NewRateLimiter(cfg, httprate.KeyByRealIP),
+		RateLimiter(cfg, nil),
 		middleware.SpendUsage(client),
 	)
 
