@@ -186,34 +186,29 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 }
 
 func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error) {
-	var userPerm *proto.UserPermission
-	var resourceAccess *proto.ResourceAccess
-	var err error
-
 	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.
 	if useCache {
-		userPerm, resourceAccess, err = c.permCache.GetUserPermission(ctx, projectID, userID)
+		perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
 		if err != nil {
 			// log the error, but don't stop
 			c.logger.With("err", err).Error("FetchUserPermission failed to query the permCache")
 		}
-	}
-
-	// Ask quotacontrol server via client
-	if userPerm == nil {
-		userPerm, resourceAccess, err = c.quotaClient.GetUserPermission(ctx, projectID, userID)
-		if err != nil {
-			return userPerm, resourceAccess, err
+		if perm != nil {
+			return perm, access, nil
 		}
 	}
 
-	// Check if userPerm is still nil, in which case return unauthorized
-	if userPerm == nil {
-		v := proto.UserPermission_UNAUTHORIZED
-		return &v, resourceAccess, nil
+	// Ask quotacontrol server via client
+	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	// if userPerm is still nil, return unauthorized
+	if perm == nil {
+		perm = proto.Ptr(proto.UserPermission_UNAUTHORIZED)
 	}
 
-	return userPerm, resourceAccess, nil
+	return perm, access, nil
 }
 
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
