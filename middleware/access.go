@@ -23,7 +23,7 @@ type Client interface {
 	FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
-	FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess)
+	FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
@@ -110,8 +110,12 @@ func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 					return
 				}
 
-				// if we get nil permission
-				if perm, _ := client.FetchPermission(ctx, projectID, getAccount(ctx), true); perm != nil && !perm.CanAccess(proto.UserPermission_READ) {
+				perm, _, err := client.FetchPermission(ctx, projectID, getAccount(ctx), true)
+				if err != nil {
+					proto.RespondWithError(w, err)
+					return
+				}
+				if !perm.CanAccess(proto.UserPermission_READ) {
 					proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 					return
 				}
@@ -220,14 +224,8 @@ func EnsurePermission(client Client, minPermission proto.UserPermission) func(ne
 				return
 			}
 
-			perm, _ := client.FetchPermission(ctx, q.GetProjectID(), getAccount(ctx), true)
-			// if we can't find the permission, we assume the user has no access
-			if perm == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			if !perm.CanAccess(minPermission) {
+			perm, _, err := client.FetchPermission(ctx, q.GetProjectID(), getAccount(ctx), true)
+			if err != nil || !perm.CanAccess(minPermission) {
 				proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 				return
 			}
