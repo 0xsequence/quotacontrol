@@ -186,12 +186,17 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 }
 
 func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error) {
+	logger := c.logger.With(
+		slog.String("op", "spend_quota"),
+		slog.Uint64("project_id", projectID),
+		slog.String("user_id", userID),
+	)
 	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.
 	if useCache {
 		perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
 		if err != nil {
 			// log the error, but don't stop
-			c.logger.With("err", err).Error("FetchUserPermission failed to query the permCache")
+			logger.Error("unexpected cache error", slog.Any("err", err))
 		}
 		if perm != nil {
 			return perm, access, nil
@@ -201,6 +206,7 @@ func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, user
 	// Ask quotacontrol server via client
 	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
+		logger.Error("unexpected client error", slog.Any("err", err))
 		return nil, nil, err
 	}
 	// if userPerm is still nil, return unauthorized
