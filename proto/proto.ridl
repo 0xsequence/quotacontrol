@@ -102,6 +102,7 @@ error 1007 MaxAccessKeys     "Access keys limit reached"                        
 error 1008 NoDefaultKey      "No default access key found"                               HTTP 403
 error 1009 AtLeastOneKey     "There should be at least one active accessKey per project" HTTP 403
 error 1010 AccessKeyMismatch "Access key does not belong to the project"                 HTTP 403
+error 1011 ProjectNotFound   "Project not found"                                         HTTP 401
 
 service QuotaControl
   # Project

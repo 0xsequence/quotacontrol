@@ -101,12 +101,12 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 	// fetch access quota
 	quota, err := c.quotaCache.GetProjectQuota(ctx, projectID)
 	if err != nil {
-		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
+		if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
 			logger.Warn("unexpected cache error", slog.Any("err", err))
 			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetProjectQuota(ctx, projectID, now); err != nil {
-			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
+			if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
 				logger.Warn("unexpected client error", slog.Any("err", err))
 				return nil, nil
 			}
