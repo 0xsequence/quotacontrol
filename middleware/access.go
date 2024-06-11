@@ -23,7 +23,7 @@ type Client interface {
 	FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
-	FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error)
+	FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
@@ -109,11 +109,18 @@ func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 					proto.RespondWithError(w, err)
 					return
 				}
+
+				// if we get nil permission
+				if perm, _ := client.FetchPermission(ctx, projectID, getAccount(ctx), true); perm != nil && !perm.CanAccess(proto.UserPermission_READ) {
+					proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+					return
+				}
+
 				quota = q
 			}
 
 			// check if we have an access key
-			if accessKey := getAccessKey(ctx); accessKey != "" {
+			if accessKey := GetAccessKey(ctx); accessKey != "" {
 				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 				if err != nil {
 					proto.RespondWithError(w, err)
@@ -213,13 +220,14 @@ func EnsurePermission(client Client, minPermission proto.UserPermission) func(ne
 				return
 			}
 
-			perm, _, err := client.FetchUserPermission(ctx, q.GetProjectID(), getAccount(ctx), true)
-			if err != nil {
-				proto.RespondWithError(w, err)
+			perm, _ := client.FetchPermission(ctx, q.GetProjectID(), getAccount(ctx), true)
+			// if we can't find the permission, we assume the user has no access
+			if perm == nil {
+				next.ServeHTTP(w, r)
 				return
 			}
 
-			if perm == nil || *perm < minPermission {
+			if !perm.CanAccess(minPermission) {
 				proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 				return
 			}

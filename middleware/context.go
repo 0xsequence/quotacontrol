@@ -32,8 +32,8 @@ func WithAccessKey(ctx context.Context, accessKey string) context.Context {
 	return context.WithValue(ctx, ctxKeyAccessKey, accessKey)
 }
 
-// getAccessKey returns the access key from the context.
-func getAccessKey(ctx context.Context) string {
+// GetAccessKey returns the access key from the context.
+func GetAccessKey(ctx context.Context) string {
 	v, ok := ctx.Value(ctxKeyAccessKey).(string)
 	if !ok {
 		return ""

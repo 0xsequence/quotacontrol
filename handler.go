@@ -34,6 +34,7 @@ type CycleStore interface {
 	GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error)
 }
 
+// PermissionStore is the interface that wraps the GetUserPermission method.
 type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error)
 }
@@ -472,14 +473,13 @@ func (h handler) DisableAccessKey(ctx context.Context, accessKey string) (bool, 
 func (h handler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
 	perm, access, err := h.store.PermissionStore.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
-		return perm, access, proto.ErrUnauthorizedUser
-	}
-	if perm != nil && *perm == proto.UserPermission_UNAUTHORIZED {
-		return perm, access, proto.ErrUnauthorizedUser
+		return nil, nil, proto.ErrUnauthorizedUser
 	}
 
-	if err := h.cache.PermissionCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
-		h.log.With("err", err).Error("quotacontrol: failed to set user perm in cache")
+	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
+		if err := h.cache.PermissionCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
+			h.log.With("err", err).Error("quotacontrol: failed to set user perm in cache")
+		}
 	}
 
 	return perm, access, nil

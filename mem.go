@@ -166,12 +166,13 @@ func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string) error {
 func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
 	m.Lock()
 	defer m.Unlock()
-	if m.permissions[projectID] == nil {
-		return nil, nil, proto.ErrUnauthorizedUser
-	}
-	p, ok := m.permissions[projectID][userID]
+	users, ok := m.permissions[projectID]
 	if !ok {
-		return nil, nil, proto.ErrUnauthorizedUser
+		return proto.Ptr(proto.UserPermission_UNAUTHORIZED), nil, nil
+	}
+	p, ok := users[userID]
+	if !ok {
+		return proto.Ptr(proto.UserPermission_UNAUTHORIZED), nil, nil
 	}
 	return &p.Permission, &p.Access, nil
 }

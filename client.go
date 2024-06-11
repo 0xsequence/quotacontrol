@@ -185,7 +185,9 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	return 0, nil
 }
 
-func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error) {
+// FetchPermission fetches the user permission from cache or from the quota server.
+// If an error occurs, it returns nil.
+func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess) {
 	logger := c.logger.With(
 		slog.String("op", "spend_quota"),
 		slog.Uint64("project_id", projectID),
@@ -199,7 +201,7 @@ func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, user
 			logger.Error("unexpected cache error", slog.Any("err", err))
 		}
 		if perm != nil {
-			return perm, access, nil
+			return perm, access
 		}
 	}
 
@@ -207,14 +209,8 @@ func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, user
 	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
 		logger.Error("unexpected client error", slog.Any("err", err))
-		return nil, nil, err
 	}
-	// if userPerm is still nil, return unauthorized
-	if perm == nil {
-		perm = proto.Ptr(proto.UserPermission_UNAUTHORIZED)
-	}
-
-	return perm, access, nil
+	return perm, access
 }
 
 func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {

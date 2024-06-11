@@ -207,3 +207,10 @@ func (c *Cycle) Advance(now time.Time) {
 		c.End = c.End.AddDate(0, 1, 0)
 	}
 }
+
+func (u *UserPermission) CanAccess(perm UserPermission) bool {
+	if u == nil {
+		return false
+	}
+	return *u >= perm
+}

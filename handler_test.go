@@ -313,6 +313,7 @@ func TestJWT(t *testing.T) {
 	auth := jwtauth.New("HS256", []byte(secret), nil)
 
 	project := uint64(7)
+	account := "account"
 	key := proto.GenerateAccessKey(project)
 	service := proto.Service_Indexer
 
@@ -344,12 +345,18 @@ func TestJWT(t *testing.T) {
 	}
 	server.store.SetAccessLimit(ctx, project, &limit)
 
-	_, token, err := auth.Encode(map[string]any{"project": project})
+	_, token, err := auth.Encode(map[string]any{"project": project, "account": account})
 	require.NoError(t, err)
 
 	var expectedHits int64
 
-	t.Run("TokenOnly", func(t *testing.T) {
+	t.Run("UnauthorizedUser", func(t *testing.T) {
+		ok, err := executeRequest(ctx, r, "", token)
+		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
+		assert.False(t, ok)
+	})
+	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: project})
+	t.Run("AuthorizedUser", func(t *testing.T) {
 		ok, err := executeRequest(ctx, r, "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
