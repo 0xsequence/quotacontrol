@@ -21,7 +21,7 @@ func TestRateLimiter(t *testing.T) {
 			PublicRPM: 10,
 			ErrorMsg:  _CustomErrorMessage,
 		},
-	}, nil)
+	})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

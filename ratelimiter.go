@@ -9,7 +9,7 @@ import (
 	httprateredis "github.com/go-chi/httprate-redis"
 )
 
-func RateLimiter(cfg Config, keyFn middleware.RateLimitFunc) func(next http.Handler) http.Handler {
+func RateLimiter(cfg Config) func(next http.Handler) http.Handler {
 	// Short-cut the middleware if the rate limiter is disabled
 	if !cfg.RateLimiter.Enabled {
 		return func(next http.Handler) http.Handler {
@@ -26,6 +26,10 @@ func RateLimiter(cfg Config, keyFn middleware.RateLimitFunc) func(next http.Hand
 	if cfg.RateLimiter.AccountRPM != 0 {
 		accountRPM = cfg.RateLimiter.AccountRPM
 	}
+	serviceRPM := 0
+	if cfg.RateLimiter.ServiceRPM != 0 {
+		serviceRPM = cfg.RateLimiter.ServiceRPM
+	}
 
 	var counter httprate.LimitCounter
 	if cfg.Redis.Enabled {
@@ -37,5 +41,5 @@ func RateLimiter(cfg Config, keyFn middleware.RateLimitFunc) func(next http.Hand
 		limitErr.Message = cfg.RateLimiter.ErrorMsg
 	}
 
-	return middleware.RateLimit(counter, defaultRPM, accountRPM, keyFn, limitErr)
+	return middleware.RateLimit(counter, defaultRPM, accountRPM, serviceRPM, limitErr)
 }

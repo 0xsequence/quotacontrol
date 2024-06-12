@@ -19,16 +19,9 @@ func (f RateLimitFunc) KeyFunc(r *http.Request) (string, error) {
 	return key, nil
 }
 
-func RateLimit(limitCounter httprate.LimitCounter, defaultRPM, acccountRPM int, keyFn RateLimitFunc, errLimit error) func(next http.Handler) http.Handler {
+func RateLimit(limitCounter httprate.LimitCounter, defaultRPM, acccountRPM, serviceRPM int, errLimit error) func(next http.Handler) http.Handler {
 	if errLimit == nil {
 		errLimit = proto.ErrLimitExceeded
-	}
-
-	if keyFn == nil {
-		keyFn = func(r *http.Request) (key string, rpm *int) {
-			key, _ = httprate.KeyByRealIP(r)
-			return key, nil
-		}
 	}
 
 	fn := RateLimitFunc(func(r *http.Request) (key string, rpm *int) {
@@ -38,7 +31,11 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM, acccountRPM int, 
 		if account := GetAccount(r.Context()); account != "" {
 			return AccountRateKey(account), proto.Ptr(acccountRPM)
 		}
-		return keyFn(r)
+		if service := GetService(r.Context()); service != "" {
+			return "", proto.Ptr(0)
+		}
+		key, _ = httprate.KeyByRealIP(r)
+		return key, nil
 	})
 
 	options := []httprate.Option{

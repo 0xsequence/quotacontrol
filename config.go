@@ -46,5 +46,6 @@ type RateLimiterConfig struct {
 	Enabled    bool   `toml:"enabled"`
 	PublicRPM  int    `toml:"public_rpm"`
 	AccountRPM int    `toml:"account_rpm"`
+	ServiceRPM int    `toml:"service_rpm"`
 	ErrorMsg   string `toml:"error_message"`
 }
