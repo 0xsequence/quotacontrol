@@ -1,4 +1,4 @@
-package quotacontrol
+package middleware_test
 
 import (
 	"encoding/binary"
@@ -9,19 +9,19 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/cachestore/redis"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRateLimiter(t *testing.T) {
 	const _CustomErrorMessage = "Custom error message"
-	rl := RateLimiter(Config{
-		RateLimiter: RateLimiterConfig{
-			Enabled:   true,
-			PublicRPM: 10,
-			ErrorMsg:  _CustomErrorMessage,
-		},
-	})
+	rl := middleware.RateLimit(middleware.RLConfig{
+		Enabled:   true,
+		PublicRPM: 10,
+		ErrorMsg:  _CustomErrorMessage,
+	}, redis.Config{})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

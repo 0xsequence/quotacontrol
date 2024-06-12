@@ -48,7 +48,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		middleware.VerifyQuota(client),
 		addCredits(2).Middleware,
 		addCredits(-1).Middleware,
-		RateLimiter(cfg),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis),
 		middleware.SpendUsage(client),
 	)
 
