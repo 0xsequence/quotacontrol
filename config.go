@@ -24,6 +24,7 @@ type Config struct {
 	UpdateFreq    Duration          `toml:"update_freq"`
 	RateLimiter   RateLimiterConfig `toml:"rate_limiter"`
 	Redis         redis.Config      `toml:"redis"`
+	DefaultUsage  *int64            `toml:"default_usage"`
 	LRUSize       int               `toml:"lru_size"`
 	LRUExpiration Duration          `toml:"lru_expiration"`
 
@@ -43,6 +44,7 @@ func (cfg Config) RateLimitCfg() *httprateredis.Config {
 
 type RateLimiterConfig struct {
 	Enabled    bool   `toml:"enabled"`
-	DefaultRPM int    `toml:"default_rpm"`
+	PublicRPM  int    `toml:"public_rpm"`
+	AccountRPM int    `toml:"account_rpm"`
 	ErrorMsg   string `toml:"error_message"`
 }

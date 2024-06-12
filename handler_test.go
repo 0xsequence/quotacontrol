@@ -44,7 +44,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.SetKey(nil),
+		middleware.Credentials(nil),
 		middleware.VerifyQuota(client),
 		addCredits(2).Middleware,
 		addCredits(-1).Middleware,
@@ -159,9 +159,9 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		ctx := middleware.WithTime(context.Background(), now)
 
-		for i, max := 0, cfg.RateLimiter.DefaultRPM*2; i < max; i++ {
+		for i, max := 0, cfg.RateLimiter.PublicRPM*2; i < max; i++ {
 			ok, err := executeRequest(ctx, r, "", "")
-			if i < cfg.RateLimiter.DefaultRPM {
+			if i < cfg.RateLimiter.PublicRPM {
 				assert.NoError(t, err, i)
 				assert.True(t, ok, i)
 			} else {
@@ -326,7 +326,7 @@ func TestJWT(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(
 		jwtauth.Verifier(auth),
-		middleware.SetKey(auth),
+		middleware.Credentials(auth),
 		middleware.VerifyQuota(client),
 		addCredits(1).Middleware,
 		middleware.EnsureUsage(client),
@@ -400,7 +400,7 @@ func TestJWTAccess(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(
 		jwtauth.Verifier(auth),
-		middleware.SetKey(auth),
+		middleware.Credentials(auth),
 		middleware.VerifyQuota(client),
 		middleware.EnsurePermission(client, UserPermission_READ_WRITE),
 	)

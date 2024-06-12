@@ -18,9 +18,13 @@ func RateLimiter(cfg Config, keyFn middleware.RateLimitFunc) func(next http.Hand
 	}
 
 	// httprate limit counter
-	rpm := 120
-	if cfg.RateLimiter.DefaultRPM != 0 {
-		rpm = cfg.RateLimiter.DefaultRPM
+	defaultRPM := 120
+	if cfg.RateLimiter.PublicRPM != 0 {
+		defaultRPM = cfg.RateLimiter.PublicRPM
+	}
+	accountRPM := 4000
+	if cfg.RateLimiter.AccountRPM != 0 {
+		accountRPM = cfg.RateLimiter.AccountRPM
 	}
 
 	var counter httprate.LimitCounter
@@ -33,5 +37,5 @@ func RateLimiter(cfg Config, keyFn middleware.RateLimitFunc) func(next http.Hand
 		limitErr.Message = cfg.RateLimiter.ErrorMsg
 	}
 
-	return middleware.RateLimit(counter, rpm, keyFn, limitErr)
+	return middleware.RateLimit(counter, defaultRPM, accountRPM, keyFn, limitErr)
 }

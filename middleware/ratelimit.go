@@ -14,7 +14,12 @@ const _RateLimitWindow = 1 * time.Minute
 // RateLimitFunc is a function that returns the rate limit key and rate per minute for a given request.
 type RateLimitFunc func(r *http.Request) (key string, rpm *int)
 
-func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn RateLimitFunc, errLimit error) func(next http.Handler) http.Handler {
+func (f RateLimitFunc) KeyFunc(r *http.Request) (string, error) {
+	key, _ := f(r)
+	return key, nil
+}
+
+func RateLimit(limitCounter httprate.LimitCounter, defaultRPM, acccountRPM int, keyFn RateLimitFunc, errLimit error) func(next http.Handler) http.Handler {
 	if errLimit == nil {
 		errLimit = proto.ErrLimitExceeded
 	}
@@ -26,12 +31,15 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn RateLim
 		}
 	}
 
-	fn := func(r *http.Request) (key string, rpm *int) {
+	fn := RateLimitFunc(func(r *http.Request) (key string, rpm *int) {
 		if q := GetAccessQuota(r.Context()); q != nil {
 			return ProjectRateKey(q.GetProjectID()), proto.Ptr(int(q.Limit.RateLimit))
 		}
+		if account := GetAccount(r.Context()); account != "" {
+			return AccountRateKey(account), proto.Ptr(acccountRPM)
+		}
 		return keyFn(r)
-	}
+	})
 
 	options := []httprate.Option{
 		httprate.WithLimitCounter(limitCounter),
@@ -39,8 +47,7 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn RateLim
 			if q := GetAccessQuota(r.Context()); q != nil {
 				return ProjectRateKey(q.GetProjectID()), nil
 			}
-			key, _ := fn(r)
-			return key, nil
+			return fn.KeyFunc(r)
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			proto.RespondWithError(w, errLimit)
@@ -69,6 +76,10 @@ func RateLimit(limitCounter httprate.LimitCounter, defaultRPM int, keyFn RateLim
 
 func ProjectRateKey(projectID uint64) string {
 	return fmt.Sprintf("rl:project:%d", projectID)
+}
+
+func AccountRateKey(account string) string {
+	return fmt.Sprintf("rl:account:%s", account)
 }
 
 type RateLimiterCfg interface {

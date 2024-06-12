@@ -31,8 +31,8 @@ func newConfig() quotacontrol.Config {
 			Enabled: true,
 		},
 		RateLimiter: quotacontrol.RateLimiterConfig{
-			Enabled:    true,
-			DefaultRPM: 10,
+			Enabled:   true,
+			PublicRPM: 10,
 		},
 	}
 }

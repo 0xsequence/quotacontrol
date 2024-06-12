@@ -17,9 +17,9 @@ func TestRateLimiter(t *testing.T) {
 	const _CustomErrorMessage = "Custom error message"
 	rl := RateLimiter(Config{
 		RateLimiter: RateLimiterConfig{
-			Enabled:    true,
-			DefaultRPM: 10,
-			ErrorMsg:   _CustomErrorMessage,
+			Enabled:   true,
+			PublicRPM: 10,
+			ErrorMsg:  _CustomErrorMessage,
 		},
 	}, nil)
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))

@@ -1,10 +1,7 @@
 package middleware
 
 import (
-	"context"
-	"errors"
 	"net/http"
-	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
 
@@ -12,25 +9,10 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-const (
-	HeaderAccessKey = "X-Access-Key"
-	HeaderOrigin    = "Origin"
-)
-
-// Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
-type Client interface {
-	IsEnabled() bool
-	FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error)
-	FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error)
-	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
-	FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error)
-	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
-}
-
-// SetKey gets the access key header and sets it in the context.
+// Credentials gets the credentials from the JWT or the Access key.
 // It uses JWT from `jwtauth.Verifier` to extract the project claim and sets it in the context as well.
 // When both are present, it checks project mismatch between the access key and the JWT token.
-func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
+func Credentials(ja *jwtauth.JWTAuth, accessKeyFuncs ...func(*http.Request) string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var (
@@ -39,23 +21,29 @@ func SetKey(ja *jwtauth.JWTAuth) func(next http.Handler) http.Handler {
 				accessKey = r.Header.Get(HeaderAccessKey)
 			)
 
+			// use additional access key functions to extract the access key
+			if accessKey == "" {
+				for _, f := range accessKeyFuncs {
+					accessKey = f(r)
+					if accessKey != "" {
+						break
+					}
+				}
+			}
+
 			if accessKey != "" {
 				projectID, _ = proto.GetProjectID(accessKey)
 				ctx = WithAccessKey(ctx, accessKey)
 			}
 
-			if ja == nil {
-				next.ServeHTTP(w, r.WithContext(ctx))
+			token, claims, err := getJWT(ctx)
+			if err != nil {
+				proto.RespondWithError(w, err)
 				return
 			}
 
-			token, claims, err := jwtauth.FromContext(ctx)
-			if err != nil {
-				if errors.Is(err, jwtauth.ErrNoTokenFound) {
-					next.ServeHTTP(w, r.WithContext(ctx))
-					return
-				}
-				proto.RespondWithError(w, err)
+			if token == nil {
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 
@@ -110,7 +98,7 @@ func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 					return
 				}
 
-				perm, _, err := client.FetchPermission(ctx, projectID, getAccount(ctx), true)
+				perm, _, err := client.FetchPermission(ctx, projectID, GetAccount(ctx), true)
 				if err != nil {
 					proto.RespondWithError(w, err)
 					return
@@ -154,7 +142,10 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 				return
 			}
 
-			cu := GetComputeUnits(ctx)
+			cu, ok := getComputeUnits(ctx)
+			if !ok {
+				cu = client.GetDefaultUsage()
+			}
 			if cu == 0 {
 				next.ServeHTTP(w, r)
 				return
@@ -185,9 +176,18 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 			}
 
 			ctx := r.Context()
-			quota, cu := GetAccessQuota(ctx), GetComputeUnits(ctx)
 
-			if quota == nil || cu == 0 {
+			quota := GetAccessQuota(ctx)
+			if quota == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			cu, ok := getComputeUnits(ctx)
+			if !ok {
+				cu = client.GetDefaultUsage()
+			}
+			if cu == 0 {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -224,7 +224,7 @@ func EnsurePermission(client Client, minPermission proto.UserPermission) func(ne
 				return
 			}
 
-			perm, _, err := client.FetchPermission(ctx, q.GetProjectID(), getAccount(ctx), true)
+			perm, _, err := client.FetchPermission(ctx, q.GetProjectID(), GetAccount(ctx), true)
 			if err != nil || !perm.CanAccess(minPermission) {
 				proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 				return

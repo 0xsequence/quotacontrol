@@ -2,9 +2,12 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 var DefaultCreditsUsagePerCall int64 = 1
@@ -18,14 +21,58 @@ func (k *contextKey) String() string {
 }
 
 var (
+	ctxKeySessionType  = &contextKey{"SessionType"}
+	ctxKeyAccount      = &contextKey{"Account"}
+	ctxKeyService      = &contextKey{"Service"}
 	ctxKeyAccessKey    = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
 	ctxKeyProjectID    = &contextKey{"ProjectID"}
-	ctxKeyAccount      = &contextKey{"Account"}
 	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
 	ctxKeyTime         = &contextKey{"Time"}
 	ctxKeySpending     = &contextKey{"Spending"}
 )
+
+// withSessionType adds the access key to the context.
+func withSessionType(ctx context.Context, accessType proto.SessionType) context.Context {
+	return context.WithValue(ctx, ctxKeySessionType, accessType)
+}
+
+// GetSessionType returns the access key from the context.
+func GetSessionType(ctx context.Context) proto.SessionType {
+	v, ok := ctx.Value(ctxKeySessionType).(proto.SessionType)
+	if !ok {
+		return proto.SessionType_Anonymous
+	}
+	return v
+}
+
+// WithAccount adds the account to the context.
+func withAccount(ctx context.Context, account string) context.Context {
+	return context.WithValue(ctx, ctxKeyAccount, account)
+}
+
+// GetAccount returns the account from the context.
+func GetAccount(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyAccount).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// withService adds the service to the context.
+func withService(ctx context.Context, service string) context.Context {
+	return context.WithValue(ctx, ctxKeyService, service)
+}
+
+// GetService returns the service from the context.
+func GetService(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyService).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
 
 // WithAccessKey adds the access key to the context.
 func WithAccessKey(ctx context.Context, accessKey string) context.Context {
@@ -73,32 +120,15 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 	return accessQuota.GetProjectID(), accessQuota.IsActive()
 }
 
-// WithAccount adds the account to the context.
-func withAccount(ctx context.Context, account string) context.Context {
-	return context.WithValue(ctx, ctxKeyAccount, account)
-}
-
-// getAccount returns the account from the context.
-func getAccount(ctx context.Context) string {
-	v, ok := ctx.Value(ctxKeyAccount).(string)
-	if !ok {
-		return ""
-	}
-	return v
-}
-
 // WithComputeUnits sets the compute units to the context.
 func WithComputeUnits(ctx context.Context, cu int64) context.Context {
 	return context.WithValue(ctx, ctxKeyComputeUnits, cu)
 }
 
-// GetComputeUnits returns the compute units from the context. If the compute units is not set, it returns 1.
-func GetComputeUnits(ctx context.Context) int64 {
+// getComputeUnits returns the compute units from the context. If the compute units is not set, it returns 1.
+func getComputeUnits(ctx context.Context) (int64, bool) {
 	v, ok := ctx.Value(ctxKeyComputeUnits).(int64)
-	if !ok {
-		return DefaultCreditsUsagePerCall
-	}
-	return v
+	return v, ok
 }
 
 // AddComputeUnits adds the compute units to the context.
@@ -130,4 +160,18 @@ func withSpending(ctx context.Context) context.Context {
 func HasSpending(ctx context.Context) bool {
 	_, ok := ctx.Value(ctxKeySpending).(struct{})
 	return ok
+}
+
+func getJWT(ctx context.Context) (jwt.Token, map[string]any, error) {
+	token, claims, err := jwtauth.FromContext(ctx)
+	if err != nil {
+		if errors.Is(err, jwtauth.ErrExpired) {
+			return nil, nil, proto.ErrSessionExpired
+		}
+		if errors.Is(err, jwtauth.ErrNoTokenFound) {
+			return nil, nil, nil
+		}
+		return nil, nil, proto.ErrUnauthorized
+	}
+	return token, claims, err
 }

@@ -92,6 +92,14 @@ func (c *Client) IsDangerMode() bool {
 	return c != nil && c.cfg.DangerMode
 }
 
+// GetDefaultUsage returns the default usage value.
+func (c *Client) GetDefaultUsage() int64 {
+	if c.cfg.DefaultUsage != nil {
+		return *c.cfg.DefaultUsage
+	}
+	return 1
+}
+
 // FetchProjectQuota fetches the project quota from cache or from the quota server.
 func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	logger := c.logger.With(
