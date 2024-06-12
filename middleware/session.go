@@ -82,3 +82,21 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+func AccessControl(acl ACL) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			req := newRequest(r.URL.Path)
+			if req == nil {
+				proto.RespondWithError(w, proto.ErrUnauthorized.WithCause(errInvalidRPC))
+				return
+			}
+			if err := acl.authorize(req, GetSessionType(r.Context())); err != nil {
+				proto.RespondWithError(w, proto.ErrUnauthorized.WithCause(err))
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

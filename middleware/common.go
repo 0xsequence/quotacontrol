@@ -2,9 +2,16 @@ package middleware
 
 import (
 	"context"
+	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+)
+
+var (
+	errInvalidRPC = errors.New("invalid rpc method called")
 )
 
 const (
@@ -21,4 +28,53 @@ type Client interface {
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
 	FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
+}
+
+type ACL map[string]map[string][]proto.SessionType
+
+func (acl ACL) authorize(r *rcpRequest, sessionType proto.SessionType) error {
+	if r.Package != "rpc" {
+		return proto.ErrUnauthorized
+	}
+
+	serviceACL, ok := acl[r.Service]
+	if !ok {
+		return proto.ErrUnauthorized
+	}
+
+	// get method's ACL
+	perms, ok := serviceACL[r.Method]
+	if !ok {
+		// unable to find method in rules list. deny.
+		return proto.ErrUnauthorized
+	}
+
+	// authorize using methods's ACL
+	if !slices.Contains(perms, sessionType) {
+		return proto.ErrUnauthorized
+	}
+
+	return nil
+}
+
+type rcpRequest struct {
+	Package string
+	Service string
+	Method  string
+}
+
+func newRequest(path string) *rcpRequest {
+	parts := strings.Split(path, "/")
+	if len(parts) != 4 {
+		return nil
+	}
+	t := rcpRequest{
+		Package: parts[1],
+		Service: parts[2],
+		Method:  parts[3],
+	}
+	if t.Package == "" || t.Service == "" || t.Method == "" {
+		return nil
+	}
+	return &t
 }
