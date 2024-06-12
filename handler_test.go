@@ -44,7 +44,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Credentials(nil),
+		middleware.SetCredentials(nil),
 		middleware.VerifyQuota(client),
 		addCredits(2).Middleware,
 		addCredits(-1).Middleware,
@@ -326,7 +326,7 @@ func TestJWT(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(
 		jwtauth.Verifier(auth),
-		middleware.Credentials(auth),
+		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
 		addCredits(1).Middleware,
 		middleware.EnsureUsage(client),
@@ -400,7 +400,7 @@ func TestJWTAccess(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(
 		jwtauth.Verifier(auth),
-		middleware.Credentials(auth),
+		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
 		middleware.EnsurePermission(client, UserPermission_READ_WRITE),
 	)
