@@ -146,9 +146,9 @@ func (q *testServer) getEvents(projectID uint64) []proto.EventType {
 	return v
 }
 
-func (q *testServer) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+func (q *testServer) NotifyEvent(ctx context.Context, projectID uint64, eventType proto.EventType) (bool, error) {
 	q.Lock()
-	q.notifications[projectID] = append(q.notifications[projectID], *eventType)
+	q.notifications[projectID] = append(q.notifications[projectID], eventType)
 	q.Unlock()
 	return true, nil
 }

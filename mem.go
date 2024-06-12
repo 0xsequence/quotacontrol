@@ -163,18 +163,18 @@ func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string) error {
 	return nil
 }
 
-func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
+func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
 	m.Lock()
 	defer m.Unlock()
 	users, ok := m.permissions[projectID]
 	if !ok {
-		return proto.Ptr(proto.UserPermission_UNAUTHORIZED), nil, nil
+		return proto.UserPermission_UNAUTHORIZED, nil, nil
 	}
 	p, ok := users[userID]
 	if !ok {
-		return proto.Ptr(proto.UserPermission_UNAUTHORIZED), nil, nil
+		return proto.UserPermission_UNAUTHORIZED, nil, nil
 	}
-	return &p.Permission, &p.Access, nil
+	return p.Permission, &p.Access, nil
 }
 
 func (m *MemoryStore) SetUserPermission(ctx context.Context, projectID uint64, userID string, permission proto.UserPermission, access proto.ResourceAccess) error {

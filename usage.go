@@ -11,8 +11,8 @@ import (
 
 // UsageUpdater is an interface that allows to update the usage of a service
 type UsageUpdater interface {
-	UpdateKeyUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
-	UpdateProjectUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error)
+	UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
+	UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error)
 }
 
 func newUsageRecord() usageRecord {
@@ -95,7 +95,7 @@ func (u *usageTracker) GetUpdates() map[time.Time]usageRecord {
 }
 
 // SyncUsage syncs the usage of a service with the UsageUpdater
-func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, service *proto.Service) error {
+func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, service proto.Service) error {
 	u.SyncMutex.Lock()
 	defer u.SyncMutex.Unlock()
 	var errList []error

@@ -36,7 +36,7 @@ type CycleStore interface {
 
 // PermissionStore is the interface that wraps the GetUserPermission method.
 type PermissionStore interface {
-	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error)
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error)
 }
 
 type Cache struct {
@@ -216,15 +216,15 @@ func (h handler) GetAccessQuota(ctx context.Context, accessKey string, now time.
 	return &record, nil
 }
 
-func (h handler) NotifyEvent(ctx context.Context, projectID uint64, eventType *proto.EventType) (bool, error) {
+func (h handler) NotifyEvent(ctx context.Context, projectID uint64, eventType proto.EventType) (bool, error) {
 	return true, nil
 }
 
-func (h handler) UpdateProjectUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error) {
+func (h handler) UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error) {
 	var errs []error
 	m := make(map[uint64]bool, len(usage))
 	for projectID, accessUsage := range usage {
-		err := h.store.UsageStore.UpdateAccessUsage(ctx, projectID, "", *service, now, *accessUsage)
+		err := h.store.UsageStore.UpdateAccessUsage(ctx, projectID, "", service, now, *accessUsage)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%d: %w", projectID, err))
 		}
@@ -236,7 +236,7 @@ func (h handler) UpdateProjectUsage(ctx context.Context, service *proto.Service,
 	return m, nil
 }
 
-func (h handler) UpdateKeyUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+func (h handler) UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for key, u := range usage {
@@ -245,7 +245,7 @@ func (h handler) UpdateKeyUsage(ctx context.Context, service *proto.Service, now
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue
 		}
-		if err = h.store.UsageStore.UpdateAccessUsage(ctx, projectID, key, *service, now, *u); err != nil {
+		if err = h.store.UsageStore.UpdateAccessUsage(ctx, projectID, key, service, now, *u); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 		}
 		m[key] = err == nil
@@ -256,7 +256,7 @@ func (h handler) UpdateKeyUsage(ctx context.Context, service *proto.Service, now
 	return m, nil
 }
 
-func (h handler) UpdateUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+func (h handler) UpdateUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
 	return h.UpdateKeyUsage(ctx, service, now, usage)
 }
 
@@ -470,10 +470,10 @@ func (h handler) DisableAccessKey(ctx context.Context, accessKey string) (bool, 
 	return true, nil
 }
 
-func (h handler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
+func (h handler) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
 	perm, access, err := h.store.PermissionStore.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
-		return nil, nil, proto.ErrUnauthorizedUser
+		return proto.UserPermission_UNAUTHORIZED, nil, proto.ErrUnauthorizedUser
 	}
 
 	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {

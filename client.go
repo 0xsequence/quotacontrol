@@ -195,7 +195,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 
 // FetchPermission fetches the user permission from cache or from the quota server.
 // If an error occurs, it returns nil.
-func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error) {
+func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (proto.UserPermission, *proto.ResourceAccess, error) {
 	logger := c.logger.With(
 		slog.String("op", "spend_quota"),
 		slog.Uint64("project_id", projectID),
@@ -208,7 +208,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID s
 			// log the error, but don't stop
 			logger.Error("unexpected cache error", slog.Any("err", err))
 		}
-		if perm != nil {
+		if perm != proto.UserPermission_UNAUTHORIZED {
 			return perm, access, nil
 		}
 	}
@@ -217,7 +217,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID s
 	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
 		logger.Error("unexpected client error", slog.Any("err", err))
-		return nil, nil, err
+		return proto.UserPermission_UNAUTHORIZED, nil, err
 	}
 	return perm, access, nil
 }
@@ -281,7 +281,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			return false, proto.ErrLimitExceeded
 		}
 		if event != nil {
-			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, event); err != nil {
+			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
 				logger.Error("notify event failed", slog.Any("err", err))
 			}
 		}
@@ -332,7 +332,7 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 	// Start the sync
 	for range c.ticker.C {
-		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
+		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
 			c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 			continue
 		}
@@ -351,7 +351,7 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
-	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
+	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
 		c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 	}
 	c.logger.With("op", "stop").Info("-> quota control: stopped.")

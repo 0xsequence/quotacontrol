@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -38,7 +37,7 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 				originClaim = strings.TrimSuffix(originClaim, "/")
 				originHeader := strings.TrimSuffix(r.Header.Get("Origin"), "/")
 				if originHeader != "" && originHeader != originClaim {
-					proto.RespondWithError(w, fmt.Errorf("invalid origin claim: %w", proto.ErrUnauthorized))
+					proto.RespondWithError(w, proto.ErrUnauthorized.WithCausef("invalid origin claim"))
 					return
 				}
 			}
@@ -88,7 +87,7 @@ func AccessControl(acl ACL) func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			req := newRequest(r.URL.Path)
 			if req == nil {
-				proto.RespondWithError(w, proto.ErrUnauthorized.WithCause(errInvalidRPC))
+				proto.RespondWithError(w, proto.ErrUnauthorized.WithCausef("invalid rpc method called"))
 				return
 			}
 			if err := acl.authorize(req, GetSessionType(r.Context())); err != nil {
