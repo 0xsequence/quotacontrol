@@ -68,7 +68,7 @@ enum EventType: uint16
   - OverMax
 
 enum SessionType: uint16
-  - Anonymous
+  - Public
   - Account
   - AccessKey
   - Project

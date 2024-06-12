@@ -22,7 +22,7 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 				return
 			}
 			if token == nil {
-				ctx = withSessionType(ctx, proto.SessionType_Anonymous)
+				ctx = withSessionType(ctx, proto.SessionType_Public)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}

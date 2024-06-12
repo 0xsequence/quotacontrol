@@ -41,7 +41,7 @@ func withSessionType(ctx context.Context, accessType proto.SessionType) context.
 func GetSessionType(ctx context.Context) proto.SessionType {
 	v, ok := ctx.Value(ctxKeySessionType).(proto.SessionType)
 	if !ok {
-		return proto.SessionType_Anonymous
+		return proto.SessionType_Public
 	}
 	return v
 }
