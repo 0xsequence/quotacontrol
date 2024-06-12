@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"time"
 
@@ -25,31 +24,30 @@ type Client interface {
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error)
 }
 
-type ACL map[string]map[string][]proto.SessionType
+type ServiceConfig[T any] map[string]map[string]T
 
-func (acl ACL) authorize(r *rcpRequest, sessionType proto.SessionType) error {
-	if r.Package != "rpc" {
-		return proto.ErrUnauthorized
+type (
+	ACL  = ServiceConfig[[]proto.SessionType]
+	Cost = ServiceConfig[int64]
+)
+
+func (s ServiceConfig[T]) GetConfig(r *rcpRequest) (v T, ok bool) {
+	if r.Package != "rpc" || s == nil {
+		return v, false
 	}
 
-	serviceACL, ok := acl[r.Service]
+	serviceACL, ok := s[r.Service]
 	if !ok {
-		return proto.ErrUnauthorized
+		return v, false
 	}
 
 	// get method's ACL
-	perms, ok := serviceACL[r.Method]
+	cfg, ok := serviceACL[r.Method]
 	if !ok {
-		// unable to find method in rules list. deny.
-		return proto.ErrUnauthorized
+		return v, false
 	}
 
-	// authorize using methods's ACL
-	if !slices.Contains(perms, sessionType) {
-		return proto.ErrUnauthorized
-	}
-
-	return nil
+	return cfg, true
 }
 
 type rcpRequest struct {
