@@ -55,9 +55,8 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		usageCache: cache,
 		quotaCache: quotaCache,
 		permCache:  PermissionCache(cache),
-		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authClient{
-			client:      http.DefaultClient,
-			bearerToken: cfg.AuthToken,
+		quotaClient: proto.NewQuotaControlClient(cfg.URL, &http.Client{
+			Transport: bearerToken(cfg.AuthToken),
 		}),
 		ticker: ticker,
 		logger: logger,
@@ -365,14 +364,11 @@ func (c *Client) isStopping() bool {
 	return atomic.LoadInt32(&c.running) == 2
 }
 
-type authClient struct {
-	client      *http.Client
-	bearerToken string
-}
+type bearerToken string
 
-func (c *authClient) Do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", c.bearerToken))
-	return c.client.Do(req)
+func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", t))
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 func getQuotaKey(projectID uint64, cycle *proto.Cycle, now time.Time) string {
