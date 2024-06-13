@@ -165,7 +165,7 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	value, err := s.client.IncrBy(ctx, cacheKey, amount).Result()
 	if err != nil {
-		return 0, err
+		return v, err
 	}
 	return value, nil
 }

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/0xsequence/quotacontrol/proto"
 
@@ -123,6 +124,7 @@ func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 
 			if quota != nil {
 				ctx = withAccessQuota(ctx, quota)
+				w.Header().Set(HeaderQuotaLimit, strconv.FormatInt(quota.Limit.FreeMax, 10))
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -155,6 +157,10 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 			if err != nil {
 				proto.RespondWithError(w, err)
 				return
+			}
+			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-usage, 0), 10))
+			if overage := max(usage-quota.Limit.FreeMax, 0); overage > 0 {
+				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 			if usage+cu > quota.Limit.OverMax {
 				proto.RespondWithError(w, proto.ErrLimitExceeded)
@@ -192,10 +198,15 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 				return
 			}
 
-			ok, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
+			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil {
 				proto.RespondWithError(w, err)
 				return
+			}
+
+			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-total, 0), 10))
+			if overage := total - quota.Limit.FreeMax; overage > 0 {
+				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 
 			if ok {

@@ -221,10 +221,10 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID s
 	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (spent bool, total int64, err error) {
 	// quota is nil only on unexpected errors from quota fetch
 	if quota == nil || computeUnits == 0 {
-		return false, nil
+		return false, 0, nil
 	}
 
 	logger := c.logger.With(
@@ -245,7 +245,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			// limit exceeded
 			if errors.Is(err, proto.ErrLimitExceeded) {
 				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
-				return false, proto.ErrLimitExceeded
+				return false, total, proto.ErrLimitExceeded
 			}
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
@@ -254,7 +254,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("err", err))
 					}
-					return false, nil
+					return false, 0, nil
 				}
 				continue
 			}
@@ -266,7 +266,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			}
 
 			logger.Error("unexpected cache error", slog.Any("err", err))
-			return false, err
+			return false, 0, err
 
 		}
 
@@ -277,17 +277,17 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			c.usage.AddKeyUsage(accessKey, now, usage)
 		}
 		if usage.LimitedCompute != 0 {
-			return false, proto.ErrLimitExceeded
+			return false, total, proto.ErrLimitExceeded
 		}
 		if event != nil {
 			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
 				logger.Error("notify event failed", slog.Any("err", err))
 			}
 		}
-		return true, nil
+		return true, total, nil
 	}
 	logger.Error("operation timed out")
-	return false, nil
+	return false, 0, nil
 }
 
 func (c *Client) ClearQuotaCacheByProjectID(ctx context.Context, projectID uint64) error {
