@@ -31,11 +31,11 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
 	}
 
-	redisExp := time.Hour
+	redisExpiration := time.Hour
 	if cfg.Redis.KeyTTL > 0 {
-		redisExp = cfg.Redis.KeyTTL
+		redisExpiration = cfg.Redis.KeyTTL
 	}
-	cache := NewRedisCache(redisClient, redisExp)
+	cache := NewRedisCache(redisClient, redisExpiration)
 
 	quotaCache := QuotaCache(cache)
 	if cfg.LRUSize > 0 {
