@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -195,7 +196,7 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 			}
 
 			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
-			if err != nil {
+			if err != nil && !errors.Is(err, proto.ErrLimitExceeded) {
 				proto.RespondWithError(w, err)
 				return
 			}
@@ -203,6 +204,11 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-total, 0), 10))
 			if overage := total - quota.Limit.FreeMax; overage > 0 {
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
+			}
+
+			if errors.Is(err, proto.ErrLimitExceeded) {
+				proto.RespondWithError(w, err)
+				return
 			}
 
 			if ok {

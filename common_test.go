@@ -178,10 +178,10 @@ func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func executeRequest(ctx context.Context, handler http.Handler, accessKey, jwt string) (bool, error) {
+func executeRequest(ctx context.Context, handler http.Handler, accessKey, jwt string) (bool, http.Header, error) {
 	req, err := http.NewRequest("POST", "/", nil)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	req.Header.Set("X-Real-IP", "127.0.0.1")
 	if accessKey != "" {
@@ -197,10 +197,10 @@ func executeRequest(ctx context.Context, handler http.Handler, accessKey, jwt st
 	if status := rr.Result().StatusCode; status < http.StatusOK || status >= http.StatusBadRequest {
 		w := proto.WebRPCError{}
 		json.Unmarshal(rr.Body.Bytes(), &w)
-		return false, w
+		return false, rr.Header(), w
 	}
 
-	return true, nil
+	return true, rr.Header(), nil
 }
 
 type addCredits int64
