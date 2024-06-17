@@ -41,7 +41,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		quotaCache = NewLRU(quotaCache, cfg.LRUSize, lruExpiration)
 	}
 
-	ticker := (*time.Ticker)(nil)
+	var ticker *time.Ticker
 	if cfg.UpdateFreq.Duration > 0 {
 		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
 	}
@@ -101,13 +101,13 @@ func (c *Client) GetDefaultUsage() int64 {
 
 // FetchProjectQuota fetches the project quota from cache or from the quota server.
 func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
-	logger := c.logger.With(
-		slog.String("op", "fetch_project_quota"),
-		slog.Uint64("project_id", projectID),
-	)
 	// fetch access quota
 	quota, err := c.quotaCache.GetProjectQuota(ctx, projectID)
 	if err != nil {
+		logger := c.logger.With(
+			slog.String("op", "fetch_project_quota"),
+			slog.Uint64("project_id", projectID),
+		)
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
 			logger.Warn("unexpected cache error", slog.Any("err", err))
 			return nil, nil
@@ -161,7 +161,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 		slog.String("access_key", quota.AccessKey.AccessKey),
 	)
 
-	for i := time.Duration(0); i < 3; i++ {
+	for i := range 3 {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
 		if err != nil {
 			// ping the server to prepare usage
@@ -178,7 +178,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 
 			// wait for cache to be ready
 			if errors.Is(err, ErrCacheWait) {
-				time.Sleep(time.Millisecond * 100 * (i + 1))
+				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
 				continue
 			}
 
@@ -239,7 +239,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 	// spend compute units
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 
-	for i := time.Duration(0); i < 3; i++ {
+	for i := range 3 {
 		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.OverMax)
 		if err != nil {
 			// limit exceeded
@@ -261,7 +261,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 
 			// wait for cache to be ready
 			if errors.Is(err, ErrCacheWait) {
-				time.Sleep(time.Millisecond * 100 * (i + 1))
+				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
 				continue
 			}
 

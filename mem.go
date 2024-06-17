@@ -55,7 +55,11 @@ func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycl
 
 func (m *MemoryStore) SetAccessCycle(ctx context.Context, projectID uint64, cycle *proto.Cycle) error {
 	m.Lock()
-	m.cycles[projectID] = *cycle
+	if cycle != nil {
+		m.cycles[projectID] = *cycle
+	} else {
+		delete(m.cycles, projectID)
+	}
 	m.Unlock()
 	return nil
 }

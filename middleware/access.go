@@ -16,12 +16,7 @@ import (
 func SetCredentials(ja *jwtauth.JWTAuth, accessKeyFuncs ...func(*http.Request) string) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var (
-				ctx       = r.Context()
-				projectID = uint64(0)
-				accessKey = r.Header.Get(HeaderAccessKey)
-			)
-
+			accessKey := r.Header.Get(HeaderAccessKey)
 			// use additional access key functions to extract the access key
 			if accessKey == "" {
 				for _, f := range accessKeyFuncs {
@@ -32,6 +27,9 @@ func SetCredentials(ja *jwtauth.JWTAuth, accessKeyFuncs ...func(*http.Request) s
 				}
 			}
 
+			ctx := r.Context()
+
+			var projectID uint64
 			if accessKey != "" {
 				projectID, _ = proto.GetProjectID(accessKey)
 				ctx = WithAccessKey(ctx, accessKey)
@@ -84,12 +82,10 @@ func VerifyQuota(client Client) func(next http.Handler) http.Handler {
 				return
 			}
 
-			ctx := r.Context()
+			var quota *proto.AccessQuota
 
-			var (
-				quota *proto.AccessQuota
-				now   = GetTime(ctx)
-			)
+			ctx := r.Context()
+			now := GetTime(ctx)
 
 			// check if we alreayd have a project ID from the JWT
 			if projectID, ok := GetProjectID(ctx); ok {
