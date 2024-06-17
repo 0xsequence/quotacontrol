@@ -31,13 +31,20 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
 	}
 
-	cache := NewRedisCache(redisClient, time.Minute)
+	redisExpiration := time.Hour
+	if cfg.Redis.KeyTTL > 0 {
+		redisExpiration = cfg.Redis.KeyTTL
+	}
+	cache := NewRedisCache(redisClient, redisExpiration)
+
 	quotaCache := QuotaCache(cache)
 	if cfg.LRUSize > 0 {
-		quotaCache = NewLRU(quotaCache, cfg.LRUSize, cfg.LRUExpiration.Duration)
+		lruExpiration := time.Minute
+		if cfg.LRUExpiration.Duration > 0 {
+			lruExpiration = cfg.LRUExpiration.Duration
+		}
+		quotaCache = NewLRU(quotaCache, cfg.LRUSize, lruExpiration)
 	}
-
-	permCache := PermissionCache(cache)
 
 	return &Client{
 		cfg:     cfg,
@@ -45,9 +52,9 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		usage: &usageTracker{
 			Usage: make(map[time.Time]usageRecord),
 		},
-		usageCache: UsageCache(cache),
+		usageCache: cache,
 		quotaCache: quotaCache,
-		permCache:  permCache,
+		permCache:  cache,
 		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
 			client:      http.DefaultClient,
 			bearerToken: cfg.AuthToken,
