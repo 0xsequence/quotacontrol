@@ -2,12 +2,10 @@ package middleware
 
 import (
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/jwtauth/v5"
-	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 // Session middleware that detects the session type and sets the account or service on the context.
@@ -16,20 +14,10 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			token, claims, err := getJWT(ctx)
-			if err != nil {
-				proto.RespondWithError(w, err)
-				return
-			}
-			if token == nil {
+			_, claims, ok := getJWT(ctx)
+			if !ok {
 				ctx = withSessionType(ctx, proto.SessionType_Public)
 				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
-			// When JWT token is found, ensure it verifies, or error
-			if err := jwt.Validate(token, ja.ValidateOptions()...); err != nil {
-				proto.RespondWithError(w, proto.ErrUnauthorized.WithCause(err))
 				return
 			}
 
@@ -94,13 +82,14 @@ func AccessControl(acl ACL, cost Cost, defaultCost int64) func(next http.Handler
 				return
 			}
 
-			sessions, ok := acl.GetConfig(req)
+			min, ok := acl.GetConfig(req)
 			if !ok {
 				proto.RespondWithError(w, proto.ErrUnauthorized.WithCausef("rpc method not found"))
 				return
 			}
 
-			if !slices.Contains(sessions, GetSessionType(r.Context())) {
+			session := GetSessionType(r.Context())
+			if session < min {
 				proto.RespondWithError(w, proto.ErrUnauthorized)
 				return
 			}

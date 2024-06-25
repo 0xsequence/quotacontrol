@@ -200,7 +200,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID s
 		slog.Uint64("project_id", projectID),
 		slog.String("user_id", userID),
 	)
-	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.
+	// Check short-lived cache if requested. Note using the cache TTL from config (default 1m).
 	if useCache {
 		perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
 		if err != nil {

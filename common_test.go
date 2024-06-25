@@ -16,6 +16,7 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/goware/logger"
 
 	"github.com/goware/cachestore/redis"
@@ -178,8 +179,15 @@ func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func executeRequest(ctx context.Context, handler http.Handler, accessKey, jwt string) (bool, http.Header, error) {
-	req, err := http.NewRequest("POST", "/", nil)
+func mustJWT(t *testing.T, auth *jwtauth.JWTAuth, claims map[string]interface{}) string {
+	t.Helper()
+	_, token, err := auth.Encode(claims)
+	require.NoError(t, err)
+	return token
+}
+
+func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, jwt string) (bool, http.Header, error) {
+	req, err := http.NewRequest("POST", path, nil)
 	if err != nil {
 		return false, nil, err
 	}

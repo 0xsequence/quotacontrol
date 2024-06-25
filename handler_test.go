@@ -65,7 +65,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Spend Free CU
 		for i := int64(1); i < limit.FreeWarn; i++ {
-			ok, headers, err := executeRequest(ctx, r, key, "")
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -76,7 +76,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		// Go over free CU
-		ok, headers, err := executeRequest(ctx, r, key, "")
+		ok, headers, err := executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -87,7 +87,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Get close to soft quota
 		for i := limit.FreeWarn + 1; i < limit.OverWarn; i++ {
-			ok, headers, err := executeRequest(ctx, r, key, "")
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -98,7 +98,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		// Go over soft quota
-		ok, headers, err = executeRequest(ctx, r, key, "")
+		ok, headers, err = executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -109,7 +109,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Get close to hard quota
 		for i := limit.OverWarn + 1; i < limit.OverMax; i++ {
-			ok, headers, err := executeRequest(ctx, r, key, "")
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -120,7 +120,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 
 		// Go over hard quota
-		ok, headers, err = executeRequest(ctx, r, key, "")
+		ok, headers, err = executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -131,7 +131,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		// Denied
 		for i := 0; i < 10; i++ {
-			ok, headers, err := executeRequest(ctx, r, key, "")
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
 			assert.False(t, ok)
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -164,7 +164,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ctx := middleware.WithTime(context.Background(), now)
 		server.notifications = make(map[uint64][]proto.EventType)
 
-		ok, headers, err := executeRequest(ctx, r, key, "")
+		ok, headers, err := executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaLimit))
@@ -183,7 +183,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ctx := middleware.WithTime(context.Background(), now)
 
 		for i, max := 0, cfg.RateLimiter.PublicRPM*2; i < max; i++ {
-			ok, headers, err := executeRequest(ctx, r, "", "")
+			ok, headers, err := executeRequest(ctx, r, "", "", "")
 			if i < cfg.RateLimiter.PublicRPM {
 				assert.NoError(t, err, i)
 				assert.True(t, ok, i)
@@ -217,7 +217,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		for _, err := range errList {
 			server.ErrGetAccessQuota = err
-			ok, headers, err := executeRequest(ctx, r, key, "")
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.True(t, ok)
 			assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 			assert.NoError(t, err)
@@ -228,7 +228,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		for _, err := range errList {
 			server.ErrPrepareUsage = err
-			ok, headers, err := executeRequest(ctx, r, key, "")
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.True(t, ok)
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaLimit))
 			assert.NoError(t, err)
@@ -250,7 +250,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ctx := middleware.WithTime(context.Background(), now)
 
 		server.PrepareUsageDelay = time.Second * 3
-		ok, headers, err := executeRequest(ctx, r, key, "")
+		ok, headers, err := executeRequest(ctx, r, "", key, "")
 		assert.True(t, ok)
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaLimit))
 		assert.NoError(t, err)
@@ -261,7 +261,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), counter.GetValue())
 		assert.Equal(t, &expectedUsage, &usage)
 	})
-
 }
 
 func TestDefaultKey(t *testing.T) {
@@ -337,8 +336,7 @@ func TestDefaultKey(t *testing.T) {
 }
 
 func TestJWT(t *testing.T) {
-	const secret = "secret"
-	auth := jwtauth.New("HS256", []byte(secret), nil)
+	auth := jwtauth.New("HS256", []byte("secret"), nil)
 
 	project := uint64(7)
 	account := "account"
@@ -352,11 +350,10 @@ func TestJWT(t *testing.T) {
 	client := newQuotaClient(cfg, service)
 
 	r := chi.NewRouter()
+
 	r.Use(
-		jwtauth.Verifier(auth),
 		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
-		addCredits(1).Middleware,
 		middleware.EnsureUsage(client),
 		middleware.SpendUsage(client),
 	)
@@ -373,41 +370,40 @@ func TestJWT(t *testing.T) {
 	}
 	server.store.SetAccessLimit(ctx, project, &limit)
 
-	_, token, err := auth.Encode(map[string]any{"project": project, "account": account})
-	require.NoError(t, err)
+	token := mustJWT(t, auth, middleware.Claims{"project": project, "account": account})
 
 	var expectedHits int64
 
 	t.Run("UnauthorizedUser", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", token)
+		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 	})
 	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: project})
 	t.Run("AuthorizedUser", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", token)
+		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		expectedHits++
 	})
 	t.Run("AccessKeyNotFound", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, key, token)
+		ok, headers, err := executeRequest(ctx, r, "", key, token)
 		require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 	})
 	server.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
 	t.Run("AccessKeyFound", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, key, token)
+		ok, headers, err := executeRequest(ctx, r, "", key, token)
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		expectedHits++
 	})
 	t.Run("AccessKeyMismatch", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, proto.GenerateAccessKey(project+1), token)
+		ok, headers, err := executeRequest(ctx, r, "", proto.GenerateAccessKey(project+1), token)
 		require.ErrorIs(t, err, proto.ErrAccessKeyMismatch)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
@@ -417,8 +413,7 @@ func TestJWT(t *testing.T) {
 }
 
 func TestJWTAccess(t *testing.T) {
-	const secret = "secret"
-	auth := jwtauth.New("HS256", []byte(secret), nil)
+	auth := jwtauth.New("HS256", []byte("secret"), nil)
 
 	project := uint64(7)
 	service := proto.Service_Indexer
@@ -432,7 +427,6 @@ func TestJWTAccess(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		jwtauth.Verifier(auth),
 		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
 		middleware.EnsurePermission(client, UserPermission_READ_WRITE),
@@ -449,16 +443,12 @@ func TestJWTAccess(t *testing.T) {
 	}
 	server.store.SetAccessLimit(ctx, project, &limit)
 
-	_, token, err := auth.Encode(map[string]any{
-		"account": account,
-		"project": project,
-	})
-	require.NoError(t, err)
+	token := mustJWT(t, auth, middleware.Claims{"account": account, "project": project})
 
 	var expectedHits int64
 
 	t.Run("NoPermission", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", token)
+		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
@@ -466,7 +456,7 @@ func TestJWTAccess(t *testing.T) {
 
 	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
 	t.Run("LowPermission", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", token)
+		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -475,7 +465,7 @@ func TestJWTAccess(t *testing.T) {
 	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: project})
 	server.FlushCache()
 	t.Run("EnoughPermission", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", token)
+		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -485,7 +475,7 @@ func TestJWTAccess(t *testing.T) {
 	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_ADMIN, proto.ResourceAccess{ProjectID: project})
 	server.FlushCache()
 	t.Run("MorePermission", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", token)
+		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
@@ -493,4 +483,72 @@ func TestJWTAccess(t *testing.T) {
 	})
 
 	assert.Equal(t, expectedHits, counter.GetValue())
+}
+
+func TestSession(t *testing.T) {
+	auth := jwtauth.New("HS256", []byte("secret"), nil)
+
+	project := uint64(7)
+	service := proto.Service_Indexer
+	account := "account"
+
+	counter := hitCounter(0)
+
+	cfg := newConfig()
+	server := newTestServer(t, &cfg)
+	client := newQuotaClient(cfg, service)
+
+	ACL := middleware.ACL{
+		"Service": {
+			"MethodPublic":    proto.SessionType_Public,
+			"MethodAccessKey": proto.SessionType_AccessKey,
+			"MethodProject":   proto.SessionType_Project,
+			"MethodAdmin":     proto.SessionType_Admin,
+			"MethodService":   proto.SessionType_Service,
+		},
+	}
+
+	r := chi.NewRouter()
+	r.Use(
+		middleware.SetCredentials(auth),
+		middleware.VerifyQuota(client),
+		middleware.Session(auth),
+		middleware.AccessControl(ACL, middleware.Cost{}, 1),
+	)
+	r.Handle("/*", &counter)
+
+	ctx := context.Background()
+	limit := proto.Limit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
+	}
+	server.store.SetAccessLimit(ctx, project, &limit)
+	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
+
+	tokens := map[proto.SessionType]string{
+		proto.SessionType_Account: mustJWT(t, auth, middleware.Claims{"account": account}),
+		proto.SessionType_Project: mustJWT(t, auth, middleware.Claims{"account": account, "project": project}),
+		proto.SessionType_Admin:   mustJWT(t, auth, middleware.Claims{"account": account, "admin": true}),
+		proto.SessionType_Service: mustJWT(t, auth, middleware.Claims{"service": "service"}),
+	}
+
+	for session, token := range tokens {
+		for service := range ACL {
+			for method, minSession := range ACL[service] {
+				path := "/rpc/" + service + "/" + method
+				ok, _, err := executeRequest(ctx, r, path, "", token)
+				if success := session >= minSession; success {
+					assert.NoError(t, err, "%s/%s %s (%s)", service, method, session, minSession)
+					assert.True(t, ok)
+				} else {
+					assert.Error(t, err, "%s/%s %s (%s)", service, method, session, minSession)
+					assert.False(t, ok)
+				}
+			}
+		}
+
+	}
 }

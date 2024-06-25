@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	HeaderAccessKey      = "X-Access-Key"
-	HeaderOrigin         = "Origin"
-	HeaderQuotaLimit     = "X-Quota-Limit"
-	HeaderQuotaRemaining = "X-Quota-Remaining"
-	HeaderQuotaOverage   = "X-Quota-Overage"
+	HeaderAccessKey       = "Access-Key"
+	LegacyHeaderAccessKey = "X-Access-Key"
+	HeaderOrigin          = "Origin"
+	HeaderQuotaLimit      = "Quota-Limit"
+	HeaderQuotaRemaining  = "Quota-Remaining"
+	HeaderQuotaOverage    = "Quota-Overage"
 )
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
@@ -27,10 +28,12 @@ type Client interface {
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, int64, error)
 }
 
+type Claims map[string]any
+
 type ServiceConfig[T any] map[string]map[string]T
 
 type (
-	ACL  = ServiceConfig[[]proto.SessionType]
+	ACL  = ServiceConfig[proto.SessionType]
 	Cost = ServiceConfig[int64]
 )
 
@@ -62,6 +65,9 @@ type rcpRequest struct {
 func newRequest(path string) *rcpRequest {
 	parts := strings.Split(path, "/")
 	if len(parts) != 4 {
+		return nil
+	}
+	if parts[0] != "" {
 		return nil
 	}
 	t := rcpRequest{

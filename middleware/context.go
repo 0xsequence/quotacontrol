@@ -2,11 +2,9 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
@@ -24,6 +22,8 @@ var (
 	ctxKeySessionType  = &contextKey{"SessionType"}
 	ctxKeyAccount      = &contextKey{"Account"}
 	ctxKeyService      = &contextKey{"Service"}
+	ctxKeyJWT          = &contextKey{"JWT"}
+	ctxKeyClaims       = &contextKey{"Claims"}
 	ctxKeyAccessKey    = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
 	ctxKeyProjectID    = &contextKey{"ProjectID"}
@@ -110,14 +110,18 @@ func withProjectID(ctx context.Context, projectID uint64) context.Context {
 // GetProjectID returns the projectID and if its active from the context.
 // In case its not set, it will return 0.
 func GetProjectID(ctx context.Context) (uint64, bool) {
-	if projectID, ok := ctx.Value(ctxKeyProjectID).(uint64); ok {
-		return projectID, true
+	if v, ok := getProjectID(ctx); ok {
+		return v, true
 	}
-	accessQuota := GetAccessQuota(ctx)
-	if accessQuota == nil {
-		return 0, false
+	if q := GetAccessQuota(ctx); q != nil {
+		return q.GetProjectID(), q.IsActive()
 	}
-	return accessQuota.GetProjectID(), accessQuota.IsActive()
+	return 0, false
+}
+
+func getProjectID(ctx context.Context) (uint64, bool) {
+	v, ok := ctx.Value(ctxKeyProjectID).(uint64)
+	return v, ok
 }
 
 // WithComputeUnits sets the compute units to the context.
@@ -162,16 +166,19 @@ func HasSpending(ctx context.Context) bool {
 	return ok
 }
 
-func getJWT(ctx context.Context) (jwt.Token, map[string]any, error) {
-	token, claims, err := jwtauth.FromContext(ctx)
-	if err != nil {
-		if errors.Is(err, jwtauth.ErrExpired) {
-			return nil, nil, proto.ErrSessionExpired
-		}
-		if errors.Is(err, jwtauth.ErrNoTokenFound) {
-			return nil, nil, nil
-		}
-		return nil, nil, proto.ErrUnauthorized
+// withJWT sets the JWT to the context.
+func withJWT(ctx context.Context, token jwt.Token, claims Claims) context.Context {
+	return context.WithValue(context.WithValue(ctx, ctxKeyJWT, token), ctxKeyClaims, claims)
+}
+
+func getJWT(ctx context.Context) (jwt.Token, Claims, bool) {
+	token, ok := ctx.Value(ctxKeyJWT).(jwt.Token)
+	if !ok {
+		return nil, nil, false
 	}
-	return token, claims, err
+	claims, ok := ctx.Value(ctxKeyClaims).(Claims)
+	if !ok {
+		return nil, nil, false
+	}
+	return token, claims, ok
 }
