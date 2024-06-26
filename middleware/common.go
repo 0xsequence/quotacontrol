@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,12 +10,11 @@ import (
 )
 
 const (
-	HeaderAccessKey       = "Access-Key"
-	LegacyHeaderAccessKey = "X-Access-Key"
-	HeaderOrigin          = "Origin"
-	HeaderQuotaLimit      = "Quota-Limit"
-	HeaderQuotaRemaining  = "Quota-Remaining"
-	HeaderQuotaOverage    = "Quota-Overage"
+	HeaderAccessKey      = "X-Access-Key"
+	HeaderOrigin         = "Origin"
+	HeaderQuotaLimit     = "Quota-Limit"
+	HeaderQuotaRemaining = "Quota-Remaining"
+	HeaderQuotaOverage   = "Quota-Overage"
 )
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
@@ -29,6 +29,19 @@ type Client interface {
 }
 
 type Claims map[string]any
+
+func (c Claims) String() string {
+	s := strings.Builder{}
+	s.WriteString("{")
+	for k, v := range c {
+		if s.Len() > 1 {
+			s.WriteString(", ")
+		}
+		fmt.Fprintf(&s, "%s:%v", k, v)
+	}
+	s.WriteString("}")
+	return s.String()
+}
 
 type ServiceConfig[T any] map[string]map[string]T
 

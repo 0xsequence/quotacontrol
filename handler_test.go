@@ -3,6 +3,7 @@ package quotacontrol_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -489,8 +490,10 @@ func TestSession(t *testing.T) {
 	auth := jwtauth.New("HS256", []byte("secret"), nil)
 
 	project := uint64(7)
+	key := proto.GenerateAccessKey(project)
 	service := proto.Service_Indexer
-	account := "account"
+	address := "accountId"
+	serviceName := "serviceName"
 
 	counter := hitCounter(0)
 
@@ -498,13 +501,23 @@ func TestSession(t *testing.T) {
 	server := newTestServer(t, &cfg)
 	client := newQuotaClient(cfg, service)
 
+	const (
+		MethodPublic    = "MethodPublic"
+		MethodAccount   = "MethodAccount"
+		MethodAccessKey = "MethodAccessKey"
+		MethodProject   = "MethodProject"
+		MethodAdmin     = "MethodAdmin"
+		MethodService   = "MethodService"
+	)
+
 	ACL := middleware.ACL{
 		"Service": {
-			"MethodPublic":    proto.SessionType_Public,
-			"MethodAccessKey": proto.SessionType_AccessKey,
-			"MethodProject":   proto.SessionType_Project,
-			"MethodAdmin":     proto.SessionType_Admin,
-			"MethodService":   proto.SessionType_Service,
+			MethodPublic:    proto.SessionType_Public,
+			MethodAccount:   proto.SessionType_Account,
+			MethodAccessKey: proto.SessionType_AccessKey,
+			MethodProject:   proto.SessionType_Project,
+			MethodAdmin:     proto.SessionType_Admin,
+			MethodService:   proto.SessionType_Service,
 		},
 	}
 
@@ -526,25 +539,80 @@ func TestSession(t *testing.T) {
 		OverMax:   10,
 	}
 	server.store.SetAccessLimit(ctx, project, &limit)
-	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
+	server.store.SetUserPermission(ctx, project, address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
+	server.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
 
-	tokens := map[proto.SessionType]string{
-		proto.SessionType_Account: mustJWT(t, auth, middleware.Claims{"account": account}),
-		proto.SessionType_Project: mustJWT(t, auth, middleware.Claims{"account": account, "project": project}),
-		proto.SessionType_Admin:   mustJWT(t, auth, middleware.Claims{"account": account, "admin": true}),
-		proto.SessionType_Service: mustJWT(t, auth, middleware.Claims{"service": "service"}),
+	testCases := []struct {
+		AccessKey string
+		Claims    middleware.Claims
+		Session   proto.SessionType
+	}{
+		{
+			Session: proto.SessionType_Public,
+		},
+		{
+			Claims:  middleware.Claims{"account": address},
+			Session: proto.SessionType_Account,
+		},
+		{
+			AccessKey: key,
+			Claims:    middleware.Claims{"account": address},
+			Session:   proto.SessionType_AccessKey,
+		},
+		{
+			AccessKey: key,
+			Claims:    middleware.Claims{"account": address},
+			Session:   proto.SessionType_AccessKey,
+		},
+		{
+			Claims:  middleware.Claims{"account": address, "project": project},
+			Session: proto.SessionType_Project,
+		},
+		{
+			AccessKey: key,
+			Claims:    middleware.Claims{"account": address, "project": project},
+			Session:   proto.SessionType_Project,
+		},
+		{
+			Claims:  middleware.Claims{"account": address, "admin": true},
+			Session: proto.SessionType_Admin,
+		},
+		{
+			AccessKey: key,
+			Claims:    middleware.Claims{"account": address, "admin": true},
+			Session:   proto.SessionType_Admin,
+		},
+		{
+			Claims:  middleware.Claims{"service": serviceName},
+			Session: proto.SessionType_Service,
+		},
+		{
+			AccessKey: key,
+			Claims:    middleware.Claims{"service": serviceName},
+			Session:   proto.SessionType_Service,
+		},
 	}
 
-	for session, token := range tokens {
-		for service := range ACL {
-			for method, minSession := range ACL[service] {
+	for service := range ACL {
+		for _, method := range []string{MethodPublic, MethodAccount, MethodAccessKey, MethodProject, MethodAdmin, MethodService} {
+			minSession := ACL[service][method]
+			fmt.Printf("%s/%s - %s+\n", service, method, minSession)
+			for _, tc := range testCases {
 				path := "/rpc/" + service + "/" + method
-				ok, _, err := executeRequest(ctx, r, path, "", token)
-				if success := session >= minSession; success {
-					assert.NoError(t, err, "%s/%s %s (%s)", service, method, session, minSession)
+				jwt := ""
+				if tc.Claims != nil {
+					jwt = mustJWT(t, auth, tc.Claims)
+				}
+				ok, _, err := executeRequest(ctx, r, path, tc.AccessKey, jwt)
+				success := tc.Session >= minSession
+				if ok != success {
+					fmt.Printf("  - %s %v Key:%v\n", tc.Session, tc.Claims, tc.AccessKey != "")
+				}
+				if success {
+					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
 					assert.True(t, ok)
 				} else {
-					assert.Error(t, err, "%s/%s %s (%s)", service, method, session, minSession)
+					assert.Error(t, err, "%s/%s %+v", service, method, tc)
 					assert.False(t, ok)
 				}
 			}

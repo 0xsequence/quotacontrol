@@ -17,7 +17,6 @@ import (
 func SetCredentials(ja *jwtauth.JWTAuth, accessKeyFuncs ...func(*http.Request) string) func(next http.Handler) http.Handler {
 	baseFuncs := []func(*http.Request) string{
 		func(r *http.Request) string { return r.Header.Get(HeaderAccessKey) },
-		func(r *http.Request) string { return r.Header.Get(LegacyHeaderAccessKey) },
 	}
 	return func(next http.Handler) http.Handler {
 		return credentials{Auth: ja, KeyFuncs: append(baseFuncs, accessKeyFuncs...), Next: next}
@@ -61,8 +60,7 @@ type credentials struct {
 func (m credentials) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var accessKey string
 	for _, f := range m.KeyFuncs {
-		accessKey = f(r)
-		if accessKey != "" {
+		if accessKey = f(r); accessKey != "" {
 			break
 		}
 	}
@@ -71,7 +69,6 @@ func (m credentials) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var projectID uint64
 	if accessKey != "" {
-		projectID, _ = proto.GetProjectID(accessKey)
 		ctx = WithAccessKey(ctx, accessKey)
 	}
 
@@ -103,11 +100,13 @@ func (m credentials) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx = withJWT(ctx, token, claims)
 
 	if v, ok := claims["project"].(float64); ok {
-		if projectID != 0 && uint64(v) != projectID {
-			proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
-			return
-		}
 		projectID = uint64(v)
+		if accessKey != "" {
+			if id, _ := proto.GetProjectID(accessKey); id != projectID {
+				proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
+				return
+			}
+		}
 	}
 
 	if projectID != 0 {
@@ -165,7 +164,10 @@ func (m verify) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			proto.RespondWithError(w, err)
 			return
 		}
-		quota = q
+		// don't override the quota from the project
+		if quota == nil {
+			quota = q
+		}
 	}
 
 	if quota != nil {

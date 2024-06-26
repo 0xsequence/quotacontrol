@@ -16,7 +16,11 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 
 			_, claims, ok := getJWT(ctx)
 			if !ok {
-				ctx = withSessionType(ctx, proto.SessionType_Public)
+				sessionType := proto.SessionType_Public
+				if quota := GetAccessQuota(ctx); quota != nil {
+					sessionType = proto.SessionType_AccessKey
+				}
+				ctx = withSessionType(ctx, sessionType)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -36,18 +40,10 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 			serviceClaim, _ := claims["service"].(string)
 			adminClaim, _ := claims["admin"].(bool)
 
-			if quota := GetAccessQuota(ctx); quota != nil {
-				sessionType := proto.SessionType_AccessKey
-				if quota.IsJWT() {
-					sessionType = proto.SessionType_Project
-					ctx = withAccount(ctx, accountClaim)
-				}
-				ctx = withSessionType(ctx, sessionType)
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
-			switch {
+			switch quota := GetAccessQuota(ctx); {
+			case serviceClaim != "":
+				ctx = withSessionType(ctx, proto.SessionType_Service)
+				ctx = withService(ctx, serviceClaim)
 			case adminClaim:
 				if accountClaim == "" {
 					proto.RespondWithError(w, proto.ErrUnauthorized)
@@ -57,13 +53,20 @@ func Session(ja *jwtauth.JWTAuth) func(http.Handler) http.Handler {
 				ctx = withSessionType(ctx, proto.SessionType_Admin)
 			case accountClaim != "":
 				ctx = withAccount(ctx, accountClaim)
-				ctx = withSessionType(ctx, proto.SessionType_Account)
-			case serviceClaim != "":
-				ctx = withSessionType(ctx, proto.SessionType_Service)
-				ctx = withService(ctx, serviceClaim)
+				sessionType := proto.SessionType_Account
+				if quota != nil {
+					sessionType = proto.SessionType_AccessKey
+					if quota.IsJWT() {
+						sessionType = proto.SessionType_Project
+					}
+				}
+				ctx = withSessionType(ctx, sessionType)
 			default:
-				proto.RespondWithError(w, proto.ErrUnauthorized)
-				return
+				sessionType := proto.SessionType_Public
+				if quota != nil {
+					sessionType = proto.SessionType_AccessKey
+				}
+				ctx = withSessionType(ctx, sessionType)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
