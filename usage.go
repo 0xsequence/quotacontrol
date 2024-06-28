@@ -11,8 +11,8 @@ import (
 
 // UsageUpdater is an interface that allows to update the usage of a service
 type UsageUpdater interface {
-	UpdateKeyUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
-	UpdateProjectUsage(ctx context.Context, service *proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error)
+	UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
+	UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error)
 }
 
 func newUsageRecord() usageRecord {
@@ -37,50 +37,28 @@ type usageTracker struct {
 	Usage map[time.Time]usageRecord
 }
 
-func (u *usageTracker) ensureTime(now time.Time) {
+// AddUsage adds the usage of a access key.
+func (u *usageTracker) AddKeyUsage(accessKey string, now time.Time, usage proto.AccessUsage) {
 	u.DataMutex.Lock()
 	if _, ok := u.Usage[now]; !ok {
 		u.Usage[now] = newUsageRecord()
 	}
-	u.DataMutex.Unlock()
-}
-
-func (u *usageTracker) ensureKey(now time.Time, key string) {
-	u.ensureTime(now)
-
-	u.DataMutex.Lock()
-	if _, ok := u.Usage[now].ByAccessKey[key]; !ok {
-		u.Usage[now].ByAccessKey[key] = &proto.AccessUsage{}
+	if _, ok := u.Usage[now].ByAccessKey[accessKey]; !ok {
+		u.Usage[now].ByAccessKey[accessKey] = &proto.AccessUsage{}
 	}
-	u.DataMutex.Unlock()
-}
-
-func (u *usageTracker) ensureProject(now time.Time, projectID uint64) {
-	u.ensureTime(now)
-
-	u.DataMutex.Lock()
-	if _, ok := u.Usage[now].ByProjectID[projectID]; !ok {
-		u.Usage[now].ByProjectID[projectID] = &proto.AccessUsage{}
-	}
-	u.DataMutex.Unlock()
-}
-
-// AddUsage adds the usage of a access key.
-func (u *usageTracker) AddKeyUsage(accessKey string, now time.Time, usage proto.AccessUsage) {
-	u.ensureTime(now)
-	u.ensureKey(now, accessKey)
-
-	u.DataMutex.Lock()
 	u.Usage[now].ByAccessKey[accessKey].Add(usage)
 	u.DataMutex.Unlock()
 }
 
 // AddUsage adds the usage of a access key.
 func (u *usageTracker) AddProjectUsage(projectID uint64, now time.Time, usage proto.AccessUsage) {
-	u.ensureTime(now)
-	u.ensureProject(now, projectID)
-
 	u.DataMutex.Lock()
+	if _, ok := u.Usage[now]; !ok {
+		u.Usage[now] = newUsageRecord()
+	}
+	if _, ok := u.Usage[now].ByProjectID[projectID]; !ok {
+		u.Usage[now].ByProjectID[projectID] = &proto.AccessUsage{}
+	}
 	u.Usage[now].ByProjectID[projectID].Add(usage)
 	u.DataMutex.Unlock()
 }
@@ -95,7 +73,7 @@ func (u *usageTracker) GetUpdates() map[time.Time]usageRecord {
 }
 
 // SyncUsage syncs the usage of a service with the UsageUpdater
-func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, service *proto.Service) error {
+func (u *usageTracker) SyncUsage(ctx context.Context, updater UsageUpdater, service proto.Service) error {
 	u.SyncMutex.Lock()
 	defer u.SyncMutex.Unlock()
 	var errList []error

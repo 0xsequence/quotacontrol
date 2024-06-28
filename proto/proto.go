@@ -1,5 +1,4 @@
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.13.7 -pkg=proto -server -client -out=./proto.gen.go
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/quotacontrol.gen.ts
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.14.8 -pkg=proto -server -client -out=./proto.gen.go
 package proto
 
 import (
@@ -164,6 +163,10 @@ func (q *AccessQuota) IsActive() bool {
 	return q.AccessKey.Active
 }
 
+func (q *AccessQuota) IsJWT() bool {
+	return q.AccessKey != nil && q.AccessKey.AccessKey == ""
+}
+
 func (q *AccessQuota) IsDefault() bool {
 	if q.Limit == nil || q.AccessKey == nil {
 		return false
@@ -202,4 +205,11 @@ func (c *Cycle) Advance(now time.Time) {
 		c.Start = c.Start.AddDate(0, 1, 0)
 		c.End = c.End.AddDate(0, 1, 0)
 	}
+}
+
+func (u *UserPermission) CanAccess(perm UserPermission) bool {
+	if u == nil {
+		return false
+	}
+	return *u >= perm
 }

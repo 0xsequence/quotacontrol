@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 var DefaultCreditsUsagePerCall int64 = 1
@@ -18,21 +19,68 @@ func (k *contextKey) String() string {
 }
 
 var (
-	ctxKeyAccessKey     = &contextKey{"AccessKey"}
-	ctxKeyAccessQuota   = &contextKey{"AccessQuota"}
-	ctxKeyComputeUnits  = &contextKey{"ComputeUnits"}
-	ctxKeyRateLimitSkip = &contextKey{"RateLimitSkip"}
-	ctxKeyTime          = &contextKey{"Time"}
-	ctxKeyResult        = &contextKey{"Result"}
+	ctxKeySessionType  = &contextKey{"SessionType"}
+	ctxKeyAccount      = &contextKey{"Account"}
+	ctxKeyService      = &contextKey{"Service"}
+	ctxKeyJWT          = &contextKey{"JWT"}
+	ctxKeyClaims       = &contextKey{"Claims"}
+	ctxKeyAccessKey    = &contextKey{"AccessKey"}
+	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
+	ctxKeyProjectID    = &contextKey{"ProjectID"}
+	ctxKeyComputeUnits = &contextKey{"ComputeUnits"}
+	ctxKeyTime         = &contextKey{"Time"}
+	ctxKeySpending     = &contextKey{"Spending"}
 )
+
+// withSessionType adds the access key to the context.
+func withSessionType(ctx context.Context, accessType proto.SessionType) context.Context {
+	return context.WithValue(ctx, ctxKeySessionType, accessType)
+}
+
+// GetSessionType returns the access key from the context.
+func GetSessionType(ctx context.Context) proto.SessionType {
+	v, ok := ctx.Value(ctxKeySessionType).(proto.SessionType)
+	if !ok {
+		return proto.SessionType_Public
+	}
+	return v
+}
+
+// WithAccount adds the account to the context.
+func withAccount(ctx context.Context, account string) context.Context {
+	return context.WithValue(ctx, ctxKeyAccount, account)
+}
+
+// GetAccount returns the account from the context.
+func GetAccount(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyAccount).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// withService adds the service to the context.
+func withService(ctx context.Context, service string) context.Context {
+	return context.WithValue(ctx, ctxKeyService, service)
+}
+
+// GetService returns the service from the context.
+func GetService(ctx context.Context) string {
+	v, ok := ctx.Value(ctxKeyService).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
 
 // WithAccessKey adds the access key to the context.
 func WithAccessKey(ctx context.Context, accessKey string) context.Context {
 	return context.WithValue(ctx, ctxKeyAccessKey, accessKey)
 }
 
-// getAccessKey returns the access key from the context.
-func getAccessKey(ctx context.Context) string {
+// GetAccessKey returns the access key from the context.
+func GetAccessKey(ctx context.Context) string {
 	v, ok := ctx.Value(ctxKeyAccessKey).(string)
 	if !ok {
 		return ""
@@ -45,15 +93,6 @@ func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Cont
 	return context.WithValue(ctx, ctxKeyAccessQuota, quota)
 }
 
-// GetAccessKey returns the access key from the context.
-func GetAccessKey(ctx context.Context) string {
-	v, ok := ctx.Value(ctxKeyAccessKey).(string)
-	if !ok {
-		return ""
-	}
-	return v
-}
-
 // GetAccessQuota returns the access quota from the context.
 func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
 	v, ok := ctx.Value(ctxKeyAccessQuota).(*proto.AccessQuota)
@@ -63,27 +102,26 @@ func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
 	return v
 }
 
+// withProjectID adds the projectID to the context.
+func withProjectID(ctx context.Context, projectID uint64) context.Context {
+	return context.WithValue(ctx, ctxKeyProjectID, projectID)
+}
+
 // GetProjectID returns the projectID and if its active from the context.
 // In case its not set, it will return 0.
 func GetProjectID(ctx context.Context) (uint64, bool) {
-	accessQuota := GetAccessQuota(ctx)
-	if accessQuota == nil {
-		return 0, false
+	if v, ok := getProjectID(ctx); ok {
+		return v, true
 	}
-	projectID := accessQuota.GetProjectID()
-	active := accessQuota.IsActive()
-	return projectID, active
+	if q := GetAccessQuota(ctx); q != nil {
+		return q.GetProjectID(), q.IsActive()
+	}
+	return 0, false
 }
 
-// WithSkipRateLimit adds the skip rate limit flag to the context.
-func WithSkipRateLimit(ctx context.Context) context.Context {
-	return context.WithValue(ctx, ctxKeyRateLimitSkip, struct{}{})
-}
-
-// IsSkipRateLimit returns true if the skip rate limit flag is set in the context.
-func IsSkipRateLimit(ctx context.Context) bool {
-	_, ok := ctx.Value(ctxKeyRateLimitSkip).(struct{})
-	return ok
+func getProjectID(ctx context.Context) (uint64, bool) {
+	v, ok := ctx.Value(ctxKeyProjectID).(uint64)
+	return v, ok
 }
 
 // WithComputeUnits sets the compute units to the context.
@@ -91,13 +129,10 @@ func WithComputeUnits(ctx context.Context, cu int64) context.Context {
 	return context.WithValue(ctx, ctxKeyComputeUnits, cu)
 }
 
-// GetComputeUnits returns the compute units from the context. If the compute units is not set, it returns 1.
-func GetComputeUnits(ctx context.Context) int64 {
+// getComputeUnits returns the compute units from the context. If the compute units is not set, it returns 1.
+func getComputeUnits(ctx context.Context) (int64, bool) {
 	v, ok := ctx.Value(ctxKeyComputeUnits).(int64)
-	if !ok {
-		return DefaultCreditsUsagePerCall
-	}
-	return v
+	return v, ok
 }
 
 // AddComputeUnits adds the compute units to the context.
@@ -120,13 +155,30 @@ func GetTime(ctx context.Context) time.Time {
 	return v
 }
 
-// withResult sets the result of spending in the context.
-func withResult(ctx context.Context) context.Context {
-	return context.WithValue(ctx, ctxKeyResult, struct{}{})
+// withSpending sets the result of spending in the context.
+func withSpending(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeySpending, struct{}{})
 }
 
-// GetResult returns the result of spending from the context.
-func GetResult(ctx context.Context) bool {
-	_, ok := ctx.Value(ctxKeyResult).(struct{})
+// HasSpending returns the result of spending from the context.
+func HasSpending(ctx context.Context) bool {
+	_, ok := ctx.Value(ctxKeySpending).(struct{})
 	return ok
+}
+
+// withJWT sets the JWT to the context.
+func withJWT(ctx context.Context, token jwt.Token, claims Claims) context.Context {
+	return context.WithValue(context.WithValue(ctx, ctxKeyJWT, token), ctxKeyClaims, claims)
+}
+
+func getJWT(ctx context.Context) (jwt.Token, Claims, bool) {
+	token, ok := ctx.Value(ctxKeyJWT).(jwt.Token)
+	if !ok {
+		return nil, nil, false
+	}
+	claims, ok := ctx.Value(ctxKeyClaims).(Claims)
+	if !ok {
+		return nil, nil, false
+	}
+	return token, claims, ok
 }
