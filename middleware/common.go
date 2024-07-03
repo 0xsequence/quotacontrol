@@ -187,12 +187,9 @@ func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Cont
 }
 
 // GetAccessQuota returns the access quota from the context.
-func GetAccessQuota(ctx context.Context) *proto.AccessQuota {
+func GetAccessQuota(ctx context.Context) (*proto.AccessQuota, bool) {
 	v, ok := ctx.Value(ctxKeyAccessQuota).(*proto.AccessQuota)
-	if !ok {
-		return nil
-	}
-	return v
+	return v, ok
 }
 
 // withProjectID adds the projectID to the context.
@@ -206,7 +203,7 @@ func GetProjectID(ctx context.Context) (uint64, bool) {
 	if v, ok := getProjectID(ctx); ok {
 		return v, true
 	}
-	if q := GetAccessQuota(ctx); q != nil {
+	if q, ok := GetAccessQuota(ctx); ok {
 		return q.GetProjectID(), q.IsActive()
 	}
 	return 0, false

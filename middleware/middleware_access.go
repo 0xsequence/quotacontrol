@@ -179,8 +179,8 @@ func (m permission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// check if we alreayd have a project ID from the JWT
-	q := GetAccessQuota(ctx)
-	if q == nil || !q.IsJWT() {
+	q, ok := GetAccessQuota(ctx)
+	if !ok || !q.IsJWT() {
 		proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 		return
 	}

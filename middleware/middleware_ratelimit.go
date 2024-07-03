@@ -46,13 +46,14 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 	options := []httprate.Option{
 		httprate.WithLimitCounter(limitCounter),
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
-			if q := GetAccessQuota(r.Context()); q != nil {
+			ctx := r.Context()
+			if q, ok := GetAccessQuota(ctx); ok {
 				return ProjectRateKey(q.GetProjectID()), nil
 			}
-			if account := GetAccount(r.Context()); account != "" {
+			if account := GetAccount(ctx); account != "" {
 				return AccountRateKey(account), nil
 			}
-			if service := GetService(r.Context()); service != "" {
+			if service := GetService(ctx); service != "" {
 				return "", nil
 			}
 			return httprate.KeyByRealIP(r)
@@ -81,13 +82,13 @@ type rateLimit struct {
 func (m rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if q := GetAccessQuota(r.Context()); q != nil {
+	if q, ok := GetAccessQuota(ctx); ok {
 		ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
 	}
-	if account := GetAccount(r.Context()); account != "" {
+	if account := GetAccount(ctx); account != "" {
 		ctx = httprate.WithRequestLimit(ctx, m.AccountRPM)
 	}
-	if service := GetService(r.Context()); service != "" {
+	if service := GetService(ctx); service != "" {
 		ctx = httprate.WithRequestLimit(ctx, m.ServiceRPM)
 	}
 

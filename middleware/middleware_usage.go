@@ -30,8 +30,8 @@ type ensure struct {
 func (m ensure) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	quota := GetAccessQuota(ctx)
-	if quota == nil {
+	quota, ok := GetAccessQuota(ctx)
+	if !ok {
 		m.Next.ServeHTTP(w, r)
 		return
 	}
@@ -75,8 +75,8 @@ func (m spend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	quota := GetAccessQuota(ctx)
-	if quota == nil {
+	quota, ok := GetAccessQuota(ctx)
+	if !ok {
 		m.Next.ServeHTTP(w, r)
 		return
 	}

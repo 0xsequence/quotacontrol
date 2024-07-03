@@ -37,7 +37,7 @@ func (m session) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, claims, ok := getJWT(ctx)
 	if !ok {
 		sessionType := proto.SessionType_Public
-		if quota := GetAccessQuota(ctx); quota != nil {
+		if _, ok := GetAccessQuota(ctx); ok {
 			sessionType = proto.SessionType_AccessKey
 		}
 		ctx = withSessionType(ctx, sessionType)
@@ -60,7 +60,7 @@ func (m session) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	serviceClaim, _ := claims["service"].(string)
 	adminClaim, _ := claims["admin"].(bool)
 
-	switch quota := GetAccessQuota(ctx); {
+	switch quota, ok := GetAccessQuota(ctx); {
 	case serviceClaim != "":
 		ctx = withSessionType(ctx, proto.SessionType_Service)
 		ctx = withService(ctx, serviceClaim)
@@ -74,7 +74,7 @@ func (m session) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case accountClaim != "":
 		ctx = withAccount(ctx, accountClaim)
 		sessionType := proto.SessionType_Account
-		if quota != nil {
+		if ok {
 			sessionType = proto.SessionType_AccessKey
 			if quota.IsJWT() {
 				sessionType = proto.SessionType_Project
@@ -83,7 +83,7 @@ func (m session) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx = withSessionType(ctx, sessionType)
 	default:
 		sessionType := proto.SessionType_Public
-		if quota != nil {
+		if ok {
 			sessionType = proto.SessionType_AccessKey
 		}
 		ctx = withSessionType(ctx, sessionType)
