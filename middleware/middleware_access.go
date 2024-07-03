@@ -11,8 +11,8 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-// SetCredentials gets the credentials from the JWT or the Access key.
-// It uses `jwtauth.Verifier` to get the JWT, extra  the project claim and sets it in the context as well.
+// SetCredentials sets the credentials in the context. It supports both AccessKey and JWT tokens.
+// It uses `jwtauth.VerifyRequest` to get the JWT, extra the project claim and sets it in the context as well.
 // When both are present, it checks project mismatch between the access key and the JWT token.
 func SetCredentials(ja *jwtauth.JWTAuth, accessKeyFuncs ...func(*http.Request) string) func(next http.Handler) http.Handler {
 	baseFuncs := []func(*http.Request) string{
