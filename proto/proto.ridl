@@ -67,6 +67,14 @@ enum EventType: uint16
   - OverWarn
   - OverMax
 
+enum SessionType: uint16
+  - Public
+  - Account
+  - AccessKey
+  - Project
+  - Admin
+  - Service
+
 enum UserPermission: uint16
   - UNAUTHORIZED
   - READ
@@ -92,6 +100,11 @@ struct ResourceAccess
   - subscription: Subscription
   - minter: Minter
 
+
+error 0001 Unauthorized      "Unauthorized access"                                       HTTP 401
+error 0002 PermissionDenied  "Permission denied"                                         HTTP 403
+error 0003 SessionExpired    "Session expired"                                           HTTP 403
+
 error 1001 Timeout           "Request timed out"                                         HTTP 408
 error 1002 LimitExceeded     "Request limit exceeded"                                    HTTP 429
 error 1003 InvalidOrigin     "Invalid origin"                                            HTTP 403
@@ -101,6 +114,8 @@ error 1006 UnauthorizedUser  "Unauthorized user"                                
 error 1007 MaxAccessKeys     "Access keys limit reached"                                 HTTP 403
 error 1008 NoDefaultKey      "No default access key found"                               HTTP 403
 error 1009 AtLeastOneKey     "There should be at least one active accessKey per project" HTTP 403
+error 1010 AccessKeyMismatch "Access key does not belong to the project"                 HTTP 403
+error 1011 ProjectNotFound   "Project not found"                                         HTTP 401
 
 service QuotaControl
   # Project

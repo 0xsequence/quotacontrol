@@ -11,27 +11,34 @@ import (
 // NewMemoryStore returns a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		limits:     map[uint64]*proto.Limit{},
-		accessKeys: map[string]*proto.AccessKey{},
+		limits:     map[uint64]proto.Limit{},
+		accessKeys: map[string]proto.AccessKey{},
 		usage: usageRecord{
 			ByProjectID: map[uint64]*proto.AccessUsage{},
 			ByAccessKey: map[string]*proto.AccessUsage{},
 		},
+		permissions: map[uint64]map[string]userPermission{},
 	}
+}
+
+type userPermission struct {
+	Permission proto.UserPermission
+	Access     proto.ResourceAccess
 }
 
 // MemoryStore is an in-memory store, used for testing and prototype.
 type MemoryStore struct {
 	sync.Mutex
-	limits     map[uint64]*proto.Limit
-	cycles     map[uint64]*proto.Cycle
-	accessKeys map[string]*proto.AccessKey
-	usage      usageRecord
+	limits      map[uint64]proto.Limit
+	cycles      map[uint64]proto.Cycle
+	accessKeys  map[string]proto.AccessKey
+	usage       usageRecord
+	permissions map[uint64]map[string]userPermission
 }
 
 func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error {
 	m.Lock()
-	m.limits[projectID] = config
+	m.limits[projectID] = *config
 	m.Unlock()
 	return nil
 }
@@ -43,12 +50,16 @@ func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycl
 	if !ok {
 		return nil, proto.ErrAccessKeyNotFound
 	}
-	return limit, nil
+	return &limit, nil
 }
 
 func (m *MemoryStore) SetAccessCycle(ctx context.Context, projectID uint64, cycle *proto.Cycle) error {
 	m.Lock()
-	m.cycles[projectID] = cycle
+	if cycle != nil {
+		m.cycles[projectID] = *cycle
+	} else {
+		delete(m.cycles, projectID)
+	}
 	m.Unlock()
 	return nil
 }
@@ -57,19 +68,22 @@ func (m *MemoryStore) GetAccessCycle(ctx context.Context, projectID uint64, now 
 	m.Lock()
 	cycle := m.cycles[projectID]
 	m.Unlock()
-	return cycle, nil
+	if cycle.Start.IsZero() && cycle.End.IsZero() {
+		return DefaultCycleStore{}.GetAccessCycle(ctx, projectID, now)
+	}
+	return &cycle, nil
 }
 
 func (m *MemoryStore) InsertAccessKey(ctx context.Context, access *proto.AccessKey) error {
 	m.Lock()
-	m.accessKeys[access.AccessKey] = access
+	m.accessKeys[access.AccessKey] = *access
 	m.Unlock()
 	return nil
 }
 
 func (m *MemoryStore) UpdateAccessKey(ctx context.Context, access *proto.AccessKey) (*proto.AccessKey, error) {
 	m.Lock()
-	m.accessKeys[access.AccessKey] = access
+	m.accessKeys[access.AccessKey] = *access
 	m.Unlock()
 	return access, nil
 }
@@ -81,7 +95,7 @@ func (m *MemoryStore) FindAccessKey(ctx context.Context, accessKey string) (*pro
 	if !ok {
 		return nil, proto.ErrAccessKeyNotFound
 	}
-	return access, nil
+	return &access, nil
 }
 
 func (m *MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, active *bool, service *proto.Service) ([]*proto.AccessKey, error) {
@@ -98,7 +112,7 @@ func (m *MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, acti
 		if service != nil && !v.ValidateService(service) {
 			continue
 		}
-		accessKeys = append(accessKeys, m.accessKeys[i])
+		accessKeys = append(accessKeys, proto.Ptr(m.accessKeys[i]))
 	}
 	return accessKeys, nil
 }
@@ -146,9 +160,33 @@ func (m *MemoryStore) UpdateAccessUsage(ctx context.Context, projectID uint64, a
 	return nil
 }
 
-func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string, service proto.Service) error {
+func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string) error {
 	m.Lock()
 	m.usage.ByAccessKey[accessKey] = &proto.AccessUsage{}
 	m.Unlock()
+	return nil
+}
+
+func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
+	m.Lock()
+	defer m.Unlock()
+	users, ok := m.permissions[projectID]
+	if !ok {
+		return proto.UserPermission_UNAUTHORIZED, nil, nil
+	}
+	p, ok := users[userID]
+	if !ok {
+		return proto.UserPermission_UNAUTHORIZED, nil, nil
+	}
+	return p.Permission, &p.Access, nil
+}
+
+func (m *MemoryStore) SetUserPermission(ctx context.Context, projectID uint64, userID string, permission proto.UserPermission, access proto.ResourceAccess) error {
+	m.Lock()
+	defer m.Unlock()
+	if m.permissions[projectID] == nil {
+		m.permissions[projectID] = make(map[string]userPermission)
+	}
+	m.permissions[projectID][userID] = userPermission{Permission: permission, Access: access}
 	return nil
 }

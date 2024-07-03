@@ -1,11 +1,10 @@
-package quotacontrol
+package proto
 
 import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/base64"
 	"github.com/jxskiss/base62"
 )
@@ -41,11 +40,11 @@ func GenerateAccessKey(projectID uint64) string {
 func DecodeProjectID(accessKey string) (uint64, error) {
 	buf, err := base64.Base64UrlDecode(accessKey)
 	if err != nil {
-		return 0, proto.ErrAccessKeyNotFound.WithCause(err)
+		return 0, ErrAccessKeyNotFound.WithCause(err)
 	}
 	if len(buf) != 26 {
 		err := fmt.Errorf("invalid v1 project access key")
-		return 0, proto.ErrAccessKeyNotFound.WithCause(err)
+		return 0, ErrAccessKeyNotFound.WithCause(err)
 	}
 	return binary.BigEndian.Uint64(buf[1:9]), nil
 }
@@ -63,11 +62,11 @@ func LegacyGenerateAccessKey(projectID uint64) string {
 func LegacyDecodeProjectID(accessKey string) (uint64, error) {
 	buf, err := base62.DecodeString(accessKey)
 	if err != nil {
-		return 0, proto.ErrAccessKeyNotFound.WithCause(err)
+		return 0, ErrAccessKeyNotFound.WithCause(err)
 	}
 	if len(buf) != 24 {
 		err := fmt.Errorf("invalid v0/legacy project access key")
-		return 0, proto.ErrAccessKeyNotFound.WithCause(err)
+		return 0, ErrAccessKeyNotFound.WithCause(err)
 	}
 	return binary.BigEndian.Uint64(buf[:8]), nil
 }

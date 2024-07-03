@@ -29,8 +29,8 @@ type UsageCache interface {
 }
 
 type PermissionCache interface {
-	GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error)
-	SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess *proto.ResourceAccess) error
+	GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error)
+	SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm proto.UserPermission, resourceAccess *proto.ResourceAccess) error
 	DeleteUserPermission(ctx context.Context, projectID uint64, userID string) error
 }
 
@@ -165,33 +165,33 @@ func (s *RedisCache) SpendComputeUnits(ctx context.Context, redisKey string, amo
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	value, err := s.client.IncrBy(ctx, cacheKey, amount).Result()
 	if err != nil {
-		return 0, err
+		return v, err
 	}
 	return value, nil
 }
 
 type cacheUserPermission struct {
-	UserPermission *proto.UserPermission `json:"userPerm"`
+	UserPermission proto.UserPermission  `json:"userPerm"`
 	ResourceAccess *proto.ResourceAccess `json:"resourceAccess"`
 }
 
-func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, userID string) (*proto.UserPermission, *proto.ResourceAccess, error) {
+func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, getUserPermKey(projectID, userID))
 	raw, err := s.client.Get(ctx, cacheKey).Bytes()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, nil, nil // not found, without error
+			return proto.UserPermission_UNAUTHORIZED, nil, nil // not found, without error
 		}
-		return nil, nil, err
+		return proto.UserPermission_UNAUTHORIZED, nil, err
 	}
 	var v cacheUserPermission
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return nil, nil, err
+		return proto.UserPermission_UNAUTHORIZED, nil, err
 	}
 	return v.UserPermission, v.ResourceAccess, nil
 }
 
-func (s *RedisCache) SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm *proto.UserPermission, resourceAccess *proto.ResourceAccess) error {
+func (s *RedisCache) SetUserPermission(ctx context.Context, projectID uint64, userID string, userPerm proto.UserPermission, resourceAccess *proto.ResourceAccess) error {
 	v := cacheUserPermission{
 		UserPermission: userPerm,
 		ResourceAccess: resourceAccess,

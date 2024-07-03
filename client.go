@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -11,7 +12,7 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
-	redisclient "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 type Notifier interface {
@@ -19,23 +20,17 @@ type Notifier interface {
 }
 
 func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client {
-	// TODO: set other options too...
-	redisClient := redisclient.NewClient(&redisclient.Options{
+	options := redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
 		MaxIdleConns: cfg.Redis.MaxIdle,
-	})
-
-	ticker := (*time.Ticker)(nil)
-	if cfg.UpdateFreq.Duration > 0 {
-		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
 	}
 
 	redisExpiration := time.Hour
 	if cfg.Redis.KeyTTL > 0 {
 		redisExpiration = cfg.Redis.KeyTTL
 	}
-	cache := NewRedisCache(redisClient, redisExpiration)
+	cache := NewRedisCache(redis.NewClient(&options), redisExpiration)
 
 	quotaCache := QuotaCache(cache)
 	if cfg.LRUSize > 0 {
@@ -46,6 +41,11 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		quotaCache = NewLRU(quotaCache, cfg.LRUSize, lruExpiration)
 	}
 
+	var ticker *time.Ticker
+	if cfg.UpdateFreq.Duration > 0 {
+		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
+	}
+
 	return &Client{
 		cfg:     cfg,
 		service: service,
@@ -54,10 +54,9 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		},
 		usageCache: cache,
 		quotaCache: quotaCache,
-		permCache:  cache,
-		quotaClient: proto.NewQuotaControlClient(cfg.URL, &authorizedClient{
-			client:      http.DefaultClient,
-			bearerToken: cfg.AuthToken,
+		permCache:  PermissionCache(cache),
+		quotaClient: proto.NewQuotaControlClient(cfg.URL, &http.Client{
+			Transport: bearerToken(cfg.AuthToken),
 		}),
 		ticker: ticker,
 		logger: logger,
@@ -92,15 +91,32 @@ func (c *Client) IsDangerMode() bool {
 	return c != nil && c.cfg.DangerMode
 }
 
+// GetDefaultUsage returns the default usage value.
+func (c *Client) GetDefaultUsage() int64 {
+	if c.cfg.DefaultUsage != nil {
+		return *c.cfg.DefaultUsage
+	}
+	return 1
+}
+
 // FetchProjectQuota fetches the project quota from cache or from the quota server.
 func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.quotaCache.GetProjectQuota(ctx, projectID)
 	if err != nil {
-		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
-			return nil, err
+		logger := c.logger.With(
+			slog.String("op", "fetch_project_quota"),
+			slog.Uint64("project_id", projectID),
+		)
+		if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
+			logger.Warn("unexpected cache error", slog.Any("err", err))
+			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetProjectQuota(ctx, projectID, now); err != nil {
+			if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
+				logger.Warn("unexpected client error", slog.Any("err", err))
+				return nil, nil
+			}
 			return nil, err
 		}
 	}
@@ -109,13 +125,22 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 
 // FetchKeyQuota fetches and validates the accessKey from cache or from the quota server.
 func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
+	logger := c.logger.With(
+		slog.String("op", "fetch_key_quota"),
+		slog.String("access_key", accessKey),
+	)
 	// fetch access quota
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
-			return nil, err
+			logger.Warn("unexpected cache error", slog.Any("err", err))
+			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
+			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
+				logger.Warn("unexpected client error", slog.Any("err", err))
+				return nil, nil
+			}
 			return nil, err
 		}
 	}
@@ -129,106 +154,144 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 // FetchUsage fetches the current usage of the access key.
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
-	for i := time.Duration(0); i < 3; i++ {
+
+	logger := c.logger.With(
+		slog.String("op", "fetch_usage"),
+		slog.Uint64("project_id", quota.AccessKey.ProjectID),
+		slog.String("access_key", quota.AccessKey.AccessKey),
+	)
+
+	for i := range 3 {
 		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
-		switch err {
-		case nil:
-			return usage, nil
-		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
-			if err != nil {
-				return 0, err
+		if err != nil {
+			// ping the server to prepare usage
+			if errors.Is(err, ErrCachePing) {
+				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
+					logger.Error("unexpected client error", slog.Any("err", err))
+					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
+						logger.Error("unexpected cache error", slog.Any("err", err))
+					}
+					return 0, nil
+				}
+				continue
 			}
-			if !ok {
-				return 0, proto.ErrTimeout
+
+			// wait for cache to be ready
+			if errors.Is(err, ErrCacheWait) {
+				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
+				continue
 			}
-			fallthrough
-		case ErrCacheWait:
-			time.Sleep(time.Millisecond * 100 * (i + 1))
-		default:
+
+			logger.Error("unexpected cache error", slog.Any("err", err))
 			return 0, err
 		}
+
+		return usage, nil
 	}
-	return 0, proto.ErrTimeout
+	logger.Error("operation timed out")
+	return 0, nil
 }
 
-func (c *Client) FetchUserPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (*proto.UserPermission, *proto.ResourceAccess, error) {
-	var userPerm *proto.UserPermission
-	var resourceAccess *proto.ResourceAccess
-	var err error
-
-	// Check short-lived cache if requested. Note, the cache ttl is 10 seconds.
+// FetchPermission fetches the user permission from cache or from the quota server.
+// If an error occurs, it returns nil.
+func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (proto.UserPermission, *proto.ResourceAccess, error) {
+	logger := c.logger.With(
+		slog.String("op", "spend_quota"),
+		slog.Uint64("project_id", projectID),
+		slog.String("user_id", userID),
+	)
+	// Check short-lived cache if requested. Note using the cache TTL from config (default 1m).
 	if useCache {
-		userPerm, resourceAccess, err = c.permCache.GetUserPermission(ctx, projectID, userID)
+		perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
 		if err != nil {
 			// log the error, but don't stop
-			c.logger.With("err", err).Error("FetchUserPermission failed to query the permCache")
+			logger.Error("unexpected cache error", slog.Any("err", err))
+		}
+		if perm != proto.UserPermission_UNAUTHORIZED {
+			return perm, access, nil
 		}
 	}
 
 	// Ask quotacontrol server via client
-	if userPerm == nil {
-		userPerm, resourceAccess, err = c.quotaClient.GetUserPermission(ctx, projectID, userID)
-		if err != nil {
-			return userPerm, resourceAccess, err
-		}
+	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
+	if err != nil {
+		logger.Error("unexpected client error", slog.Any("err", err))
+		return proto.UserPermission_UNAUTHORIZED, nil, err
 	}
-
-	// Check if userPerm is still nil, in which case return unauthorized
-	if userPerm == nil {
-		v := proto.UserPermission_UNAUTHORIZED
-		return &v, resourceAccess, nil
-	}
-
-	return userPerm, resourceAccess, nil
+	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, error) {
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (spent bool, total int64, err error) {
+	// quota is nil only on unexpected errors from quota fetch
+	if quota == nil || computeUnits == 0 {
+		return false, 0, nil
+	}
+
+	logger := c.logger.With(
+		slog.String("op", "spend_quota"),
+		slog.Uint64("project_id", quota.AccessKey.ProjectID),
+		slog.String("access_key", quota.AccessKey.AccessKey),
+	)
+
 	accessKey := quota.AccessKey.AccessKey
 	cfg := quota.Limit
 
 	// spend compute units
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 
-	for i := time.Duration(0); i < 3; i++ {
+	for i := range 3 {
 		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.OverMax)
-		switch err {
-		case nil:
-			usage, event := cfg.GetSpendResult(computeUnits, total)
-			if quota.AccessKey.AccessKey == "" {
-				c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
-			} else {
-				c.usage.AddKeyUsage(accessKey, now, usage)
+		if err != nil {
+			// limit exceeded
+			if errors.Is(err, proto.ErrLimitExceeded) {
+				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
+				return false, total, proto.ErrLimitExceeded
 			}
-			if usage.LimitedCompute != 0 {
-				return false, proto.ErrLimitExceeded
-			}
-			if event != nil {
-				if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, event); err != nil {
-					c.logger.With("err", err, "op", "use_access_key", "event", event).Error("-> quota control: failed to notify")
+			// ping the server to prepare usage
+			if errors.Is(err, ErrCachePing) {
+				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
+					logger.Error("unexpected client error", slog.Any("err", err))
+					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
+						logger.Error("unexpected cache error", slog.Any("err", err))
+					}
+					return false, 0, nil
 				}
+				continue
 			}
-			return true, nil
-		case proto.ErrLimitExceeded:
-			c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
-			return false, err
-		case ErrCachePing:
-			ok, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
-			if err != nil {
-				return false, err
-			}
-			if !ok {
-				return false, proto.ErrTimeout
-			}
-			fallthrough
-		case ErrCacheWait:
-			time.Sleep(time.Millisecond * 100 * (i + 1))
-		default:
-			return false, err
-		}
-	}
 
-	return false, proto.ErrTimeout
+			// wait for cache to be ready
+			if errors.Is(err, ErrCacheWait) {
+				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
+				continue
+			}
+
+			logger.Error("unexpected cache error", slog.Any("err", err))
+			return false, 0, err
+
+		}
+
+		usage, event := cfg.GetSpendResult(computeUnits, total)
+		if quota.AccessKey.AccessKey == "" {
+			c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
+		} else {
+			c.usage.AddKeyUsage(accessKey, now, usage)
+		}
+		if usage.LimitedCompute != 0 {
+			return false, total, proto.ErrLimitExceeded
+		}
+		if event != nil {
+			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
+				logger.Error("notify event failed", slog.Any("err", err))
+			}
+		}
+		return true, total, nil
+	}
+	logger.Error("operation timed out")
+	return false, 0, nil
+}
+
+func (c *Client) ClearQuotaCacheByProjectID(ctx context.Context, projectID uint64) error {
+	return c.quotaCache.DeleteProjectQuota(ctx, projectID)
 }
 
 func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey string) error {
@@ -268,7 +331,7 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 	// Start the sync
 	for range c.ticker.C {
-		if err := c.usage.SyncUsage(ctx, c.quotaClient, &c.service); err != nil {
+		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
 			c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 			continue
 		}
@@ -287,7 +350,7 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
-	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, &c.service); err != nil {
+	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
 		c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
 	}
 	c.logger.With("op", "stop").Info("-> quota control: stopped.")
@@ -301,14 +364,11 @@ func (c *Client) isStopping() bool {
 	return atomic.LoadInt32(&c.running) == 2
 }
 
-type authorizedClient struct {
-	client      *http.Client
-	bearerToken string
-}
+type bearerToken string
 
-func (c *authorizedClient) Do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", c.bearerToken))
-	return c.client.Do(req)
+func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", t))
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 func getQuotaKey(projectID uint64, cycle *proto.Cycle, now time.Time) string {
