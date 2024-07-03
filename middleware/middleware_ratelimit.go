@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"fmt"
+	"cmp"
 	"net/http"
 	"time"
 
@@ -28,19 +28,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 		}
 	}
 
-	// httprate limit counter
-	defaultRPM := 120
-	if rlCfg.PublicRPM != 0 {
-		defaultRPM = rlCfg.PublicRPM
-	}
-	accountRPM := 4000
-	if rlCfg.AccountRPM != 0 {
-		accountRPM = rlCfg.AccountRPM
-	}
-	serviceRPM := 0
-	if rlCfg.ServiceRPM != 0 {
-		serviceRPM = rlCfg.ServiceRPM
-	}
+	defaultRPM := cmp.Or(rlCfg.PublicRPM, 120)
+	accountRPM := cmp.Or(rlCfg.AccountRPM, 4000)
+	serviceRPM := cmp.Or(rlCfg.ServiceRPM, 0)
 
 	var limitCounter httprate.LimitCounter
 	if redisCfg.Enabled {
@@ -51,11 +41,6 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 			MaxActive: redisCfg.MaxActive,
 			DBIndex:   redisCfg.DBIndex,
 		})
-	}
-
-	errLimit := proto.ErrLimitExceeded
-	if rlCfg.ErrorMsg != "" {
-		errLimit.Message = rlCfg.ErrorMsg
 	}
 
 	options := []httprate.Option{
@@ -72,37 +57,39 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 			}
 			return httprate.KeyByRealIP(r)
 		}),
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, errLimit)
-		}),
+		httprate.WithLimitHandler(proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg).Handler),
 	}
 
 	limiter := httprate.NewRateLimiter(defaultRPM, _RateLimitWindow, options...)
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-
-			if q := GetAccessQuota(r.Context()); q != nil {
-				ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
-			}
-			if account := GetAccount(r.Context()); account != "" {
-				ctx = httprate.WithRequestLimit(ctx, accountRPM)
-			}
-			if service := GetService(r.Context()); service != "" {
-				ctx = httprate.WithRequestLimit(ctx, serviceRPM)
-			}
-
-			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
-		})
+		return rateLimit{
+			AccountRPM: accountRPM,
+			ServiceRPM: serviceRPM,
+			Next:       limiter.Handler(next),
+		}
 	}
 }
 
-func ProjectRateKey(projectID uint64) string {
-	return fmt.Sprintf("rl:project:%d", projectID)
+type rateLimit struct {
+	AccountRPM int
+	ServiceRPM int
+	Next       http.Handler
 }
 
-func AccountRateKey(account string) string {
-	return fmt.Sprintf("rl:account:%s", account)
+func (m rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if q := GetAccessQuota(r.Context()); q != nil {
+		ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
+	}
+	if account := GetAccount(r.Context()); account != "" {
+		ctx = httprate.WithRequestLimit(ctx, m.AccountRPM)
+	}
+	if service := GetService(r.Context()); service != "" {
+		ctx = httprate.WithRequestLimit(ctx, m.ServiceRPM)
+	}
+
+	m.Next.ServeHTTP(w, r.WithContext(ctx))
 }

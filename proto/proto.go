@@ -4,6 +4,7 @@ package proto
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 )
 
@@ -212,4 +213,16 @@ func (u *UserPermission) CanAccess(perm UserPermission) bool {
 		return false
 	}
 	return *u >= perm
+}
+
+func (e WebRPCError) WithMessage(message string) WebRPCError {
+	err := e
+	if message != "" {
+		err.Message = message
+	}
+	return err
+}
+
+func (e WebRPCError) Handler(w http.ResponseWriter, r *http.Request) {
+	RespondWithError(w, e)
 }

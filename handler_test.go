@@ -525,7 +525,7 @@ func TestSession(t *testing.T) {
 	r.Use(
 		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
-		middleware.Session(auth),
+		middleware.Session(),
 		middleware.AccessControl(ACL, middleware.Cost{}, 1),
 	)
 	r.Handle("/*", &counter)
