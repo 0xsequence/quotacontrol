@@ -50,10 +50,10 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 			if q, ok := GetAccessQuota(ctx); ok {
 				return ProjectRateKey(q.GetProjectID()), nil
 			}
-			if account := GetAccount(ctx); account != "" {
+			if account, ok := GetAccount(ctx); ok {
 				return AccountRateKey(account), nil
 			}
-			if service := GetService(ctx); service != "" {
+			if _, ok := GetService(ctx); ok {
 				return "", nil
 			}
 			return httprate.KeyByRealIP(r)
@@ -84,11 +84,10 @@ func (m rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if q, ok := GetAccessQuota(ctx); ok {
 		ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
-	}
-	if account := GetAccount(ctx); account != "" {
+	} else if _, ok := GetAccount(ctx); ok {
 		ctx = httprate.WithRequestLimit(ctx, m.AccountRPM)
 	}
-	if service := GetService(ctx); service != "" {
+	if _, ok := GetService(ctx); ok {
 		ctx = httprate.WithRequestLimit(ctx, m.ServiceRPM)
 	}
 

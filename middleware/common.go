@@ -145,12 +145,9 @@ func withAccount(ctx context.Context, account string) context.Context {
 }
 
 // GetAccount returns the account from the context.
-func GetAccount(ctx context.Context) string {
+func GetAccount(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxKeyAccount).(string)
-	if !ok {
-		return ""
-	}
-	return v
+	return v, ok
 }
 
 // withService adds the service to the context.
@@ -159,12 +156,9 @@ func withService(ctx context.Context, service string) context.Context {
 }
 
 // GetService returns the service from the context.
-func GetService(ctx context.Context) string {
+func GetService(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxKeyService).(string)
-	if !ok {
-		return ""
-	}
-	return v
+	return v, ok
 }
 
 // WithAccessKey adds the access key to the context.
@@ -173,12 +167,9 @@ func WithAccessKey(ctx context.Context, accessKey string) context.Context {
 }
 
 // GetAccessKey returns the access key from the context.
-func GetAccessKey(ctx context.Context) string {
+func GetAccessKey(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxKeyAccessKey).(string)
-	if !ok {
-		return ""
-	}
-	return v
+	return v, ok
 }
 
 // withAccessQuota adds the quota to the context.

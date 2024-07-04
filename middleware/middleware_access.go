@@ -130,7 +130,9 @@ func (m verify) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		perm, _, err := m.Client.FetchPermission(ctx, projectID, GetAccount(ctx), true)
+		account, _ := GetAccount(ctx)
+
+		perm, _, err := m.Client.FetchPermission(ctx, projectID, account, true)
 		if err != nil {
 			proto.RespondWithError(w, err)
 			return
@@ -144,7 +146,7 @@ func (m verify) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check if we have an access key
-	if accessKey := GetAccessKey(ctx); accessKey != "" {
+	if accessKey, ok := GetAccessKey(ctx); ok {
 		q, err := m.Client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 		if err != nil {
 			proto.RespondWithError(w, err)
@@ -185,7 +187,9 @@ func (m permission) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	perm, _, err := m.Client.FetchPermission(ctx, q.GetProjectID(), GetAccount(ctx), true)
+	account, _ := GetAccount(ctx)
+
+	perm, _, err := m.Client.FetchPermission(ctx, q.GetProjectID(), account, true)
 	if err != nil || !perm.CanAccess(m.Perm) {
 		proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 		return

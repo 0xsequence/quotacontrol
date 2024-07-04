@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const RateLimitHeader = "x-ratelimit-limit"
+
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	cfg := newConfig()
 	server := newTestServer(t, &cfg)
@@ -430,6 +432,7 @@ func TestJWTAccess(t *testing.T) {
 	r.Use(
 		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis),
 		middleware.EnsurePermission(client, UserPermission_READ_WRITE),
 	)
 	r.Handle("/*", &counter)
@@ -470,6 +473,7 @@ func TestJWTAccess(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(RateLimitHeader))
 		expectedHits++
 	})
 
@@ -480,6 +484,7 @@ func TestJWTAccess(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(RateLimitHeader))
 		expectedHits++
 	})
 
