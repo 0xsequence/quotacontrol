@@ -82,13 +82,12 @@ type rateLimit struct {
 func (m rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if q, ok := GetAccessQuota(ctx); ok {
+	if _, ok := GetService(ctx); ok {
+		ctx = httprate.WithRequestLimit(ctx, m.ServiceRPM)
+	} else if q, ok := GetAccessQuota(ctx); ok {
 		ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
 	} else if _, ok := GetAccount(ctx); ok {
 		ctx = httprate.WithRequestLimit(ctx, m.AccountRPM)
-	}
-	if _, ok := GetService(ctx); ok {
-		ctx = httprate.WithRequestLimit(ctx, m.ServiceRPM)
 	}
 
 	m.Next.ServeHTTP(w, r.WithContext(ctx))

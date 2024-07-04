@@ -32,8 +32,10 @@ func newConfig() quotacontrol.Config {
 			Enabled: true,
 		},
 		RateLimiter: middleware.RLConfig{
-			Enabled:   true,
-			PublicRPM: 10,
+			Enabled:    true,
+			PublicRPM:  10,
+			AccountRPM: 100,
+			ServiceRPM: 1000,
 		},
 	}
 }

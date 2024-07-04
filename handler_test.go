@@ -357,6 +357,7 @@ func TestJWT(t *testing.T) {
 	r.Use(
 		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
+		middleware.Session(),
 		middleware.EnsureUsage(client),
 		middleware.SpendUsage(client),
 	)
@@ -399,10 +400,9 @@ func TestJWT(t *testing.T) {
 	})
 	server.store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
 	t.Run("AccessKeyFound", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", key, token)
+		ok, _, err := executeRequest(ctx, r, "", key, token)
 		require.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		expectedHits++
 	})
 	t.Run("AccessKeyMismatch", func(t *testing.T) {
@@ -464,6 +464,7 @@ func TestJWTAccess(t *testing.T) {
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(RateLimitHeader))
 	})
 
 	server.store.SetUserPermission(ctx, project, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: project})
@@ -531,6 +532,7 @@ func TestSession(t *testing.T) {
 		middleware.SetCredentials(auth),
 		middleware.VerifyQuota(client),
 		middleware.Session(),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis),
 		middleware.AccessControl(ACL, middleware.Cost{}, 1),
 	)
 	r.Handle("/*", &counter)
@@ -558,11 +560,6 @@ func TestSession(t *testing.T) {
 		{
 			Claims:  middleware.Claims{"account": address},
 			Session: proto.SessionType_Account,
-		},
-		{
-			AccessKey: key,
-			Claims:    middleware.Claims{"account": address},
-			Session:   proto.SessionType_AccessKey,
 		},
 		{
 			AccessKey: key,
@@ -598,17 +595,25 @@ func TestSession(t *testing.T) {
 		},
 	}
 
+	var (
+		publicRPM  = fmt.Sprint(cfg.RateLimiter.PublicRPM)
+		accountRPM = fmt.Sprint(cfg.RateLimiter.AccountRPM)
+		serviceRPM = fmt.Sprint(cfg.RateLimiter.ServiceRPM)
+		quotaRPM   = fmt.Sprint(limit.RateLimit)
+	)
+
 	for service := range ACL {
 		for _, method := range []string{MethodPublic, MethodAccount, MethodAccessKey, MethodProject, MethodAdmin, MethodService} {
 			minSession := ACL[service][method]
 			fmt.Printf("%s/%s - %s+\n", service, method, minSession)
 			for _, tc := range testCases {
+				args := []any{"%s/%s %+v", service, method, tc}
 				path := "/rpc/" + service + "/" + method
 				jwt := ""
 				if tc.Claims != nil {
 					jwt = mustJWT(t, auth, tc.Claims)
 				}
-				ok, _, err := executeRequest(ctx, r, path, tc.AccessKey, jwt)
+				ok, h, err := executeRequest(ctx, r, path, tc.AccessKey, jwt)
 				success := tc.Session >= minSession
 				if ok != success {
 					fmt.Printf("  - %s %v Key:%v\n", tc.Session, tc.Claims, tc.AccessKey != "")
@@ -616,8 +621,19 @@ func TestSession(t *testing.T) {
 				if success {
 					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
 					assert.True(t, ok)
+					switch v := h.Get(RateLimitHeader); tc.Session {
+					case proto.SessionType_Public:
+						assert.Equal(t, publicRPM, v)
+					case proto.SessionType_AccessKey, proto.SessionType_Project:
+						assert.Equal(t, quotaRPM, v)
+						assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), h.Get(middleware.HeaderQuotaLimit))
+					case proto.SessionType_Account:
+						assert.Equal(t, accountRPM, v)
+					case proto.SessionType_Service:
+						assert.Equal(t, serviceRPM, v, args...)
+					}
 				} else {
-					assert.Error(t, err, "%s/%s %+v", service, method, tc)
+					assert.Error(t, err, args...)
 					assert.False(t, ok)
 				}
 			}
