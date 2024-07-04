@@ -1,129 +1,121 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
-	"strings"
+	"strconv"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-// Session middleware that detects the session type and sets the account or service on the context.
-func Session() func(http.Handler) http.Handler {
+type KeyFunc func(*http.Request) string
+
+func KeyFromHeader(r *http.Request) string {
+	return r.Header.Get(HeaderAccessKey)
+}
+
+func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
+	keyFuncs = append([]KeyFunc{KeyFromHeader}, keyFuncs...)
 	return func(next http.Handler) http.Handler {
-		return session{Next: next}
-	}
-}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			var (
+				sessionType proto.SessionType
+				quota       *proto.AccessQuota
+				accessKey   string
+				token       jwt.Token
+			)
 
-// AccessControl middleware that checks if the session type is allowed to access the endpoint.
-// It also sets the compute units on the context if the endpoint requires it.
-func AccessControl(acl ACL, cost Cost, defaultCost int64) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return accessControl{
-			ACL:         acl,
-			Cost:        cost,
-			DefaultCost: defaultCost,
-			Next:        next,
-		}
-	}
-}
-
-type session struct {
-	Next http.Handler
-}
-
-func (m session) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	_, claims, ok := getJWT(ctx)
-	if !ok {
-		sessionType := proto.SessionType_Public
-		if _, ok := GetAccessQuota(ctx); ok {
-			sessionType = proto.SessionType_AccessKey
-		}
-		ctx = withSessionType(ctx, sessionType)
-		m.Next.ServeHTTP(w, r.WithContext(ctx))
-		return
-	}
-
-	// Origin check
-	if originClaim, ok := claims["ogn"].(string); ok {
-		originClaim = strings.TrimSuffix(originClaim, "/")
-		originHeader := strings.TrimSuffix(r.Header.Get("Origin"), "/")
-		if originHeader != "" && originHeader != originClaim {
-			proto.RespondWithError(w, proto.ErrUnauthorized.WithCausef("invalid origin claim"))
-			return
-		}
-	}
-
-	// Set account or service on the context
-	accountClaim, _ := claims["account"].(string)
-	serviceClaim, _ := claims["service"].(string)
-	adminClaim, _ := claims["admin"].(bool)
-
-	switch quota, ok := GetAccessQuota(ctx); {
-	case serviceClaim != "":
-		ctx = withSessionType(ctx, proto.SessionType_Service)
-		ctx = withService(ctx, serviceClaim)
-	case adminClaim:
-		if accountClaim == "" {
-			proto.RespondWithError(w, proto.ErrUnauthorized)
-			return
-		}
-		ctx = withAccount(ctx, accountClaim)
-		ctx = withSessionType(ctx, proto.SessionType_Admin)
-	case accountClaim != "":
-		ctx = withAccount(ctx, accountClaim)
-		sessionType := proto.SessionType_Account
-		if ok {
-			sessionType = proto.SessionType_AccessKey
-			if quota.IsJWT() {
-				sessionType = proto.SessionType_Project
+			for _, f := range keyFuncs {
+				if accessKey = f(r); accessKey != "" {
+					break
+				}
 			}
-		}
-		ctx = withSessionType(ctx, sessionType)
-	default:
-		sessionType := proto.SessionType_Public
-		if ok {
-			sessionType = proto.SessionType_AccessKey
-		}
-		ctx = withSessionType(ctx, sessionType)
+
+			token, err := jwtauth.VerifyRequest(auth, r, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie)
+			if err != nil {
+				if errors.Is(err, jwtauth.ErrExpired) {
+					proto.RespondWithError(w, proto.ErrSessionExpired)
+					return
+				}
+				if !errors.Is(err, jwtauth.ErrNoTokenFound) {
+					proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+					return
+				}
+			}
+
+			now := GetTime(ctx)
+
+			if token != nil {
+				claims, err := token.AsMap(r.Context())
+				if err != nil {
+					proto.RespondWithError(w, err)
+					return
+				}
+
+				if serviceClaim, ok := claims["service"].(string); ok {
+					ctx = withService(ctx, serviceClaim)
+					sessionType = proto.SessionType_Service
+				} else if accountClaim, ok := claims["account"].(string); ok {
+					ctx = withAccount(ctx, accountClaim)
+					sessionType = proto.SessionType_Account
+					if adminClaim, ok := claims["admin"].(bool); ok && adminClaim {
+						sessionType = proto.SessionType_Admin
+					} else if projectClaim, ok := claims["project"].(float64); ok {
+						projectID := uint64(projectClaim)
+						if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
+							proto.RespondWithError(w, err)
+							return
+						}
+						perm, _, err := client.FetchPermission(ctx, projectID, accountClaim, true)
+						if err != nil {
+							proto.RespondWithError(w, err)
+							return
+						}
+						if !perm.CanAccess(proto.UserPermission_READ) {
+							proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+							return
+						}
+						ctx = withProjectID(ctx, projectID)
+						sessionType = proto.SessionType_Project
+					}
+				}
+			}
+			if accessKey != "" && sessionType < proto.SessionType_Admin {
+				projectID, err := proto.GetProjectID(accessKey)
+				if err != nil {
+					proto.RespondWithError(w, err)
+					return
+				}
+				if quota != nil && quota.GetProjectID() != projectID {
+					proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
+					return
+				}
+				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
+				if err != nil {
+					proto.RespondWithError(w, err)
+					return
+				}
+				if q != nil && !q.IsActive() {
+					proto.RespondWithError(w, proto.ErrAccessKeyNotFound)
+					return
+				}
+				if quota == nil {
+					quota = q
+				}
+				sessionType = max(sessionType, proto.SessionType_AccessKey)
+			}
+
+			ctx = withSessionType(ctx, sessionType)
+
+			if quota != nil {
+				ctx = withAccessQuota(ctx, quota)
+				w.Header().Set(HeaderQuotaLimit, strconv.FormatInt(quota.Limit.FreeMax, 10))
+			}
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
-
-	m.Next.ServeHTTP(w, r.WithContext(ctx))
-}
-
-type accessControl struct {
-	ACL         ACL
-	Cost        Cost
-	DefaultCost int64
-	Next        http.Handler
-}
-
-func (m accessControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	req := newRequest(r.URL.Path)
-	if req == nil {
-		proto.RespondWithError(w, proto.ErrUnauthorized.WithCausef("invalid rpc method called"))
-		return
-	}
-
-	min, ok := m.ACL.GetConfig(req)
-	if !ok {
-		proto.RespondWithError(w, proto.ErrUnauthorized.WithCausef("rpc method not found"))
-		return
-	}
-
-	if session := GetSessionType(r.Context()); session < min {
-		proto.RespondWithError(w, proto.ErrUnauthorized)
-		return
-	}
-
-	ctx := r.Context()
-
-	credits := m.DefaultCost
-	if v, ok := m.Cost.GetConfig(req); ok {
-		credits = v
-	}
-	ctx = WithComputeUnits(ctx, credits)
-
-	m.Next.ServeHTTP(w, r.WithContext(ctx))
 }

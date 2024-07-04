@@ -65,30 +65,18 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
-		return rateLimit{
-			AccountRPM: accountRPM,
-			ServiceRPM: serviceRPM,
-			Next:       limiter.Handler(next),
-		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+
+			if _, ok := GetService(ctx); ok {
+				ctx = httprate.WithRequestLimit(ctx, serviceRPM)
+			} else if q, ok := GetAccessQuota(ctx); ok {
+				ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
+			} else if _, ok := GetAccount(ctx); ok {
+				ctx = httprate.WithRequestLimit(ctx, accountRPM)
+			}
+
+			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
-}
-
-type rateLimit struct {
-	AccountRPM int
-	ServiceRPM int
-	Next       http.Handler
-}
-
-func (m rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	if _, ok := GetService(ctx); ok {
-		ctx = httprate.WithRequestLimit(ctx, m.ServiceRPM)
-	} else if q, ok := GetAccessQuota(ctx); ok {
-		ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
-	} else if _, ok := GetAccount(ctx); ok {
-		ctx = httprate.WithRequestLimit(ctx, m.AccountRPM)
-	}
-
-	m.Next.ServeHTTP(w, r.WithContext(ctx))
 }
