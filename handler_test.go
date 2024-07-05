@@ -24,7 +24,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	auth := jwtauth.New("HS256", []byte("secret"), nil)
 
 	cfg := newConfig()
-	server := test.NewServer(t, &cfg)
+	server, cleanup := test.NewServer(&cfg)
+	t.Cleanup(cleanup)
 
 	now := time.Now()
 	project := uint64(7)
@@ -270,7 +271,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 func TestDefaultKey(t *testing.T) {
 	cfg := newConfig()
-	server := test.NewServer(t, &cfg)
+	server, cleanup := test.NewServer(&cfg)
+	t.Cleanup(cleanup)
 
 	now := time.Now()
 	project := uint64(7)
@@ -351,7 +353,8 @@ func TestJWT(t *testing.T) {
 	counter := spendingCounter(0)
 
 	cfg := newConfig()
-	server := test.NewServer(t, &cfg)
+	server, cleanup := test.NewServer(&cfg)
+	t.Cleanup(cleanup)
 	client := newQuotaClient(cfg, service)
 
 	r := chi.NewRouter()
@@ -425,7 +428,8 @@ func TestJWTAccess(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server := test.NewServer(t, &cfg)
+	server, cleanup := test.NewServer(&cfg)
+	t.Cleanup(cleanup)
 	client := newQuotaClient(cfg, service)
 
 	r := chi.NewRouter()
@@ -503,7 +507,8 @@ func TestSession(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server := test.NewServer(t, &cfg)
+	server, cleanup := test.NewServer(&cfg)
+	t.Cleanup(cleanup)
 	client := newQuotaClient(cfg, service)
 
 	const (

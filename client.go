@@ -59,7 +59,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 			Transport: bearerToken(cfg.AuthToken),
 		}),
 		ticker: ticker,
-		logger: logger,
+		logger: logger.With(slog.String("service", "quotacontrol")),
 	}
 }
 
@@ -109,12 +109,12 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 			slog.Uint64("project_id", projectID),
 		)
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
-			logger.Warn("unexpected cache error", slog.Any("err", err))
+			logger.Warn("unexpected cache error", slog.Any("error", err))
 			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetProjectQuota(ctx, projectID, now); err != nil {
 			if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
-				logger.Warn("unexpected client error", slog.Any("err", err))
+				logger.Warn("unexpected client error", slog.Any("error", err))
 				return nil, nil
 			}
 			return nil, err
@@ -133,12 +133,12 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 	quota, err := c.quotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
-			logger.Warn("unexpected cache error", slog.Any("err", err))
+			logger.Warn("unexpected cache error", slog.Any("error", err))
 			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
 			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
-				logger.Warn("unexpected client error", slog.Any("err", err))
+				logger.Warn("unexpected client error", slog.Any("error", err))
 				return nil, nil
 			}
 			return nil, err
@@ -167,9 +167,9 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
 				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
-					logger.Error("unexpected client error", slog.Any("err", err))
+					logger.Error("unexpected client error", slog.Any("error", err))
 					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
-						logger.Error("unexpected cache error", slog.Any("err", err))
+						logger.Error("unexpected cache error", slog.Any("error", err))
 					}
 					return 0, nil
 				}
@@ -182,7 +182,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 				continue
 			}
 
-			logger.Error("unexpected cache error", slog.Any("err", err))
+			logger.Error("unexpected cache error", slog.Any("error", err))
 			return 0, err
 		}
 
@@ -196,7 +196,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 // If an error occurs, it returns nil.
 func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (proto.UserPermission, *proto.ResourceAccess, error) {
 	logger := c.logger.With(
-		slog.String("op", "spend_quota"),
+		slog.String("op", "fetch_permission"),
 		slog.Uint64("project_id", projectID),
 		slog.String("user_id", userID),
 	)
@@ -205,7 +205,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID s
 		perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
 		if err != nil {
 			// log the error, but don't stop
-			logger.Error("unexpected cache error", slog.Any("err", err))
+			logger.Error("unexpected cache error", slog.Any("error", err))
 		}
 		if perm != proto.UserPermission_UNAUTHORIZED {
 			return perm, access, nil
@@ -215,7 +215,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID s
 	// Ask quotacontrol server via client
 	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
-		logger.Error("unexpected client error", slog.Any("err", err))
+		logger.Error("unexpected client error", slog.Any("error", err))
 		return proto.UserPermission_UNAUTHORIZED, nil, err
 	}
 	return perm, access, nil
@@ -250,9 +250,9 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
 				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
-					logger.Error("unexpected client error", slog.Any("err", err))
+					logger.Error("unexpected client error", slog.Any("error", err))
 					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
-						logger.Error("unexpected cache error", slog.Any("err", err))
+						logger.Error("unexpected cache error", slog.Any("error", err))
 					}
 					return false, 0, nil
 				}
@@ -265,7 +265,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 				continue
 			}
 
-			logger.Error("unexpected cache error", slog.Any("err", err))
+			logger.Error("unexpected cache error", slog.Any("error", err))
 			return false, 0, err
 
 		}
@@ -281,7 +281,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 		}
 		if event != nil {
 			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
-				logger.Error("notify event failed", slog.Any("err", err))
+				logger.Error("notify event failed", slog.Any("error", err))
 			}
 		}
 		return true, total, nil
@@ -316,7 +316,8 @@ func (c *Client) Run(ctx context.Context) error {
 		return fmt.Errorf("quota control: already running")
 	}
 
-	c.logger.With("op", "run").Info("-> quota control: running")
+	logger := c.logger.With("op", "run")
+	logger.Info("running...")
 
 	atomic.StoreInt32(&c.running, 1)
 	defer atomic.StoreInt32(&c.running, 0)
@@ -332,10 +333,10 @@ func (c *Client) Run(ctx context.Context) error {
 	// Start the sync
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
-			c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
+			logger.Error("sync usage", slog.Any("error", err))
 			continue
 		}
-		c.logger.With("op", "run").Info("-> quota control: synced usage")
+		logger.Debug("sync usage")
 	}
 	return nil
 }
@@ -346,14 +347,16 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	}
 	atomic.StoreInt32(&c.running, 2)
 
-	c.logger.With("op", "stop").Info("-> quota control: stopping..")
+	logger := c.logger.With("op", "stop")
+
+	logger.Info("stopping...")
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
 	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
-		c.logger.With("err", err, "op", "run").Error("-> quota control: failed to sync usage")
+		logger.Error("sync usage", slog.Any("error", err))
 	}
-	c.logger.With("op", "stop").Info("-> quota control: stopped.")
+	logger.Info("stopped.")
 }
 
 func (c *Client) isRunning() bool {
