@@ -8,7 +8,6 @@ import (
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 const (
@@ -116,8 +115,6 @@ var (
 	ctxKeySessionType  = &contextKey{"SessionType"}
 	ctxKeyAccount      = &contextKey{"Account"}
 	ctxKeyService      = &contextKey{"Service"}
-	ctxKeyJWT          = &contextKey{"JWT"}
-	ctxKeyClaims       = &contextKey{"Claims"}
 	ctxKeyAccessKey    = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
 	ctxKeyProjectID    = &contextKey{"ProjectID"}
@@ -247,21 +244,4 @@ func withSpending(ctx context.Context) context.Context {
 func HasSpending(ctx context.Context) bool {
 	_, ok := ctx.Value(ctxKeySpending).(struct{})
 	return ok
-}
-
-// withJWT sets the JWT to the context.
-func withJWT(ctx context.Context, token jwt.Token, claims Claims) context.Context {
-	return context.WithValue(context.WithValue(ctx, ctxKeyJWT, token), ctxKeyClaims, claims)
-}
-
-func getJWT(ctx context.Context) (jwt.Token, Claims, bool) {
-	token, ok := ctx.Value(ctxKeyJWT).(jwt.Token)
-	if !ok {
-		return nil, nil, false
-	}
-	claims, ok := ctx.Value(ctxKeyClaims).(Claims)
-	if !ok {
-		return nil, nil, false
-	}
-	return token, claims, ok
 }
