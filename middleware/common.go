@@ -202,7 +202,7 @@ func getProjectID(ctx context.Context) (uint64, bool) {
 	return v, ok
 }
 
-// WithComputeUnits sets the compute units and rate limit increment to the context.
+// WithComputeUnits sets the compute units.
 func WithComputeUnits(ctx context.Context, cu int64) context.Context {
 	return context.WithValue(ctx, ctxKeyComputeUnits, cu)
 }
