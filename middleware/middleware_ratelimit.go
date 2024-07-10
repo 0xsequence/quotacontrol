@@ -71,6 +71,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 			if _, ok := GetService(ctx); ok {
 				ctx = httprate.WithRequestLimit(ctx, serviceRPM)
 			} else if q, ok := GetAccessQuota(ctx); ok {
+				if cu, ok := getComputeUnits(ctx); ok {
+					ctx = httprate.WithIncrement(ctx, int(cu))
+				}
 				ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
 			} else if _, ok := GetAccount(ctx); ok {
 				ctx = httprate.WithRequestLimit(ctx, accountRPM)

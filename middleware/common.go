@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/go-chi/httprate"
 )
 
 const (
@@ -205,7 +204,6 @@ func getProjectID(ctx context.Context) (uint64, bool) {
 
 // WithComputeUnits sets the compute units and rate limit increment to the context.
 func WithComputeUnits(ctx context.Context, cu int64) context.Context {
-	ctx = httprate.WithIncrement(ctx, int(cu))
 	return context.WithValue(ctx, ctxKeyComputeUnits, cu)
 }
 
