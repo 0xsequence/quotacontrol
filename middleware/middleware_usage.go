@@ -28,7 +28,7 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
+			w.Header().Set(HeaderCreditsCost, strconv.FormatInt(cu, 10))
 
 			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
@@ -74,7 +74,7 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
+			w.Header().Set(HeaderCreditsCost, strconv.FormatInt(cu, 10))
 
 			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrLimitExceeded) {

@@ -11,15 +11,15 @@ import (
 )
 
 const (
-	HeaderAccessKey          = "X-Access-Key"
-	HeaderOrigin             = "Origin"
-	HeaderQuotaLimit         = "Quota-Limit"
-	HeaderQuotaRemaining     = "Quota-Remaining"
-	HeaderQuotaOverage       = "Quota-Overage"
-	HeaderQuotaCost          = "Quota-Cost"
-	HeaderQuotaRateRemaining = "Quota-Rate-Remaining"
-	HeaderQuotaRateLimit     = "Quota-Rate-Limit"
-	HeaderQuotaRateReset     = "Quota-Rate-Reset"
+	HeaderAccessKey        = "X-Access-Key"
+	HeaderOrigin           = "Origin"
+	HeaderQuotaLimit       = "Quota-Limit"
+	HeaderQuotaRemaining   = "Quota-Remaining"
+	HeaderQuotaOverage     = "Quota-Overage"
+	HeaderCreditsCost      = "Credits-Cost"
+	HeaderCreditsRemaining = "Credits-Rate-Remaining"
+	HeaderCreditsLimit     = "Credits-Rate-Limit"
+	HeaderCreditsReset     = "Credits-Rate-Reset"
 )
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.

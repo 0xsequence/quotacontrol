@@ -81,9 +81,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 	return func(next http.Handler) http.Handler {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := w.Header()
-			swapHeader(h, "X-RateLimit-Limit", HeaderQuotaRateLimit)
-			swapHeader(h, "X-RateLimit-Remaining", HeaderQuotaRateRemaining)
-			swapHeader(h, "X-RateLimit-Reset", HeaderQuotaRateReset)
+			swapHeader(h, "X-RateLimit-Limit", HeaderCreditsLimit)
+			swapHeader(h, "X-RateLimit-Remaining", HeaderCreditsRemaining)
+			swapHeader(h, "X-RateLimit-Reset", HeaderCreditsReset)
 			next.ServeHTTP(w, r)
 		})
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

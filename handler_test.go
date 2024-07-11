@@ -18,8 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const RateLimitHeader = "x-ratelimit-limit"
-
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	auth := jwtauth.New("HS256", []byte("secret"), nil)
 
@@ -468,7 +466,7 @@ func TestJWTAccess(t *testing.T) {
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(RateLimitHeader))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderCreditsLimit))
 	})
 
 	server.Store.SetUserPermission(ctx, project, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: project})
@@ -478,7 +476,7 @@ func TestJWTAccess(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(RateLimitHeader))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderCreditsLimit))
 		expectedHits++
 	})
 
@@ -489,7 +487,7 @@ func TestJWTAccess(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(RateLimitHeader))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderCreditsLimit))
 		expectedHits++
 	})
 
@@ -633,7 +631,7 @@ func TestSession(t *testing.T) {
 				if success {
 					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
 					assert.True(t, ok)
-					switch v := h.Get(RateLimitHeader); tc.Session {
+					switch v := h.Get(middleware.HeaderCreditsLimit); tc.Session {
 					case proto.SessionType_Public:
 						assert.Equal(t, publicRPM, v)
 					case proto.SessionType_AccessKey, proto.SessionType_Project:
