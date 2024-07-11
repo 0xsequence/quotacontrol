@@ -94,8 +94,12 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 		})
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			ctx = httprate.WithRequestLimit(ctx, rlCfg.getRateLimit(ctx))
-			limiter.Handler(handler).ServeHTTP(w, r.WithContext(ctx))
+			if limit := rlCfg.getRateLimit(ctx); limit > 0 {
+				ctx = httprate.WithRequestLimit(ctx, limit)
+				limiter.Handler(handler).ServeHTTP(w, r.WithContext(ctx))
+			} else {
+				next.ServeHTTP(w, r)
+			}
 		})
 	}
 }
