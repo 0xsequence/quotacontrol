@@ -7,14 +7,19 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/httprate"
 )
 
 const (
-	HeaderAccessKey      = "X-Access-Key"
-	HeaderOrigin         = "Origin"
-	HeaderQuotaLimit     = "Quota-Limit"
-	HeaderQuotaRemaining = "Quota-Remaining"
-	HeaderQuotaOverage   = "Quota-Overage"
+	HeaderAccessKey          = "X-Access-Key"
+	HeaderOrigin             = "Origin"
+	HeaderQuotaLimit         = "Quota-Limit"
+	HeaderQuotaRemaining     = "Quota-Remaining"
+	HeaderQuotaOverage       = "Quota-Overage"
+	HeaderQuotaCost          = "Quota-Cost"
+	HeaderQuotaRateRemaining = "Quota-Rate-Remaining"
+	HeaderQuotaRateLimit     = "Quota-Rate-Limit"
+	HeaderQuotaRateReset     = "Quota-Rate-Reset"
 )
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
@@ -202,8 +207,9 @@ func getProjectID(ctx context.Context) (uint64, bool) {
 	return v, ok
 }
 
-// WithComputeUnits sets the compute units.
+// WithComputeUnits sets the compute units and rate limit increment to the context.
 func WithComputeUnits(ctx context.Context, cu int64) context.Context {
+	ctx = httprate.WithIncrement(ctx, int(cu))
 	return context.WithValue(ctx, ctxKeyComputeUnits, cu)
 }
 

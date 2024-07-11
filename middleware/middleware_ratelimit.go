@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"cmp"
+	"context"
 	"net/http"
 	"time"
 
@@ -21,6 +22,19 @@ type RLConfig struct {
 	ErrorMsg   string `toml:"error_message"`
 }
 
+func (r RLConfig) getRateLimit(ctx context.Context) int {
+	if _, ok := GetService(ctx); ok {
+		return r.ServiceRPM
+	}
+	if q, ok := GetAccessQuota(ctx); ok {
+		return int(q.Limit.RateLimit)
+	}
+	if _, ok := GetAccount(ctx); ok {
+		return r.AccountRPM
+	}
+	return r.PublicRPM
+}
+
 func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) http.Handler {
 	if !rlCfg.Enabled {
 		return func(next http.Handler) http.Handler {
@@ -28,9 +42,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 		}
 	}
 
-	defaultRPM := cmp.Or(rlCfg.PublicRPM, 120)
-	accountRPM := cmp.Or(rlCfg.AccountRPM, 4000)
-	serviceRPM := cmp.Or(rlCfg.ServiceRPM, 0)
+	rlCfg.PublicRPM = cmp.Or(rlCfg.PublicRPM, 1000)
+	rlCfg.AccountRPM = cmp.Or(rlCfg.AccountRPM, 4000)
+	rlCfg.ServiceRPM = cmp.Or(rlCfg.ServiceRPM, 0)
 
 	var limitCounter httprate.LimitCounter
 	if redisCfg.Enabled {
@@ -61,25 +75,29 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 		httprate.WithLimitHandler(proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg).Handler),
 	}
 
-	limiter := httprate.NewRateLimiter(defaultRPM, _RateLimitWindow, options...)
+	limiter := httprate.NewRateLimiter(rlCfg.PublicRPM, _RateLimitWindow, options...)
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			swapHeader(h, "X-RateLimit-Limit", HeaderQuotaRateLimit)
+			swapHeader(h, "X-RateLimit-Remaining", HeaderQuotaRateRemaining)
+			swapHeader(h, "X-RateLimit-Reset", HeaderQuotaRateReset)
+			next.ServeHTTP(w, r)
+		})
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-
-			if _, ok := GetService(ctx); ok {
-				ctx = httprate.WithRequestLimit(ctx, serviceRPM)
-			} else if q, ok := GetAccessQuota(ctx); ok {
-				if cu, ok := getComputeUnits(ctx); ok {
-					ctx = httprate.WithIncrement(ctx, int(cu))
-				}
-				ctx = httprate.WithRequestLimit(ctx, int(q.Limit.RateLimit))
-			} else if _, ok := GetAccount(ctx); ok {
-				ctx = httprate.WithRequestLimit(ctx, accountRPM)
-			}
-
-			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
+			ctx = httprate.WithRequestLimit(ctx, rlCfg.getRateLimit(ctx))
+			limiter.Handler(handler).ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+// swapHeader swaps the header from one key to another.
+func swapHeader(h http.Header, from, to string) {
+	if v := h.Get(from); v != "" {
+		h.Set(to, v)
+		h.Del(from)
 	}
 }
