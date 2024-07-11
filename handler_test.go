@@ -502,7 +502,7 @@ func TestSession(t *testing.T) {
 	key := proto.GenerateAccessKey(project)
 	service := proto.Service_Indexer
 	address := "accountId"
-	//serviceName := "//serviceName"
+	serviceName := "serviceName"
 
 	counter := hitCounter(0)
 
@@ -551,102 +551,100 @@ func TestSession(t *testing.T) {
 	server.Store.SetUserPermission(ctx, project, address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
 
-	testCases := []struct {
+	type testCase struct {
 		AccessKey string
-		Claims    middleware.Claims
 		Session   proto.SessionType
-	}{
-		// {
-		// 	Session: proto.SessionType_Public,
-		// },
-		// {
-		// 	Claims:  middleware.Claims{"account": address},
-		// 	Session: proto.SessionType_Account,
-		// },
+	}
+
+	testCases := []testCase{
+		{
+			Session: proto.SessionType_Public,
+		},
+		{
+			Session: proto.SessionType_Account,
+		},
 		{
 			AccessKey: key,
-			Claims:    middleware.Claims{"account": address},
 			Session:   proto.SessionType_AccessKey,
 		},
 		{
-			Claims:  middleware.Claims{"account": address, "project": project},
 			Session: proto.SessionType_Project,
 		},
 		{
 			AccessKey: key,
-			Claims:    middleware.Claims{"account": address, "project": project},
 			Session:   proto.SessionType_Project,
 		},
-		// {
-		// 	Claims:  middleware.Claims{"account": address, "admin": true},
-		// 	Session: proto.SessionType_Admin,
-		// },
-		// {
-		// 	AccessKey: key,
-		// 	Claims:    middleware.Claims{"account": address, "admin": true},
-		// 	Session:   proto.SessionType_Admin,
-		// },
-		// {
-		// 	Claims:  middleware.Claims{"service": //serviceName},
-		// 	Session: proto.SessionType_Service,
-		// },
-		// {
-		// 	AccessKey: key,
-		// 	Claims:    middleware.Claims{"service": serviceName},
-		// 	Session:   proto.SessionType_Service,
-		// },
+		{
+			Session: proto.SessionType_Admin,
+		},
+		{
+			AccessKey: key,
+			Session:   proto.SessionType_Admin,
+		},
+		{
+			Session: proto.SessionType_Service,
+		},
+		{
+			AccessKey: key,
+			Session:   proto.SessionType_Service,
+		},
 	}
 
 	var (
-		publicRPM  = fmt.Sprint(cfg.RateLimiter.PublicRate)
-		accountRPM = fmt.Sprint(cfg.RateLimiter.AccountRate)
-		serviceRPM = fmt.Sprint(cfg.RateLimiter.ServiceRate)
+		publicRPM  = fmt.Sprint(middleware.DefaultPublicRate)
+		accountRPM = fmt.Sprint(middleware.DefaultAccountRate)
+		serviceRPM = ""
 		quotaRPM   = fmt.Sprint(limit.RateLimit)
 	)
 
 	methods := []string{
-		// MethodPublic,
-		// MethodAccount,
+		MethodPublic,
+		MethodAccount,
 		MethodAccessKey,
-		// MethodProject,
-		// MethodAdmin,
-		// MethodService,
+		MethodProject,
+		MethodAdmin,
+		MethodService,
 	}
 
 	for service := range ACL {
 		for _, method := range methods {
 			minSession := ACL[service][method]
-			fmt.Printf("%s/%s - %s+\n", service, method, minSession)
 			for _, tc := range testCases {
-				args := []any{"%s/%s %+v", service, method, tc}
-				path := "/rpc/" + service + "/" + method
-				jwt := ""
-				if tc.Claims != nil {
-					jwt = mustJWT(t, auth, tc.Claims)
-				}
-				ok, h, err := executeRequest(ctx, r, path, tc.AccessKey, jwt)
-				success := tc.Session >= minSession
-				if ok != success {
-					fmt.Printf("  - %s %v Key:%v\n", tc.Session, tc.Claims, tc.AccessKey != "")
-				}
-				if success {
+				t.Run(fmt.Sprintf("%s/%s/%s", method, tc.Session, tc.AccessKey), func(t *testing.T) {
+					var claims middleware.Claims
+					switch tc.Session {
+					case proto.SessionType_Account:
+						claims = middleware.Claims{"account": address}
+					case proto.SessionType_Project:
+						claims = middleware.Claims{"account": address, "project": project}
+					case proto.SessionType_Admin:
+						claims = middleware.Claims{"account": address, "admin": true}
+					case proto.SessionType_Service:
+						claims = middleware.Claims{"service": serviceName}
+					}
+
+					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, mustJWT(t, auth, claims))
+					if tc.Session < minSession {
+						assert.Error(t, err)
+						assert.False(t, ok)
+						return
+					}
+
 					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
 					assert.True(t, ok)
-					switch v := h.Get(middleware.HeaderCreditsLimit); tc.Session {
+					creditsLimit := h.Get(middleware.HeaderCreditsLimit)
+					switch tc.Session {
 					case proto.SessionType_Public:
-						assert.Equal(t, publicRPM, v)
+						assert.Equal(t, publicRPM, creditsLimit)
 					case proto.SessionType_AccessKey, proto.SessionType_Project:
-						assert.Equal(t, quotaRPM, v)
+						assert.Equal(t, quotaRPM, creditsLimit)
 						assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), h.Get(middleware.HeaderQuotaLimit))
-					case proto.SessionType_Account:
-						assert.Equal(t, accountRPM, v)
+					case proto.SessionType_Account, proto.SessionType_Admin:
+						assert.Equal(t, accountRPM, creditsLimit)
 					case proto.SessionType_Service:
-						assert.Equal(t, serviceRPM, v, args...)
+						assert.Equal(t, serviceRPM, creditsLimit)
 					}
-				} else {
-					assert.Error(t, err, args...)
-					assert.False(t, ok)
-				}
+				})
 			}
 		}
 

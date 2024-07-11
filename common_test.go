@@ -65,6 +65,9 @@ func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func mustJWT(t *testing.T, auth *jwtauth.JWTAuth, claims map[string]interface{}) string {
 	t.Helper()
+	if claims == nil {
+		return ""
+	}
 	_, token, err := auth.Encode(claims)
 	require.NoError(t, err)
 	return token
