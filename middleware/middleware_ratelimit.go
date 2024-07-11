@@ -14,25 +14,31 @@ import (
 
 const _RateLimitWindow = 1 * time.Minute
 
+const (
+	DefaultPublicRate  = 3000
+	DefaultAccountRate = 6000
+	DefaultServiceRate = 0
+)
+
 type RLConfig struct {
-	Enabled    bool   `toml:"enabled"`
-	PublicRPM  int    `toml:"public_rpm"`
-	AccountRPM int    `toml:"account_rpm"`
-	ServiceRPM int    `toml:"service_rpm"`
-	ErrorMsg   string `toml:"error_message"`
+	Enabled     bool   `toml:"enabled"`
+	PublicRate  int    `toml:"public_rate"`
+	AccountRate int    `toml:"account_rate"`
+	ServiceRate int    `toml:"service_rate"`
+	ErrorMsg    string `toml:"error_message"`
 }
 
 func (r RLConfig) getRateLimit(ctx context.Context) int {
 	if _, ok := GetService(ctx); ok {
-		return r.ServiceRPM
+		return r.ServiceRate
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
 		return int(q.Limit.RateLimit)
 	}
 	if _, ok := GetAccount(ctx); ok {
-		return r.AccountRPM
+		return r.AccountRate
 	}
-	return r.PublicRPM
+	return r.PublicRate
 }
 
 func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) http.Handler {
@@ -42,9 +48,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 		}
 	}
 
-	rlCfg.PublicRPM = cmp.Or(rlCfg.PublicRPM, 1000)
-	rlCfg.AccountRPM = cmp.Or(rlCfg.AccountRPM, 4000)
-	rlCfg.ServiceRPM = cmp.Or(rlCfg.ServiceRPM, 0)
+	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
+	rlCfg.AccountRate = cmp.Or(rlCfg.AccountRate, DefaultAccountRate)
+	rlCfg.ServiceRate = cmp.Or(rlCfg.ServiceRate, DefaultServiceRate)
 
 	var limitCounter httprate.LimitCounter
 	if redisCfg.Enabled {
@@ -75,7 +81,7 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 		httprate.WithLimitHandler(proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg).Handler),
 	}
 
-	limiter := httprate.NewRateLimiter(rlCfg.PublicRPM, _RateLimitWindow, options...)
+	limiter := httprate.NewRateLimiter(rlCfg.PublicRate, _RateLimitWindow, options...)
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {

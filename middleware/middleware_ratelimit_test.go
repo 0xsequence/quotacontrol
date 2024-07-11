@@ -18,9 +18,9 @@ import (
 func TestRateLimiter(t *testing.T) {
 	const _CustomErrorMessage = "Custom error message"
 	rl := middleware.RateLimit(middleware.RLConfig{
-		Enabled:   true,
-		PublicRPM: 10,
-		ErrorMsg:  _CustomErrorMessage,
+		Enabled:    true,
+		PublicRate: 10,
+		ErrorMsg:   _CustomErrorMessage,
 	}, redis.Config{})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 

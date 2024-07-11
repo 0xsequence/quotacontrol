@@ -30,7 +30,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	key := proto.GenerateAccessKey(project)
 	service := proto.Service_Indexer
 
-	const _credits = 10
+	const _credits = middleware.DefaultPublicRate / 10
+
 	limit := proto.Limit{
 		RateLimit: _credits * 100,
 		FreeWarn:  _credits * 5,
@@ -187,9 +188,9 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		ctx := middleware.WithTime(context.Background(), now)
 
-		for i, max := 0, cfg.RateLimiter.PublicRPM*2; i < max; i += _credits {
+		for i, max := 0, cfg.RateLimiter.PublicRate*2; i < max; i += _credits {
 			ok, headers, err := executeRequest(ctx, r, "", "", "")
-			if i < cfg.RateLimiter.PublicRPM {
+			if i < cfg.RateLimiter.PublicRate {
 				assert.NoError(t, err, i)
 				assert.True(t, ok, i)
 				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
@@ -597,9 +598,9 @@ func TestSession(t *testing.T) {
 	}
 
 	var (
-		publicRPM  = fmt.Sprint(cfg.RateLimiter.PublicRPM)
-		accountRPM = fmt.Sprint(cfg.RateLimiter.AccountRPM)
-		serviceRPM = fmt.Sprint(cfg.RateLimiter.ServiceRPM)
+		publicRPM  = fmt.Sprint(cfg.RateLimiter.PublicRate)
+		accountRPM = fmt.Sprint(cfg.RateLimiter.AccountRate)
+		serviceRPM = fmt.Sprint(cfg.RateLimiter.ServiceRate)
 		quotaRPM   = fmt.Sprint(limit.RateLimit)
 	)
 
