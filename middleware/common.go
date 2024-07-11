@@ -29,7 +29,7 @@ type Client interface {
 	FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
-	FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (proto.UserPermission, *proto.ResourceAccess, error)
+	CheckPermission(ctx context.Context, projectID uint64, userID string, minPermission proto.UserPermission) (bool, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (bool, int64, error)
 }
 

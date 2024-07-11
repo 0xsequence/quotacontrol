@@ -61,8 +61,12 @@ func EnsurePermission(client Client, minPermission proto.UserPermission) func(ne
 
 			account, _ := GetAccount(ctx)
 
-			perm, _, err := client.FetchPermission(ctx, q.GetProjectID(), account, true)
-			if err != nil || !perm.CanAccess(minPermission) {
+			ok, err := client.CheckPermission(ctx, q.GetProjectID(), account, minPermission)
+			if err != nil {
+				proto.RespondWithError(w, proto.ErrUnauthorized.WithCause(err))
+				return
+			}
+			if !ok {
 				proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 				return
 			}

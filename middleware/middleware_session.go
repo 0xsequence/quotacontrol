@@ -69,12 +69,12 @@ func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(nex
 							proto.RespondWithError(w, err)
 							return
 						}
-						perm, _, err := client.FetchPermission(ctx, projectID, accountClaim, true)
+						ok, err := client.CheckPermission(ctx, projectID, accountClaim, proto.UserPermission_READ)
 						if err != nil {
 							proto.RespondWithError(w, err)
 							return
 						}
-						if !perm.CanAccess(proto.UserPermission_READ) {
+						if !ok {
 							proto.RespondWithError(w, proto.ErrUnauthorizedUser)
 							return
 						}

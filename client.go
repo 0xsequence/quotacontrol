@@ -192,28 +192,37 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	return 0, nil
 }
 
+func (c *Client) CheckPermission(ctx context.Context, projectID uint64, userID string, minPermission proto.UserPermission) (bool, error) {
+	if sessionType := middleware.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
+		return true, nil
+	}
+	perm, _, err := c.FetchPermission(ctx, projectID, userID)
+	if err != nil {
+		return false, err
+	}
+	return perm >= minPermission, nil
+}
+
 // FetchPermission fetches the user permission from cache or from the quota server.
 // If an error occurs, it returns nil.
-func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string, useCache bool) (proto.UserPermission, *proto.ResourceAccess, error) {
+func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_permission"),
 		slog.Uint64("project_id", projectID),
 		slog.String("user_id", userID),
 	)
 	// Check short-lived cache if requested. Note using the cache TTL from config (default 1m).
-	if useCache {
-		perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
-		if err != nil {
-			// log the error, but don't stop
-			logger.Error("unexpected cache error", slog.Any("error", err))
-		}
-		if perm != proto.UserPermission_UNAUTHORIZED {
-			return perm, access, nil
-		}
+	perm, access, err := c.permCache.GetUserPermission(ctx, projectID, userID)
+	if err != nil {
+		// log the error, but don't stop
+		logger.Error("unexpected cache error", slog.Any("error", err))
+	}
+	if perm != proto.UserPermission_UNAUTHORIZED {
+		return perm, access, nil
 	}
 
 	// Ask quotacontrol server via client
-	perm, access, err := c.quotaClient.GetUserPermission(ctx, projectID, userID)
+	perm, access, err = c.quotaClient.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
 		logger.Error("unexpected client error", slog.Any("error", err))
 		return proto.UserPermission_UNAUTHORIZED, nil, err
