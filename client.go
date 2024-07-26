@@ -192,11 +192,11 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	return 0, nil
 }
 
-func (c *Client) CheckPermission(ctx context.Context, projectID uint64, userID string, minPermission proto.UserPermission) (bool, error) {
+func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
 	if sessionType := middleware.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
 		return true, nil
 	}
-	perm, _, err := c.FetchPermission(ctx, projectID, userID)
+	perm, _, err := c.FetchPermission(ctx, projectID)
 	if err != nil {
 		return false, err
 	}
@@ -205,7 +205,8 @@ func (c *Client) CheckPermission(ctx context.Context, projectID uint64, userID s
 
 // FetchPermission fetches the user permission from cache or from the quota server.
 // If an error occurs, it returns nil.
-func (c *Client) FetchPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
+func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.UserPermission, *proto.ResourceAccess, error) {
+	userID, _ := middleware.GetAccount(ctx)
 	logger := c.logger.With(
 		slog.String("op", "fetch_permission"),
 		slog.Uint64("project_id", projectID),

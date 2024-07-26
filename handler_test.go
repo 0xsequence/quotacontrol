@@ -632,17 +632,17 @@ func TestSession(t *testing.T) {
 
 					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
 					assert.True(t, ok)
-					creditsLimit := h.Get(middleware.HeaderCreditsLimit)
+					rateLimit := h.Get(middleware.HeaderCreditsLimit)
 					switch tc.Session {
 					case proto.SessionType_Public:
-						assert.Equal(t, publicRPM, creditsLimit)
+						assert.Equal(t, publicRPM, rateLimit)
 					case proto.SessionType_AccessKey, proto.SessionType_Project:
-						assert.Equal(t, quotaRPM, creditsLimit)
+						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), h.Get(middleware.HeaderQuotaLimit))
 					case proto.SessionType_Account, proto.SessionType_Admin:
-						assert.Equal(t, accountRPM, creditsLimit)
+						assert.Equal(t, accountRPM, rateLimit)
 					case proto.SessionType_Service:
-						assert.Equal(t, serviceRPM, creditsLimit)
+						assert.Equal(t, serviceRPM, rateLimit)
 					}
 				})
 			}
