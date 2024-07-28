@@ -10,6 +10,7 @@ enum Service: uint16
   - Relayer
   - Metadata
   - Marketplace
+  - DataSync
 
 struct Limit
   - maxKeys: int64
