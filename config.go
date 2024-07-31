@@ -3,6 +3,7 @@ package quotacontrol
 import (
 	"time"
 
+	"github.com/0xsequence/quotacontrol/middleware"
 	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/goware/cachestore/redis"
 	"github.com/lestrrat-go/jwx/v2/jwa"
@@ -20,14 +21,14 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type Config struct {
-	Enabled       bool              `toml:"enabled"`
-	URL           string            `toml:"url"`
-	AuthToken     string            `toml:"auth_token"`
-	UpdateFreq    Duration          `toml:"update_freq"`
-	RateLimiter   RateLimiterConfig `toml:"rate_limiter"`
-	Redis         redis.Config      `toml:"redis"`
-	LRUSize       int               `toml:"lru_size"`
-	LRUExpiration Duration          `toml:"lru_expiration"`
+	Enabled       bool                         `toml:"enabled"`
+	URL           string                       `toml:"url"`
+	AuthToken     string                       `toml:"auth_token"`
+	UpdateFreq    Duration                     `toml:"update_freq"`
+	RateLimiter   middleware.RateLimiterConfig `toml:"rate_limiter"`
+	Redis         redis.Config                 `toml:"redis"`
+	LRUSize       int                          `toml:"lru_size"`
+	LRUExpiration Duration                     `toml:"lru_expiration"`
 
 	// DangerMode is used for debugging
 	DangerMode bool `toml:"danger_mode"`
@@ -53,12 +54,4 @@ func (cfg *Config) SetAccessToken(alg jwa.SignatureAlgorithm, secret, service st
 	}
 	cfg.AuthToken = string(payload)
 	return nil
-}
-
-type RateLimiterConfig struct {
-	Enabled                  bool   `toml:"enabled"`
-	PublicRequestsPerMinute  int    `toml:"public_requests_per_minute"`
-	UserRequestsPerMinute    int    `toml:"user_requests_per_minute"`
-	ServiceRequestsPerMinute int    `toml:"service_requests_per_minute"`
-	ErrorMessage             string `toml:"error_message"`
 }

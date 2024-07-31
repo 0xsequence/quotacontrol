@@ -117,7 +117,7 @@ func httprateKey(r *http.Request) (string, error) {
 	return ProjectRateKey(q.AccessKey.ProjectID), nil
 }
 
-func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next http.Handler) http.Handler {
+func RateLimit(config RateLimiterConfig, limitCounter httprate.LimitCounter, eh ErrorHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
 		eh = _DefaultErrorHandler
 	}
@@ -131,10 +131,18 @@ func RateLimit(limitCounter httprate.LimitCounter, eh ErrorHandler) func(next ht
 				return
 			}
 
+			limitErr := proto.ErrLimitExceeded
+			if config.ErrorMessage != "" {
+				limitErr.Message = config.ErrorMessage
+			}
+
 			ctx = httprate.WithIncrement(ctx, int(cu))
 			options := []httprate.Option{
 				httprate.WithKeyFuncs(httprateKey),
 				httprate.WithLimitCounter(limitCounter),
+				httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+					proto.RespondWithError(w, limitErr)
+				}),
 			}
 			limiter := httprate.NewRateLimiter(int(quota.Limit.RateLimit), time.Minute, options...)
 			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
