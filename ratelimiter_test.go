@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/stretchr/testify/assert"
 )
@@ -16,7 +17,7 @@ import (
 func TestRateLimiter(t *testing.T) {
 	const _CustomErrorMessage = "Custom error message"
 	rl := NewHTTPRateLimiter(Config{
-		RateLimiter: RateLimiterConfig{
+		RateLimiter: middleware.RateLimiterConfig{
 			Enabled:                 true,
 			PublicRequestsPerMinute: 10,
 			ErrorMessage:            _CustomErrorMessage,

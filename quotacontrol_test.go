@@ -29,7 +29,7 @@ var (
 	_Config = Config{
 		Enabled:    true,
 		UpdateFreq: Duration{time.Minute},
-		RateLimiter: RateLimiterConfig{
+		RateLimiter: middleware.RateLimiterConfig{
 			Enabled:                 true,
 			PublicRequestsPerMinute: 10,
 		},
