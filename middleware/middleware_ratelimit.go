@@ -3,6 +3,7 @@ package middleware
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -10,6 +11,12 @@ import (
 	"github.com/go-chi/httprate"
 	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/goware/cachestore/redis"
+)
+
+const (
+	HeaderCreditsRemaining = "Credits-Rate-Remaining"
+	HeaderCreditsLimit     = "Credits-Rate-Limit"
+	HeaderCreditsReset     = "Credits-Rate-Reset"
 )
 
 const _RateLimitWindow = 1 * time.Minute
@@ -41,11 +48,15 @@ func (r RLConfig) getRateLimit(ctx context.Context) int {
 	return r.PublicRate
 }
 
-func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) http.Handler {
+func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next http.Handler) http.Handler {
 	if !rlCfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
+	}
+
+	if eh == nil {
+		eh = proto.RespondWithError
 	}
 
 	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
@@ -78,7 +89,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 			}
 			return httprate.KeyByRealIP(r)
 		}),
-		httprate.WithLimitHandler(proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg).Handler),
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			eh(w, proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg))
+		}),
 	}
 
 	limiter := httprate.NewRateLimiter(rlCfg.PublicRate, _RateLimitWindow, options...)
@@ -104,10 +117,10 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config) func(next http.Handler) ht
 	}
 }
 
-// swapHeader swaps the header from one key to another.
-func swapHeader(h http.Header, from, to string) {
-	if v := h.Get(from); v != "" {
-		h.Set(to, v)
-		h.Del(from)
-	}
+func ProjectRateKey(projectID uint64) string {
+	return fmt.Sprintf("rl:project:%d", projectID)
+}
+
+func AccountRateKey(account string) string {
+	return fmt.Sprintf("rl:account:%s", account)
 }

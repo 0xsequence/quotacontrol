@@ -5,7 +5,6 @@ package proto
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 )
 
@@ -222,8 +221,4 @@ func (e WebRPCError) WithMessage(message string) WebRPCError {
 		err.Message = message
 	}
 	return err
-}
-
-func (e WebRPCError) Handler(w http.ResponseWriter, r *http.Request) {
-	RespondWithError(w, e)
 }

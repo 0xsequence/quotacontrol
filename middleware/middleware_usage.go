@@ -8,8 +8,18 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
+const (
+	HeaderQuotaLimit     = "Quota-Limit"
+	HeaderQuotaRemaining = "Quota-Remaining"
+	HeaderQuotaOverage   = "Quota-Overage"
+	HeaderCreditsCost    = "Credits-Cost"
+)
+
 // EnsureUsage is a middleware that checks if the quota has enough usage left.
-func EnsureUsage(client Client) func(next http.Handler) http.Handler {
+func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = proto.RespondWithError
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -32,7 +42,7 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 
 			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
-				proto.RespondWithError(w, err)
+				eh(w, err)
 				return
 			}
 			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-usage, 0), 10))
@@ -40,7 +50,7 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 			if usage+cu > quota.Limit.OverMax {
-				proto.RespondWithError(w, proto.ErrLimitExceeded)
+				eh(w, proto.ErrLimitExceeded)
 				return
 			}
 
@@ -50,7 +60,10 @@ func EnsureUsage(client Client) func(next http.Handler) http.Handler {
 }
 
 // SpendUsage is a middleware that spends the usage from the quota.
-func SpendUsage(client Client) func(next http.Handler) http.Handler {
+func SpendUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = proto.RespondWithError
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !client.IsEnabled() {
@@ -78,7 +91,7 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 
 			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrLimitExceeded) {
-				proto.RespondWithError(w, err)
+				eh(w, err)
 				return
 			}
 
@@ -88,7 +101,7 @@ func SpendUsage(client Client) func(next http.Handler) http.Handler {
 			}
 
 			if errors.Is(err, proto.ErrLimitExceeded) {
-				proto.RespondWithError(w, err)
+				eh(w, err)
 				return
 			}
 

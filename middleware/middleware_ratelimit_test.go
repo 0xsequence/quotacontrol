@@ -16,12 +16,19 @@ import (
 )
 
 func TestRateLimiter(t *testing.T) {
-	const _CustomErrorMessage = "Custom error message"
+	const (
+		_CustomErrorMessage = "Custom error message"
+		_TestHeader         = "X-Test-Header"
+		_TestHeaderValue    = "test"
+	)
 	rl := middleware.RateLimit(middleware.RLConfig{
 		Enabled:    true,
 		PublicRate: 10,
 		ErrorMsg:   _CustomErrorMessage,
-	}, redis.Config{})
+	}, redis.Config{}, func(w http.ResponseWriter, err error) {
+		w.Header().Set(_TestHeader, _TestHeaderValue)
+		proto.RespondWithError(w, err)
+	})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)
@@ -40,6 +47,7 @@ func TestRateLimiter(t *testing.T) {
 			continue
 		}
 		assert.Equal(t, http.StatusTooManyRequests, w.Code)
+		assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
 		err := proto.WebRPCError{}
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
 		assert.Equal(t, err.Message, _CustomErrorMessage)

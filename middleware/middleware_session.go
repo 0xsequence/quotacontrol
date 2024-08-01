@@ -10,13 +10,21 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
+const (
+	HeaderAccessKey = "X-Access-Key"
+	HeaderOrigin    = "Origin"
+)
+
 type KeyFunc func(*http.Request) string
 
 func KeyFromHeader(r *http.Request) string {
 	return r.Header.Get(HeaderAccessKey)
 }
 
-func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
+func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
+	if eh == nil {
+		eh = proto.RespondWithError
+	}
 	keyFuncs = append([]KeyFunc{KeyFromHeader}, keyFuncs...)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,11 +45,11 @@ func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(nex
 			token, err := jwtauth.VerifyRequest(auth, r, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie)
 			if err != nil {
 				if errors.Is(err, jwtauth.ErrExpired) {
-					proto.RespondWithError(w, proto.ErrSessionExpired)
+					eh(w, proto.ErrSessionExpired)
 					return
 				}
 				if !errors.Is(err, jwtauth.ErrNoTokenFound) {
-					proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+					eh(w, proto.ErrUnauthorizedUser)
 					return
 				}
 			}
@@ -51,7 +59,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(nex
 			if token != nil {
 				claims, err := token.AsMap(r.Context())
 				if err != nil {
-					proto.RespondWithError(w, err)
+					eh(w, err)
 					return
 				}
 
@@ -66,16 +74,16 @@ func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(nex
 					} else if projectClaim, ok := claims["project"].(float64); ok {
 						projectID := uint64(projectClaim)
 						if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
-							proto.RespondWithError(w, err)
+							eh(w, err)
 							return
 						}
 						ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ)
 						if err != nil {
-							proto.RespondWithError(w, err)
+							eh(w, err)
 							return
 						}
 						if !ok {
-							proto.RespondWithError(w, proto.ErrUnauthorizedUser)
+							eh(w, proto.ErrUnauthorizedUser)
 							return
 						}
 						ctx = withProjectID(ctx, projectID)
@@ -86,20 +94,20 @@ func Session(client Client, auth *jwtauth.JWTAuth, keyFuncs ...KeyFunc) func(nex
 			if accessKey != "" && sessionType < proto.SessionType_Admin {
 				projectID, err := proto.GetProjectID(accessKey)
 				if err != nil {
-					proto.RespondWithError(w, err)
+					eh(w, err)
 					return
 				}
 				if quota != nil && quota.GetProjectID() != projectID {
-					proto.RespondWithError(w, proto.ErrAccessKeyMismatch)
+					eh(w, proto.ErrAccessKeyMismatch)
 					return
 				}
 				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 				if err != nil {
-					proto.RespondWithError(w, err)
+					eh(w, err)
 					return
 				}
 				if q != nil && !q.IsActive() {
-					proto.RespondWithError(w, proto.ErrAccessKeyNotFound)
+					eh(w, proto.ErrAccessKeyNotFound)
 					return
 				}
 				if quota == nil {

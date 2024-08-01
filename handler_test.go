@@ -52,11 +52,11 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Session(client, auth),
+		middleware.Session(client, auth, nil),
 		addCredits(_credits*2).Middleware,
 		addCredits(_credits*-1).Middleware,
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis),
-		middleware.SpendUsage(client),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
+		middleware.SpendUsage(client, nil),
 	)
 
 	r.Handle("/*", &counter)
@@ -360,9 +360,9 @@ func TestJWT(t *testing.T) {
 	r := chi.NewRouter()
 
 	r.Use(
-		middleware.Session(client, auth),
-		middleware.EnsureUsage(client),
-		middleware.SpendUsage(client),
+		middleware.Session(client, auth, nil),
+		middleware.EnsureUsage(client, nil),
+		middleware.SpendUsage(client, nil),
 	)
 	r.Handle("/*", &counter)
 
@@ -434,9 +434,9 @@ func TestJWTAccess(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Session(client, auth),
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis),
-		middleware.EnsurePermission(client, UserPermission_READ_WRITE),
+		middleware.Session(client, auth, nil),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
+		middleware.EnsurePermission(client, UserPermission_READ_WRITE, nil),
 	)
 	r.Handle("/*", &counter)
 
@@ -533,9 +533,9 @@ func TestSession(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Session(client, auth),
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis),
-		middleware.AccessControl(ACL, middleware.Cost{}, 1),
+		middleware.Session(client, auth, nil),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
+		middleware.AccessControl(ACL, middleware.Cost{}, 1, nil),
 	)
 	r.Handle("/*", &counter)
 
