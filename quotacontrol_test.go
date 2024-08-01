@@ -122,7 +122,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	router.Use(middlewareCU(2))
 	router.Use(middleware.SetAccessKey)
 	router.Use(middleware.VerifyAccessKey(client, nil))
-	router.Use(NewHTTPRateLimiter(cfg, nil))
+	router.Use(NewHTTPRateLimiter(cfg, nil, nil))
 	router.Use(middlewareCU(-1))
 	router.Use(middleware.SpendUsage(client, nil))
 

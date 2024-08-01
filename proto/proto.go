@@ -3,6 +3,7 @@
 package proto
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -10,6 +11,11 @@ import (
 
 func Ptr[T any](v T) *T {
 	return &v
+}
+
+func (w WebRPCError) WithMessage(msg string) WebRPCError {
+	w.Message = cmp.Or(msg, w.Message)
+	return w
 }
 
 func (u *AccessUsage) Add(usage AccessUsage) {

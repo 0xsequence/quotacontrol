@@ -11,7 +11,7 @@ import (
 	httprateredis "github.com/go-chi/httprate-redis"
 )
 
-func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler) http.Handler {
+func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn, eh middleware.ErrorHandler) func(next http.Handler) http.Handler {
 	// Short-cut the middleware if the rate limiter is disabled
 	if !cfg.RateLimiter.Enabled {
 		return func(next http.Handler) http.Handler {
@@ -19,15 +19,18 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler
 		}
 	}
 
+	if eh == nil {
+		eh = middleware.FailOnUnexpectedError(proto.RespondWithError)
+	}
+
 	// httprate limit counter
 	const _DefaultRPM = 120
 
-	limitCounter, _ := httprateredis.NewRedisLimitCounter(cfg.RedisRateLimitConfig())
+	counter, _ := httprateredis.NewRedisLimitCounter(cfg.RedisRateLimitConfig())
+	limitErr := proto.ErrLimitExceeded.WithMessage(cfg.RateLimiter.ErrorMessage)
 
-	limitErr := proto.ErrLimitExceeded
-	if cfg.RateLimiter.ErrorMessage != "" {
-		limitErr.Message = cfg.RateLimiter.ErrorMessage
-	}
+	optionCounter := httprate.WithLimitCounter(counter)
+	optionLimitErr := httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) { eh(w, r, nil, limitErr) })
 
 	// Public rate limiter
 	rpmPublic := _DefaultRPM
@@ -36,10 +39,8 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler
 	}
 	optsPublic := []httprate.Option{
 		httprate.WithKeyFuncs(httprate.KeyByRealIP),
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, limitErr)
-		}),
-		httprate.WithLimitCounter(limitCounter),
+		optionLimitErr,
+		optionCounter,
 	}
 
 	// User rate limiter
@@ -49,10 +50,8 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler
 	}
 	optsUser := []httprate.Option{
 		httprate.WithKeyFuncs(ratelimitKeyFunc),
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, limitErr)
-		}),
-		httprate.WithLimitCounter(limitCounter),
+		optionLimitErr,
+		optionCounter,
 	}
 
 	// Service rate limiter
@@ -62,10 +61,8 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn) func(next http.Handler
 	}
 	optsService := []httprate.Option{
 		httprate.WithKeyFuncs(ratelimitKeyFunc),
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			proto.RespondWithError(w, limitErr)
-		}),
-		httprate.WithLimitCounter(limitCounter),
+		optionLimitErr,
+		optionCounter,
 	}
 
 	// The rate limiter middleware
