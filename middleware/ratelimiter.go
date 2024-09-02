@@ -25,7 +25,7 @@ func RateLimit(config RateLimiterConfig, limitCounter httprate.LimitCounter, eh 
 			ctx := r.Context()
 			quota, cu := GetAccessQuota(ctx), GetComputeUnits(ctx)
 
-			if quota == nil || cu == 0 {
+			if quota == nil || cu == 0 || IsSkipRateLimit(ctx) {
 				next.ServeHTTP(w, r)
 				return
 			}
