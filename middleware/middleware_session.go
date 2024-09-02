@@ -23,7 +23,7 @@ func KeyFromHeader(r *http.Request) string {
 
 func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = proto.RespondWithError
+		eh = defaultErrorHandler
 	}
 	keyFuncs = append([]KeyFunc{KeyFromHeader}, keyFuncs...)
 	return func(next http.Handler) http.Handler {
@@ -45,11 +45,11 @@ func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...Ke
 			token, err := jwtauth.VerifyRequest(auth, r, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie)
 			if err != nil {
 				if errors.Is(err, jwtauth.ErrExpired) {
-					eh(w, proto.ErrSessionExpired)
+					eh(ctx, w, proto.ErrSessionExpired)
 					return
 				}
 				if !errors.Is(err, jwtauth.ErrNoTokenFound) {
-					eh(w, proto.ErrUnauthorizedUser)
+					eh(ctx, w, proto.ErrUnauthorizedUser)
 					return
 				}
 			}
@@ -59,7 +59,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...Ke
 			if token != nil {
 				claims, err := token.AsMap(r.Context())
 				if err != nil {
-					eh(w, err)
+					eh(ctx, w, err)
 					return
 				}
 
@@ -74,16 +74,16 @@ func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...Ke
 					} else if projectClaim, ok := claims["project"].(float64); ok {
 						projectID := uint64(projectClaim)
 						if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
-							eh(w, err)
+							eh(ctx, w, err)
 							return
 						}
 						ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ)
 						if err != nil {
-							eh(w, err)
+							eh(ctx, w, err)
 							return
 						}
 						if !ok {
-							eh(w, proto.ErrUnauthorizedUser)
+							eh(ctx, w, proto.ErrUnauthorizedUser)
 							return
 						}
 						ctx = withProjectID(ctx, projectID)
@@ -94,20 +94,20 @@ func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...Ke
 			if accessKey != "" && sessionType < proto.SessionType_Admin {
 				projectID, err := proto.GetProjectID(accessKey)
 				if err != nil {
-					eh(w, err)
+					eh(ctx, w, err)
 					return
 				}
 				if quota != nil && quota.GetProjectID() != projectID {
-					eh(w, proto.ErrAccessKeyMismatch)
+					eh(ctx, w, proto.ErrAccessKeyMismatch)
 					return
 				}
 				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 				if err != nil {
-					eh(w, err)
+					eh(ctx, w, err)
 					return
 				}
 				if q != nil && !q.IsActive() {
-					eh(w, proto.ErrAccessKeyNotFound)
+					eh(ctx, w, proto.ErrAccessKeyNotFound)
 					return
 				}
 				if quota == nil {

@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"math/rand"
@@ -25,7 +26,7 @@ func TestRateLimiter(t *testing.T) {
 		Enabled:    true,
 		PublicRate: 10,
 		ErrorMsg:   _CustomErrorMessage,
-	}, redis.Config{}, func(w http.ResponseWriter, err error) {
+	}, redis.Config{}, func(ctx context.Context, w http.ResponseWriter, err error) {
 		w.Header().Set(_TestHeader, _TestHeaderValue)
 		proto.RespondWithError(w, err)
 	})

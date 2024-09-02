@@ -56,7 +56,7 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 	}
 
 	if eh == nil {
-		eh = proto.RespondWithError
+		eh = defaultErrorHandler
 	}
 
 	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
@@ -90,7 +90,8 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 			return httprate.KeyByRealIP(r)
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			eh(w, proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg))
+			ctx := r.Context()
+			eh(ctx, w, proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg))
 		}),
 	}
 
