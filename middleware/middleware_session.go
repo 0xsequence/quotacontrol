@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -21,7 +22,11 @@ func KeyFromHeader(r *http.Request) string {
 	return r.Header.Get(HeaderAccessKey)
 }
 
-func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
+type UserStore interface {
+	GetUser(ctx context.Context, address string) (any, error)
+}
+
+func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
 	if eh == nil {
 		eh = proto.RespondWithError
 	}
@@ -63,15 +68,36 @@ func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...Ke
 					return
 				}
 
-				if serviceClaim, ok := claims["service"].(string); ok {
+				serviceClaim, _ := claims["service"].(string)
+				accountClaim, _ := claims["account"].(string)
+				adminClaim, _ := claims["admin"].(bool)
+				projectClaim, _ := claims["project"].(float64)
+				switch {
+				case serviceClaim != "":
 					ctx = withService(ctx, serviceClaim)
 					sessionType = proto.SessionType_Service
-				} else if accountClaim, ok := claims["account"].(string); ok {
-					ctx = withAccount(ctx, accountClaim)
-					sessionType = proto.SessionType_Account
-					if adminClaim, ok := claims["admin"].(bool); ok && adminClaim {
+				case accountClaim != "":
+					ctx = WithAccount(ctx, accountClaim)
+					sessionType = proto.SessionType_Wallet
+
+					if u != nil {
+						user, err := u.GetUser(ctx, accountClaim)
+						if err != nil {
+							eh(w, err)
+							return
+						}
+						if user != nil {
+							sessionType = proto.SessionType_User
+							ctx = withUser(ctx, user)
+						}
+					}
+
+					if adminClaim {
 						sessionType = proto.SessionType_Admin
-					} else if projectClaim, ok := claims["project"].(float64); ok {
+						break
+					}
+
+					if projectClaim > 0 {
 						projectID := uint64(projectClaim)
 						if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
 							eh(w, err)
@@ -116,7 +142,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, eh ErrHandler, keyFuncs ...Ke
 				sessionType = max(sessionType, proto.SessionType_AccessKey)
 			}
 
-			ctx = withSessionType(ctx, sessionType)
+			ctx = WithSessionType(ctx, sessionType)
 
 			if quota != nil {
 				ctx = withAccessQuota(ctx, quota)

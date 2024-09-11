@@ -14,19 +14,19 @@ func TestVerifyACL(t *testing.T) {
 		Method2() error
 	}
 
-	acl := middleware.ACL{
+	acl := middleware.ServiceConfig[middleware.ACL]{
 		"Service": {
-			"Method1": proto.SessionType_Account,
+			"Method1": middleware.NewACL(proto.SessionType_Wallet.AndUp()...),
 		},
 	}
 
 	err := VerifyACL[Service](acl)
 	assert.Error(t, err)
 
-	acl = middleware.ACL{
+	acl = middleware.ServiceConfig[middleware.ACL]{
 		"Service": {
-			"Method1": proto.SessionType_Account,
-			"Method2": proto.SessionType_Account,
+			"Method1": middleware.NewACL(proto.SessionType_Wallet.AndUp()...),
+			"Method2": middleware.NewACL(proto.SessionType_Wallet.AndUp()...),
 		},
 	}
 

@@ -19,6 +19,7 @@ func (k *contextKey) String() string {
 var (
 	ctxKeySessionType  = &contextKey{"SessionType"}
 	ctxKeyAccount      = &contextKey{"Account"}
+	ctxKeyUser         = &contextKey{"User"}
 	ctxKeyService      = &contextKey{"Service"}
 	ctxKeyAccessKey    = &contextKey{"AccessKey"}
 	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
@@ -28,8 +29,8 @@ var (
 	ctxKeySpending     = &contextKey{"Spending"}
 )
 
-// withSessionType adds the access key to the context.
-func withSessionType(ctx context.Context, accessType proto.SessionType) context.Context {
+// WithSessionType adds the access key to the context.
+func WithSessionType(ctx context.Context, accessType proto.SessionType) context.Context {
 	return context.WithValue(ctx, ctxKeySessionType, accessType)
 }
 
@@ -43,13 +44,24 @@ func GetSessionType(ctx context.Context) proto.SessionType {
 }
 
 // WithAccount adds the account to the context.
-func withAccount(ctx context.Context, account string) context.Context {
+func WithAccount(ctx context.Context, account string) context.Context {
 	return context.WithValue(ctx, ctxKeyAccount, account)
 }
 
 // GetAccount returns the account from the context.
 func GetAccount(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(ctxKeyAccount).(string)
+	return v, ok
+}
+
+// withUser adds the user to the context.
+func withUser(ctx context.Context, user any) context.Context {
+	return context.WithValue(ctx, ctxKeyUser, user)
+}
+
+// GetUser returns the user from the context.
+func GetUser[T any](ctx context.Context) (T, bool) {
+	v, ok := ctx.Value(ctxKeyUser).(T)
 	return v, ok
 }
 

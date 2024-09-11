@@ -8,7 +8,7 @@ import (
 
 // AccessControl middleware that checks if the session type is allowed to access the endpoint.
 // It also sets the compute units on the context if the endpoint requires it.
-func AccessControl(acl ACL, cost Cost, defaultCost int64, eh ErrHandler) func(next http.Handler) http.Handler {
+func AccessControl(acl ServiceConfig[ACL], cost ServiceConfig[int64], defaultCost int64, eh ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
 		eh = proto.RespondWithError
 	}
@@ -20,13 +20,13 @@ func AccessControl(acl ACL, cost Cost, defaultCost int64, eh ErrHandler) func(ne
 				return
 			}
 
-			min, ok := acl.GetConfig(req)
+			types, ok := acl.GetConfig(req)
 			if !ok {
 				eh(w, proto.ErrUnauthorized.WithCausef("rpc method not found"))
 				return
 			}
 
-			if session := GetSessionType(r.Context()); session < min {
+			if session := GetSessionType(r.Context()); !types.Includes(session) {
 				eh(w, proto.ErrUnauthorized)
 				return
 			}
