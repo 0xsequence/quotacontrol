@@ -108,5 +108,15 @@ func (t ACL) And(types ...proto.SessionType) ACL {
 }
 
 func (t ACL) Includes(session proto.SessionType) bool {
-	return t|ACL(1<<session) == t
+	return t&ACL(1<<session) != 0
+}
+
+func (t ACL) SessionTypes() []proto.SessionType {
+	var types []proto.SessionType
+	for i := proto.SessionType(0); i < proto.SessionType_Max; i++ {
+		if t.Includes(i) {
+			types = append(types, i)
+		}
+	}
+	return types
 }
