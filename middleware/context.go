@@ -54,8 +54,8 @@ func GetAccount(ctx context.Context) (string, bool) {
 	return v, ok
 }
 
-// withUser adds the user to the context.
-func withUser(ctx context.Context, user any) context.Context {
+// WithUser adds the user to the context.
+func WithUser(ctx context.Context, user any) context.Context {
 	return context.WithValue(ctx, ctxKeyUser, user)
 }
 

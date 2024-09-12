@@ -88,7 +88,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 						}
 						if user != nil {
 							sessionType = proto.SessionType_User
-							ctx = withUser(ctx, user)
+							ctx = WithUser(ctx, user)
 						}
 					}
 
