@@ -35,7 +35,7 @@ func newConfig() quotacontrol.Config {
 
 func newQuotaClient(cfg quotacontrol.Config, service proto.Service) *quotacontrol.Client {
 	logger := logger.NewLogger(logger.LogLevel_DEBUG).With(slog.String("client", "client"))
-	return quotacontrol.NewClient(logger, service, cfg)
+	return quotacontrol.NewClient(logger, service, cfg, nil)
 }
 
 type hitCounter int64

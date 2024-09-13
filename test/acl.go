@@ -7,7 +7,7 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 )
 
-func VerifyACL[T any](acl middleware.ACL) error {
+func VerifyACL[T any](acl middleware.ServiceConfig[middleware.ACL]) error {
 	var t T
 	iType := reflect.TypeOf(&t).Elem()
 	service := iType.Name()

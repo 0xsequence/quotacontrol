@@ -19,7 +19,7 @@ type Notifier interface {
 	Notify(access *proto.AccessKey) error
 }
 
-func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client {
+func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
 	options := redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
@@ -41,6 +41,12 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		quotaCache = NewLRU(quotaCache, cfg.LRUSize, lruExpiration)
 	}
 
+	if qc == nil {
+		qc = proto.NewQuotaControlClient(cfg.URL, &http.Client{
+			Transport: bearerToken(cfg.AuthToken),
+		})
+	}
+
 	var ticker *time.Ticker
 	if cfg.UpdateFreq.Duration > 0 {
 		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
@@ -52,14 +58,12 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config) *Client 
 		usage: &usageTracker{
 			Usage: make(map[time.Time]usageRecord),
 		},
-		usageCache: cache,
-		quotaCache: quotaCache,
-		permCache:  PermissionCache(cache),
-		quotaClient: proto.NewQuotaControlClient(cfg.URL, &http.Client{
-			Transport: bearerToken(cfg.AuthToken),
-		}),
-		ticker: ticker,
-		logger: logger.With(slog.String("service", "quotacontrol")),
+		usageCache:  cache,
+		quotaCache:  quotaCache,
+		permCache:   PermissionCache(cache),
+		quotaClient: qc,
+		ticker:      ticker,
+		logger:      logger.With(slog.String("service", "quotacontrol")),
 	}
 }
 

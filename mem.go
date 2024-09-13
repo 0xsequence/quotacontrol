@@ -17,6 +17,7 @@ func NewMemoryStore() *MemoryStore {
 			ByProjectID: map[uint64]*proto.AccessUsage{},
 			ByAccessKey: map[string]*proto.AccessUsage{},
 		},
+		users:       map[string]struct{}{},
 		permissions: map[uint64]map[string]userPermission{},
 	}
 }
@@ -33,6 +34,7 @@ type MemoryStore struct {
 	cycles      map[uint64]proto.Cycle
 	accessKeys  map[string]proto.AccessKey
 	usage       usageRecord
+	users       map[string]struct{}
 	permissions map[uint64]map[string]userPermission
 }
 
@@ -165,6 +167,23 @@ func (m *MemoryStore) ResetUsage(ctx context.Context, accessKey string) error {
 	m.usage.ByAccessKey[accessKey] = &proto.AccessUsage{}
 	m.Unlock()
 	return nil
+}
+
+func (m *MemoryStore) AddUser(ctx context.Context, userID string) error {
+	m.Lock()
+	m.users[userID] = struct{}{}
+	m.Unlock()
+	return nil
+}
+
+func (m *MemoryStore) GetUser(ctx context.Context, userID string) (any, error) {
+	m.Lock()
+	v, ok := m.users[userID]
+	m.Unlock()
+	if !ok {
+		return nil, nil
+	}
+	return v, nil
 }
 
 func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {

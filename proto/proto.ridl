@@ -10,6 +10,7 @@ enum Service: uint16
   - Relayer
   - Metadata
   - Marketplace
+  - Builder
 
 struct Limit
   - maxKeys: int64
@@ -69,9 +70,10 @@ enum EventType: uint16
 
 enum SessionType: uint16
   - Public
-  - Account
+  - Wallet
   - AccessKey
   - Project
+  - User
   - Admin
   - Service
 

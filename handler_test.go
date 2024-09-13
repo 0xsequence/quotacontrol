@@ -52,7 +52,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Session(client, auth, nil),
+		middleware.Session(client, auth, nil, nil),
 		addCredits(_credits*2).Middleware,
 		addCredits(_credits*-1).Middleware,
 		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
@@ -360,7 +360,7 @@ func TestJWT(t *testing.T) {
 	r := chi.NewRouter()
 
 	r.Use(
-		middleware.Session(client, auth, nil),
+		middleware.Session(client, auth, nil, nil),
 		middleware.EnsureUsage(client, nil),
 		middleware.SpendUsage(client, nil),
 	)
@@ -434,7 +434,7 @@ func TestJWTAccess(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Session(client, auth, nil),
+		middleware.Session(client, auth, nil, nil),
 		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
 		middleware.EnsurePermission(client, UserPermission_READ_WRITE, nil),
 	)
@@ -496,14 +496,16 @@ func TestJWTAccess(t *testing.T) {
 }
 
 func TestSession(t *testing.T) {
+	const (
+		project     = uint64(7)
+		accessKey   = "AQAAAAAAAAAHkL0mNSrn6Sm3oHs0xfa_DnY"
+		service     = proto.Service_Indexer
+		address     = "walletAddress"
+		userAddress = "userAddress"
+		serviceName = "serviceName"
+	)
+
 	auth := jwtauth.New("HS256", []byte("secret"), nil)
-
-	project := uint64(7)
-	key := proto.GenerateAccessKey(project)
-	service := proto.Service_Indexer
-	address := "accountId"
-	serviceName := "serviceName"
-
 	counter := hitCounter(0)
 
 	cfg := newConfig()
@@ -516,26 +518,28 @@ func TestSession(t *testing.T) {
 		MethodAccount   = "MethodAccount"
 		MethodAccessKey = "MethodAccessKey"
 		MethodProject   = "MethodProject"
+		MethodUser      = "MethodUser"
 		MethodAdmin     = "MethodAdmin"
 		MethodService   = "MethodService"
 	)
 
-	ACL := middleware.ACL{
+	ACL := middleware.ServiceConfig[middleware.ACL]{
 		"Service": {
-			MethodPublic:    proto.SessionType_Public,
-			MethodAccount:   proto.SessionType_Account,
-			MethodAccessKey: proto.SessionType_AccessKey,
-			MethodProject:   proto.SessionType_Project,
-			MethodAdmin:     proto.SessionType_Admin,
-			MethodService:   proto.SessionType_Service,
+			MethodPublic:    middleware.NewACL(proto.SessionType_Public.OrHigher()...),
+			MethodAccount:   middleware.NewACL(proto.SessionType_Wallet.OrHigher()...),
+			MethodAccessKey: middleware.NewACL(proto.SessionType_AccessKey.OrHigher()...),
+			MethodProject:   middleware.NewACL(proto.SessionType_Project.OrHigher()...),
+			MethodUser:      middleware.NewACL(proto.SessionType_User.OrHigher()...),
+			MethodAdmin:     middleware.NewACL(proto.SessionType_Admin.OrHigher()...),
+			MethodService:   middleware.NewACL(proto.SessionType_Service.OrHigher()...),
 		},
 	}
 
 	r := chi.NewRouter()
 	r.Use(
-		middleware.Session(client, auth, nil),
+		middleware.Session(client, auth, server.Store, nil),
 		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
-		middleware.AccessControl(ACL, middleware.Cost{}, 1, nil),
+		middleware.AccessControl(ACL, nil, 1, nil),
 	)
 	r.Handle("/*", &counter)
 
@@ -547,9 +551,10 @@ func TestSession(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
+	server.Store.AddUser(ctx, userAddress)
 	server.Store.SetAccessLimit(ctx, project, &limit)
 	server.Store.SetUserPermission(ctx, project, address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: project})
+	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: accessKey, ProjectID: project})
 
 	type testCase struct {
 		AccessKey string
@@ -561,32 +566,35 @@ func TestSession(t *testing.T) {
 			Session: proto.SessionType_Public,
 		},
 		{
-			Session: proto.SessionType_Account,
+			Session: proto.SessionType_Wallet,
 		},
 		{
-			AccessKey: key,
 			Session:   proto.SessionType_AccessKey,
+			AccessKey: accessKey,
 		},
 		{
 			Session: proto.SessionType_Project,
 		},
 		{
-			AccessKey: key,
 			Session:   proto.SessionType_Project,
+			AccessKey: accessKey,
+		},
+		{
+			Session: proto.SessionType_User,
 		},
 		{
 			Session: proto.SessionType_Admin,
 		},
 		{
-			AccessKey: key,
 			Session:   proto.SessionType_Admin,
+			AccessKey: accessKey,
 		},
 		{
 			Session: proto.SessionType_Service,
 		},
 		{
-			AccessKey: key,
 			Session:   proto.SessionType_Service,
+			AccessKey: accessKey,
 		},
 	}
 
@@ -602,21 +610,24 @@ func TestSession(t *testing.T) {
 		MethodAccount,
 		MethodAccessKey,
 		MethodProject,
+		MethodUser,
 		MethodAdmin,
 		MethodService,
 	}
 
 	for service := range ACL {
 		for _, method := range methods {
-			minSession := ACL[service][method]
+			types := ACL[service][method]
 			for _, tc := range testCases {
 				t.Run(fmt.Sprintf("%s/%s/%s", method, tc.Session, tc.AccessKey), func(t *testing.T) {
 					var claims middleware.Claims
 					switch tc.Session {
-					case proto.SessionType_Account:
+					case proto.SessionType_Wallet:
 						claims = middleware.Claims{"account": address}
 					case proto.SessionType_Project:
 						claims = middleware.Claims{"account": address, "project": project}
+					case proto.SessionType_User:
+						claims = middleware.Claims{"account": userAddress}
 					case proto.SessionType_Admin:
 						claims = middleware.Claims{"account": address, "admin": true}
 					case proto.SessionType_Service:
@@ -624,7 +635,7 @@ func TestSession(t *testing.T) {
 					}
 
 					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, mustJWT(t, auth, claims))
-					if tc.Session < minSession {
+					if !types.Includes(tc.Session) {
 						assert.Error(t, err)
 						assert.False(t, ok)
 						return
@@ -639,7 +650,7 @@ func TestSession(t *testing.T) {
 					case proto.SessionType_AccessKey, proto.SessionType_Project:
 						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), h.Get(middleware.HeaderQuotaLimit))
-					case proto.SessionType_Account, proto.SessionType_Admin:
+					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
 					case proto.SessionType_Service:
 						assert.Equal(t, serviceRPM, rateLimit)

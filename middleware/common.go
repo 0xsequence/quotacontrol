@@ -40,28 +40,19 @@ func (c Claims) String() string {
 
 type ServiceConfig[T any] map[string]map[string]T
 
-type (
-	ACL  = ServiceConfig[proto.SessionType]
-	Cost = ServiceConfig[int64]
-)
-
 func (s ServiceConfig[T]) GetConfig(r *rcpRequest) (v T, ok bool) {
-	if r.Package != "rpc" || s == nil {
+	if s == nil || r.Package != "rpc" {
 		return v, false
 	}
-
-	serviceACL, ok := s[r.Service]
+	serviceCfg, ok := s[r.Service]
 	if !ok {
 		return v, false
 	}
-
-	// get method's ACL
-	cfg, ok := serviceACL[r.Method]
+	methodCfg, ok := serviceCfg[r.Method]
 	if !ok {
 		return v, false
 	}
-
-	return cfg, true
+	return methodCfg, true
 }
 
 type rcpRequest struct {
@@ -95,4 +86,37 @@ func swapHeader(h http.Header, from, to string) {
 		h.Set(to, v)
 		h.Del(from)
 	}
+}
+
+// ACL is a list of session types, encoded as a bitfield.
+// SessionType(n) is represented by n=-the bit.
+type ACL uint64
+
+func NewACL(t ...proto.SessionType) ACL {
+	var types ACL
+	for _, v := range t {
+		types = types.And(v)
+	}
+	return types
+}
+
+func (t ACL) And(types ...proto.SessionType) ACL {
+	for _, v := range types {
+		t |= 1 << v
+	}
+	return t
+}
+
+func (t ACL) Includes(session proto.SessionType) bool {
+	return t&ACL(1<<session) != 0
+}
+
+func (t ACL) SessionTypes() []proto.SessionType {
+	var types []proto.SessionType
+	for i := proto.SessionType(0); i < proto.SessionType_Max; i++ {
+		if t.Includes(i) {
+			types = append(types, i)
+		}
+	}
+	return types
 }
