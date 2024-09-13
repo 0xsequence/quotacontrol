@@ -525,13 +525,13 @@ func TestSession(t *testing.T) {
 
 	ACL := middleware.ServiceConfig[middleware.ACL]{
 		"Service": {
-			MethodPublic:    middleware.NewACL(proto.SessionType_Public.AndUp()...),
-			MethodAccount:   middleware.NewACL(proto.SessionType_Wallet.AndUp()...),
-			MethodAccessKey: middleware.NewACL(proto.SessionType_AccessKey.AndUp()...),
-			MethodProject:   middleware.NewACL(proto.SessionType_Project.AndUp()...),
-			MethodUser:      middleware.NewACL(proto.SessionType_User.AndUp()...),
-			MethodAdmin:     middleware.NewACL(proto.SessionType_Admin.AndUp()...),
-			MethodService:   middleware.NewACL(proto.SessionType_Service.AndUp()...),
+			MethodPublic:    middleware.NewACL(proto.SessionType_Public.OrHigher()...),
+			MethodAccount:   middleware.NewACL(proto.SessionType_Wallet.OrHigher()...),
+			MethodAccessKey: middleware.NewACL(proto.SessionType_AccessKey.OrHigher()...),
+			MethodProject:   middleware.NewACL(proto.SessionType_Project.OrHigher()...),
+			MethodUser:      middleware.NewACL(proto.SessionType_User.OrHigher()...),
+			MethodAdmin:     middleware.NewACL(proto.SessionType_Admin.OrHigher()...),
+			MethodService:   middleware.NewACL(proto.SessionType_Service.OrHigher()...),
 		},
 	}
 

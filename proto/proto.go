@@ -15,7 +15,7 @@ func Ptr[T any](v T) *T {
 }
 
 // AndUp returns a list of all session types from the current one up to the maximum.
-func (s SessionType) AndUp() []SessionType {
+func (s SessionType) OrHigher() []SessionType {
 	list := make([]SessionType, 0, SessionType_Service-s+1)
 	for i := s; i < SessionType_Max; i++ {
 		list = append(list, i)
