@@ -551,7 +551,7 @@ func TestSession(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	server.Store.AddUser(ctx, userAddress)
+	server.Store.AddUser(ctx, userAddress, false)
 	server.Store.SetAccessLimit(ctx, project, &limit)
 	server.Store.SetUserPermission(ctx, project, address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: accessKey, ProjectID: project})

@@ -23,7 +23,7 @@ func KeyFromHeader(r *http.Request) string {
 }
 
 type UserStore interface {
-	GetUser(ctx context.Context, address string) (any, error)
+	GetUser(ctx context.Context, address string) (any, bool, error)
 }
 
 func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
@@ -81,13 +81,17 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 					sessionType = proto.SessionType_Wallet
 
 					if u != nil {
-						user, err := u.GetUser(ctx, accountClaim)
+						user, isAdmin, err := u.GetUser(ctx, accountClaim)
 						if err != nil {
 							eh(w, err)
 							return
 						}
 						if user != nil {
-							sessionType = proto.SessionType_User
+							if isAdmin {
+								sessionType = proto.SessionType_Admin
+							} else {
+								sessionType = proto.SessionType_User
+							}
 							ctx = WithUser(ctx, user)
 						}
 					}
