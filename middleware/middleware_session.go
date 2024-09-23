@@ -139,6 +139,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 				if quota == nil {
 					quota = q
 				}
+				ctx = WithAccessKey(ctx, accessKey)
 				sessionType = max(sessionType, proto.SessionType_AccessKey)
 			}
 
