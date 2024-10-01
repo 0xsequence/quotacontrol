@@ -11,6 +11,7 @@ enum Service: uint16
   - Metadata
   - Marketplace
   - Builder
+  - WaaS
 
 struct Limit
   - maxKeys: int64
