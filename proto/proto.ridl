@@ -1,7 +1,7 @@
 webrpc = v1
 
 name = quota-control
-version = v0.1.0
+version = v0.17.0
 
 enum Service: uint16
   - NodeGateway

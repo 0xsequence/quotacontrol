@@ -43,7 +43,10 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto
 
 	if qc == nil {
 		qc = proto.NewQuotaControlClient(cfg.URL, &http.Client{
-			Transport: bearerToken(cfg.AuthToken),
+			Transport: headerRoundTripper{
+				middleware.HeaderAuthorization: fmt.Sprintf("BEARER %s", cfg.AuthToken),
+				middleware.HeaderVersion:       proto.WebRPCSchemaVersion(),
+			},
 		})
 	}
 
@@ -381,10 +384,12 @@ func (c *Client) isStopping() bool {
 	return atomic.LoadInt32(&c.running) == 2
 }
 
-type bearerToken string
+type headerRoundTripper map[string]string
 
-func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", t))
+func (t headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	for k, v := range t {
+		req.Header.Set(k, v)
+	}
 	return http.DefaultTransport.RoundTrip(req)
 }
 
