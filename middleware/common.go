@@ -10,7 +10,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
-type ErrHandler func(w http.ResponseWriter, err error)
+type ErrHandler func(r *http.Request, w http.ResponseWriter, err error)
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
 type Client interface {
