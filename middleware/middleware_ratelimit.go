@@ -29,9 +29,9 @@ const (
 
 type RLConfig struct {
 	Enabled     bool   `toml:"enabled"`
-	PublicRate  int    `toml:"public_rate"`
-	AccountRate int    `toml:"account_rate"`
-	ServiceRate int    `toml:"service_rate"`
+	PublicRate  int    `toml:"public_requests_per_minute"`
+	AccountRate int    `toml:"user_requests_per_minute"`
+	ServiceRate int    `toml:"service_requests_per_minute"`
 	ErrorMsg    string `toml:"error_message"`
 }
 
