@@ -319,7 +319,7 @@ func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err 
 	if !access.ValidateOrigin(origin) {
 		return proto.ErrInvalidOrigin
 	}
-	if !access.ValidateService(&c.service) {
+	if !access.ValidateService(c.service) {
 		return proto.ErrInvalidService
 	}
 	return nil

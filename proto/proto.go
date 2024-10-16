@@ -40,12 +40,12 @@ func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	return t.AllowedOrigins.MatchAny(rawOrigin)
 }
 
-func (t *AccessKey) ValidateService(service *Service) bool {
+func (t *AccessKey) ValidateService(service Service) bool {
 	if len(t.AllowedServices) == 0 {
 		return true
 	}
 	for _, s := range t.AllowedServices {
-		if *service == *s {
+		if service == s {
 			return true
 		}
 	}
