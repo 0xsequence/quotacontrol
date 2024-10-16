@@ -1,4 +1,4 @@
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.14.8 -pkg=proto -server -client -out=./proto.gen.go
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.15.0 -pkg=proto -server -client -out=./proto.gen.go
 //go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/quotacontrol.gen.ts
 package proto
 
