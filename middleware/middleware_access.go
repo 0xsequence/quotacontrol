@@ -30,7 +30,7 @@ func AccessControl(acl ServiceConfig[ACL], cost ServiceConfig[int64], defaultCos
 				return
 			}
 
-			if session := GetSessionType(r.Context()); !types.Includes(session) {
+			if session, _ := GetSessionType(r.Context()); !types.Includes(session) {
 				eh(r, w, proto.ErrUnauthorized)
 				return
 			}

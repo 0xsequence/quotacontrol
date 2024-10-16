@@ -35,12 +35,12 @@ func WithSessionType(ctx context.Context, accessType proto.SessionType) context.
 }
 
 // GetSessionType returns the access key from the context.
-func GetSessionType(ctx context.Context) proto.SessionType {
+func GetSessionType(ctx context.Context) (proto.SessionType, bool) {
 	v, ok := ctx.Value(ctxKeySessionType).(proto.SessionType)
 	if !ok {
-		return proto.SessionType_Public
+		return proto.SessionType_Public, false
 	}
-	return v
+	return v, true
 }
 
 // WithAccount adds the account to the context.

@@ -34,6 +34,10 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+			if _, ok := GetSessionType(ctx); ok {
+				next.ServeHTTP(w, r)
+				return
+			}
 			var (
 				sessionType proto.SessionType
 				quota       *proto.AccessQuota
