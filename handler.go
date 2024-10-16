@@ -297,7 +297,7 @@ func (h handler) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*pr
 	return nil, proto.ErrNoDefaultKey
 }
 
-func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	cycle, err := h.store.CycleStore.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
 	if err != nil {
 		return nil, err
@@ -367,7 +367,7 @@ func (h handler) RotateAccessKey(ctx context.Context, accessKey string) (*proto.
 	return newAccess, nil
 }
 
-func (h handler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []*proto.Service) (*proto.AccessKey, error) {
+func (h handler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err

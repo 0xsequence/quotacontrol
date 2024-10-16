@@ -18,7 +18,7 @@ const (
 // EnsureUsage is a middleware that checks if the quota has enough usage left.
 func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = proto.RespondWithError
+		eh = defaultErrHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,7 @@ func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Hand
 
 			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
-				eh(w, err)
+				eh(r, w, err)
 				return
 			}
 			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-usage, 0), 10))
@@ -50,7 +50,7 @@ func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Hand
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 			if usage+cu > quota.Limit.OverMax {
-				eh(w, proto.ErrLimitExceeded)
+				eh(r, w, proto.ErrLimitExceeded)
 				return
 			}
 
@@ -62,7 +62,7 @@ func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Hand
 // SpendUsage is a middleware that spends the usage from the quota.
 func SpendUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = proto.RespondWithError
+		eh = defaultErrHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +91,7 @@ func SpendUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handl
 
 			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrLimitExceeded) {
-				eh(w, err)
+				eh(r, w, err)
 				return
 			}
 
@@ -101,7 +101,7 @@ func SpendUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handl
 			}
 
 			if errors.Is(err, proto.ErrLimitExceeded) {
-				eh(w, err)
+				eh(r, w, err)
 				return
 			}
 

@@ -281,7 +281,7 @@ func TestDefaultKey(t *testing.T) {
 		proto.GenerateAccessKey(project),
 	}
 
-	service := proto.Ptr(proto.Service_Metadata)
+	service := proto.Service_Metadata
 	limit := proto.Limit{
 		RateLimit: 100,
 		FreeMax:   5,
@@ -302,7 +302,7 @@ func TestDefaultKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: project})
 	require.NoError(t, err)
 
-	client := newQuotaClient(cfg, *service)
+	client := newQuotaClient(cfg, service)
 
 	aq, err := client.FetchKeyQuota(ctx, keys[0], "", now)
 	require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestDefaultKey(t *testing.T) {
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
 
-	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, []*proto.Service{service})
+	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, []proto.Service{service})
 	require.NoError(t, err)
 
 	aq, err = client.FetchKeyQuota(ctx, keys[0], "", now)

@@ -65,8 +65,8 @@ func GetUser[T any](ctx context.Context) (T, bool) {
 	return v, ok
 }
 
-// withService adds the service to the context.
-func withService(ctx context.Context, service string) context.Context {
+// WithService adds the service to the context.
+func WithService(ctx context.Context, service string) context.Context {
 	return context.WithValue(ctx, ctxKeyService, service)
 }
 

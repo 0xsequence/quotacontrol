@@ -28,7 +28,7 @@ type UserStore interface {
 
 func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, keyFuncs ...KeyFunc) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = proto.RespondWithError
+		eh = defaultErrHandler
 	}
 	keyFuncs = append([]KeyFunc{KeyFromHeader}, keyFuncs...)
 	return func(next http.Handler) http.Handler {
@@ -50,11 +50,11 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 			token, err := jwtauth.VerifyRequest(auth, r, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie)
 			if err != nil {
 				if errors.Is(err, jwtauth.ErrExpired) {
-					eh(w, proto.ErrSessionExpired)
+					eh(r, w, proto.ErrSessionExpired)
 					return
 				}
 				if !errors.Is(err, jwtauth.ErrNoTokenFound) {
-					eh(w, proto.ErrUnauthorizedUser)
+					eh(r, w, proto.ErrUnauthorizedUser)
 					return
 				}
 			}
@@ -64,7 +64,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 			if token != nil {
 				claims, err := token.AsMap(r.Context())
 				if err != nil {
-					eh(w, err)
+					eh(r, w, err)
 					return
 				}
 
@@ -74,7 +74,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 				projectClaim, _ := claims["project"].(float64)
 				switch {
 				case serviceClaim != "":
-					ctx = withService(ctx, serviceClaim)
+					ctx = WithService(ctx, serviceClaim)
 					sessionType = proto.SessionType_Service
 				case accountClaim != "":
 					ctx = WithAccount(ctx, accountClaim)
@@ -83,7 +83,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 					if u != nil {
 						user, isAdmin, err := u.GetUser(ctx, accountClaim)
 						if err != nil {
-							eh(w, err)
+							eh(r, w, err)
 							return
 						}
 						if user != nil {
@@ -104,16 +104,16 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 					if projectClaim > 0 {
 						projectID := uint64(projectClaim)
 						if quota, err = client.FetchProjectQuota(ctx, projectID, now); err != nil {
-							eh(w, err)
+							eh(r, w, err)
 							return
 						}
 						ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ)
 						if err != nil {
-							eh(w, err)
+							eh(r, w, err)
 							return
 						}
 						if !ok {
-							eh(w, proto.ErrUnauthorizedUser)
+							eh(r, w, proto.ErrUnauthorizedUser)
 							return
 						}
 						ctx = withProjectID(ctx, projectID)
@@ -124,20 +124,20 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 			if accessKey != "" && sessionType < proto.SessionType_Admin {
 				projectID, err := proto.GetProjectID(accessKey)
 				if err != nil {
-					eh(w, err)
+					eh(r, w, err)
 					return
 				}
 				if quota != nil && quota.GetProjectID() != projectID {
-					eh(w, proto.ErrAccessKeyMismatch)
+					eh(r, w, proto.ErrAccessKeyMismatch)
 					return
 				}
 				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 				if err != nil {
-					eh(w, err)
+					eh(r, w, err)
 					return
 				}
 				if q != nil && !q.IsActive() {
-					eh(w, proto.ErrAccessKeyNotFound)
+					eh(r, w, proto.ErrAccessKeyNotFound)
 					return
 				}
 				if quota == nil {

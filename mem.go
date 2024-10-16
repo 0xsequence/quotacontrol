@@ -111,7 +111,7 @@ func (m *MemoryStore) ListAccessKeys(ctx context.Context, projectID uint64, acti
 		if active != nil && *active != v.Active {
 			continue
 		}
-		if service != nil && !v.ValidateService(service) {
+		if service != nil && !v.ValidateService(*service) {
 			continue
 		}
 		accessKeys = append(accessKeys, proto.Ptr(m.accessKeys[i]))

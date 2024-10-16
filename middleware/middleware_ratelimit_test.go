@@ -25,7 +25,7 @@ func TestRateLimiter(t *testing.T) {
 		Enabled:    true,
 		PublicRate: 10,
 		ErrorMsg:   _CustomErrorMessage,
-	}, redis.Config{}, func(w http.ResponseWriter, err error) {
+	}, redis.Config{}, func(r *http.Request, w http.ResponseWriter, err error) {
 		w.Header().Set(_TestHeader, _TestHeaderValue)
 		proto.RespondWithError(w, err)
 	})
