@@ -197,7 +197,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
-	if sessionType := middleware.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
+	if sessionType, _ := middleware.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
 		return true, nil
 	}
 	perm, _, err := c.FetchPermission(ctx, projectID)

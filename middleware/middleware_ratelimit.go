@@ -78,14 +78,14 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 		httprate.WithLimitCounter(limitCounter),
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
 			ctx := r.Context()
+			if _, ok := GetService(ctx); ok {
+				return "", nil
+			}
 			if q, ok := GetAccessQuota(ctx); ok {
 				return ProjectRateKey(q.GetProjectID()), nil
 			}
 			if account, ok := GetAccount(ctx); ok {
 				return AccountRateKey(account), nil
-			}
-			if _, ok := GetService(ctx); ok {
-				return "", nil
 			}
 			return httprate.KeyByRealIP(r)
 		}),
