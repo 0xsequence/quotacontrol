@@ -495,45 +495,47 @@ func TestJWTAccess(t *testing.T) {
 	assert.Equal(t, expectedHits, counter.GetValue())
 }
 
-func TestSession(t *testing.T) {
-	const (
-		project     = uint64(7)
-		accessKey   = "AQAAAAAAAAAHkL0mNSrn6Sm3oHs0xfa_DnY"
-		service     = proto.Service_Indexer
-		address     = "walletAddress"
-		userAddress = "userAddress"
-		serviceName = "serviceName"
-	)
+const (
+	MethodPublic    = "MethodPublic"
+	MethodAccount   = "MethodAccount"
+	MethodAccessKey = "MethodAccessKey"
+	MethodProject   = "MethodProject"
+	MethodUser      = "MethodUser"
+	MethodAdmin     = "MethodAdmin"
+	MethodService   = "MethodService"
+)
 
+var Methods = []string{MethodPublic, MethodAccount, MethodAccessKey, MethodProject, MethodUser, MethodAdmin, MethodService}
+
+var ACL = middleware.ServiceConfig[middleware.ACL]{
+	"Service": {
+		MethodPublic:    middleware.NewACL(proto.SessionType_Public.OrHigher()...),
+		MethodAccount:   middleware.NewACL(proto.SessionType_Wallet.OrHigher()...),
+		MethodAccessKey: middleware.NewACL(proto.SessionType_AccessKey.OrHigher()...),
+		MethodProject:   middleware.NewACL(proto.SessionType_Project.OrHigher()...),
+		MethodUser:      middleware.NewACL(proto.SessionType_User.OrHigher()...),
+		MethodAdmin:     middleware.NewACL(proto.SessionType_Admin.OrHigher()...),
+		MethodService:   middleware.NewACL(proto.SessionType_Service.OrHigher()...),
+	},
+}
+
+const (
+	ProjectID   = uint64(7)
+	AccessKey   = "AQAAAAAAAAAHkL0mNSrn6Sm3oHs0xfa_DnY"
+	Service     = proto.Service_Indexer
+	Address     = "walletAddress"
+	UserAddress = "userAddress"
+	ServiceName = "serviceName"
+)
+
+func TestSession(t *testing.T) {
 	auth := jwtauth.New("HS256", []byte("secret"), nil)
 	counter := hitCounter(0)
 
 	cfg := newConfig()
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
-	client := newQuotaClient(cfg, service)
-
-	const (
-		MethodPublic    = "MethodPublic"
-		MethodAccount   = "MethodAccount"
-		MethodAccessKey = "MethodAccessKey"
-		MethodProject   = "MethodProject"
-		MethodUser      = "MethodUser"
-		MethodAdmin     = "MethodAdmin"
-		MethodService   = "MethodService"
-	)
-
-	ACL := middleware.ServiceConfig[middleware.ACL]{
-		"Service": {
-			MethodPublic:    middleware.NewACL(proto.SessionType_Public.OrHigher()...),
-			MethodAccount:   middleware.NewACL(proto.SessionType_Wallet.OrHigher()...),
-			MethodAccessKey: middleware.NewACL(proto.SessionType_AccessKey.OrHigher()...),
-			MethodProject:   middleware.NewACL(proto.SessionType_Project.OrHigher()...),
-			MethodUser:      middleware.NewACL(proto.SessionType_User.OrHigher()...),
-			MethodAdmin:     middleware.NewACL(proto.SessionType_Admin.OrHigher()...),
-			MethodService:   middleware.NewACL(proto.SessionType_Service.OrHigher()...),
-		},
-	}
+	client := newQuotaClient(cfg, Service)
 
 	r := chi.NewRouter()
 	r.Use(
@@ -544,58 +546,26 @@ func TestSession(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{
-		RateLimit: 100,
-		FreeWarn:  5,
-		FreeMax:   5,
-		OverWarn:  7,
-		OverMax:   10,
-	}
-	server.Store.AddUser(ctx, userAddress, false)
-	server.Store.SetAccessLimit(ctx, project, &limit)
-	server.Store.SetUserPermission(ctx, project, address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: project})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: accessKey, ProjectID: project})
+	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	server.Store.AddUser(ctx, UserAddress, false)
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetUserPermission(ctx, ProjectID, Address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
 
-	type testCase struct {
+	testCases := []struct {
 		AccessKey string
 		Session   proto.SessionType
-	}
-
-	testCases := []testCase{
-		{
-			Session: proto.SessionType_Public,
-		},
-		{
-			Session: proto.SessionType_Wallet,
-		},
-		{
-			Session:   proto.SessionType_AccessKey,
-			AccessKey: accessKey,
-		},
-		{
-			Session: proto.SessionType_Project,
-		},
-		{
-			Session:   proto.SessionType_Project,
-			AccessKey: accessKey,
-		},
-		{
-			Session: proto.SessionType_User,
-		},
-		{
-			Session: proto.SessionType_Admin,
-		},
-		{
-			Session:   proto.SessionType_Admin,
-			AccessKey: accessKey,
-		},
-		{
-			Session: proto.SessionType_Service,
-		},
-		{
-			Session:   proto.SessionType_Service,
-			AccessKey: accessKey,
-		},
+	}{
+		{Session: proto.SessionType_Public},
+		{Session: proto.SessionType_Wallet},
+		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
+		{Session: proto.SessionType_Project},
+		{Session: proto.SessionType_Project, AccessKey: AccessKey},
+		{Session: proto.SessionType_User},
+		{Session: proto.SessionType_Admin},
+		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
+		{Session: proto.SessionType_Service},
+		{Session: proto.SessionType_Service, AccessKey: AccessKey},
 	}
 
 	var (
@@ -603,35 +573,26 @@ func TestSession(t *testing.T) {
 		accountRPM = fmt.Sprint(middleware.DefaultAccountRate)
 		serviceRPM = ""
 		quotaRPM   = fmt.Sprint(limit.RateLimit)
+		quotaLimit = strconv.FormatInt(limit.FreeMax, 10)
 	)
 
-	methods := []string{
-		MethodPublic,
-		MethodAccount,
-		MethodAccessKey,
-		MethodProject,
-		MethodUser,
-		MethodAdmin,
-		MethodService,
-	}
-
 	for service := range ACL {
-		for _, method := range methods {
+		for _, method := range Methods {
 			types := ACL[service][method]
 			for _, tc := range testCases {
 				t.Run(fmt.Sprintf("%s/%s/%s", method, tc.Session, tc.AccessKey), func(t *testing.T) {
 					var claims middleware.Claims
 					switch tc.Session {
 					case proto.SessionType_Wallet:
-						claims = middleware.Claims{"account": address}
+						claims = middleware.Claims{"account": Address}
 					case proto.SessionType_Project:
-						claims = middleware.Claims{"account": address, "project": project}
+						claims = middleware.Claims{"account": Address, "project": ProjectID}
 					case proto.SessionType_User:
-						claims = middleware.Claims{"account": userAddress}
+						claims = middleware.Claims{"account": UserAddress}
 					case proto.SessionType_Admin:
-						claims = middleware.Claims{"account": address, "admin": true}
+						claims = middleware.Claims{"account": Address, "admin": true}
 					case proto.SessionType_Service:
-						claims = middleware.Claims{"service": serviceName}
+						claims = middleware.Claims{"service": ServiceName}
 					}
 
 					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, mustJWT(t, auth, claims))
@@ -649,7 +610,103 @@ func TestSession(t *testing.T) {
 						assert.Equal(t, publicRPM, rateLimit)
 					case proto.SessionType_AccessKey, proto.SessionType_Project:
 						assert.Equal(t, quotaRPM, rateLimit)
-						assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), h.Get(middleware.HeaderQuotaLimit))
+						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
+					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
+						assert.Equal(t, accountRPM, rateLimit)
+					case proto.SessionType_Service:
+						assert.Equal(t, serviceRPM, rateLimit)
+					}
+				})
+			}
+		}
+
+	}
+}
+
+func TestSessionDisabled(t *testing.T) {
+	auth := jwtauth.New("HS256", []byte("secret"), nil)
+	counter := hitCounter(0)
+
+	cfg := newConfig()
+	cfg.Enabled = false
+	server, cleanup := test.NewServer(&cfg)
+	t.Cleanup(cleanup)
+	client := newQuotaClient(cfg, Service)
+
+	r := chi.NewRouter()
+	r.Use(
+		middleware.Session(client, auth, server.Store, nil),
+		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
+		middleware.AccessControl(ACL, nil, 1, nil),
+	)
+	r.Handle("/*", &counter)
+
+	ctx := context.Background()
+	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	server.Store.AddUser(ctx, UserAddress, false)
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetUserPermission(ctx, ProjectID, Address, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+
+	testCases := []struct {
+		AccessKey string
+		Session   proto.SessionType
+	}{
+		{Session: proto.SessionType_Public},
+		{Session: proto.SessionType_Wallet},
+		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
+		{Session: proto.SessionType_Project},
+		{Session: proto.SessionType_Project, AccessKey: AccessKey},
+		{Session: proto.SessionType_User},
+		{Session: proto.SessionType_Admin},
+		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
+		{Session: proto.SessionType_Service},
+		{Session: proto.SessionType_Service, AccessKey: AccessKey},
+	}
+
+	var (
+		publicRPM  = fmt.Sprint(middleware.DefaultPublicRate)
+		accountRPM = fmt.Sprint(middleware.DefaultAccountRate)
+		serviceRPM = ""
+		quotaRPM   = fmt.Sprint(limit.RateLimit)
+		quotaLimit = strconv.FormatInt(limit.FreeMax, 10)
+	)
+
+	for service := range ACL {
+		for _, method := range Methods {
+			types := ACL[service][method]
+			for _, tc := range testCases {
+				t.Run(fmt.Sprintf("%s/%s/%s", method, tc.Session, tc.AccessKey), func(t *testing.T) {
+					var claims middleware.Claims
+					switch tc.Session {
+					case proto.SessionType_Wallet:
+						claims = middleware.Claims{"account": Address}
+					case proto.SessionType_Project:
+						claims = middleware.Claims{"account": Address, "project": ProjectID}
+					case proto.SessionType_User:
+						claims = middleware.Claims{"account": UserAddress}
+					case proto.SessionType_Admin:
+						claims = middleware.Claims{"account": Address, "admin": true}
+					case proto.SessionType_Service:
+						claims = middleware.Claims{"service": ServiceName}
+					}
+
+					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, mustJWT(t, auth, claims))
+					if !types.Includes(tc.Session) {
+						assert.Error(t, err)
+						assert.False(t, ok)
+						return
+					}
+
+					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
+					assert.True(t, ok)
+					rateLimit := h.Get(middleware.HeaderCreditsLimit)
+					switch tc.Session {
+					case proto.SessionType_Public:
+						assert.Equal(t, publicRPM, rateLimit)
+					case proto.SessionType_AccessKey, proto.SessionType_Project:
+						assert.Equal(t, quotaRPM, rateLimit)
+						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
 					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
 					case proto.SessionType_Service:
