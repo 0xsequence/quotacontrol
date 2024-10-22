@@ -2,6 +2,7 @@ package quotacontrol
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -26,7 +27,11 @@ func NewHTTPRateLimiter(cfg Config, vary RateLimitVaryFn, eh middleware.ErrorHan
 	// httprate limit counter
 	const _DefaultRPM = 120
 
-	counter, _ := httprateredis.NewRedisLimitCounter(cfg.RedisRateLimitConfig())
+	counter, err := httprateredis.NewRedisLimitCounter(cfg.RedisRateLimitConfig())
+	if err != nil {
+		slog.Error("redis limit counter not available", slog.Any("error", err))
+	}
+
 	limitErr := proto.ErrLimitExceeded.WithMessage(cfg.RateLimiter.ErrorMessage)
 
 	optionCounter := httprate.WithLimitCounter(counter)
