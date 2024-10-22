@@ -51,7 +51,7 @@ func Session(client Client, auth *jwtauth.JWTAuth, u UserStore, eh ErrHandler, k
 				}
 			}
 
-			token, err := jwtauth.VerifyRequest(auth, r, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie)
+			token, err := jwtauth.VerifyRequest(auth, r, jwtauth.TokenFromHeader)
 			if err != nil {
 				if errors.Is(err, jwtauth.ErrExpired) {
 					eh(r, w, proto.ErrSessionExpired)
