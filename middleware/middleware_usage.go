@@ -22,6 +22,11 @@ func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Hand
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !client.IsEnabled() {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			ctx := r.Context()
 
 			quota, ok := GetAccessQuota(ctx)

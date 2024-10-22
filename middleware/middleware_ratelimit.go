@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -65,13 +66,18 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 
 	var limitCounter httprate.LimitCounter
 	if redisCfg.Enabled {
-		limitCounter, _ = httprateredis.NewRedisLimitCounter(&httprateredis.Config{
+		cfg := &httprateredis.Config{
 			Host:      redisCfg.Host,
 			Port:      redisCfg.Port,
 			MaxIdle:   redisCfg.MaxIdle,
 			MaxActive: redisCfg.MaxActive,
 			DBIndex:   redisCfg.DBIndex,
-		})
+		}
+		if c, err := httprateredis.NewRedisLimitCounter(cfg); err != nil {
+			slog.Error("redis counter not available", slog.Any("error", err))
+		} else {
+			limitCounter = c
+		}
 	}
 
 	options := []httprate.Option{
