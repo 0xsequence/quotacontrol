@@ -167,13 +167,13 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	)
 
 	for i := range 3 {
-		usage, err := c.usageCache.PeekCost(ctx, key)
+		usage, err := c.usageCache.PeekUsage(ctx, key)
 		if err != nil {
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
 				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
-					if _, err := c.usageCache.ClearCost(ctx, key); err != nil {
+					if _, err := c.usageCache.ClearUsage(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
 					}
 					return 0, nil
@@ -255,7 +255,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	for i := range 3 {
-		total, err := c.usageCache.SpendCost(ctx, key, cost, cfg.OverMax)
+		total, err := c.usageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
 		if err != nil {
 			// limit exceeded
 			if errors.Is(err, proto.ErrLimitExceeded) {
@@ -266,7 +266,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 			if errors.Is(err, ErrCachePing) {
 				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
-					if _, err := c.usageCache.ClearCost(ctx, key); err != nil {
+					if _, err := c.usageCache.ClearUsage(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
 					}
 					return false, 0, nil

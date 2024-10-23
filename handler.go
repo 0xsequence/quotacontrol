@@ -147,7 +147,7 @@ func (h handler) PrepareUsage(ctx context.Context, projectID uint64, cycle *prot
 		return false, err
 	}
 	key := getQuotaKey(projectID, cycle, now)
-	if err := h.cache.UsageCache.SetCost(ctx, key, usage.GetTotalUsage()); err != nil {
+	if err := h.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -160,7 +160,7 @@ func (h handler) ClearUsage(ctx context.Context, projectID uint64, now time.Time
 	}
 
 	key := getQuotaKey(projectID, cycle, now)
-	ok, err := h.cache.UsageCache.ClearCost(ctx, key)
+	ok, err := h.cache.UsageCache.ClearUsage(ctx, key)
 	if err != nil {
 		return false, err
 	}
@@ -519,7 +519,7 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 
 	key := getQuotaKey(projectID, cycle, now)
 
-	usage, err := h.cache.UsageCache.PeekCost(ctx, key)
+	usage, err := h.cache.UsageCache.PeekUsage(ctx, key)
 	if err != nil {
 		if !errors.Is(err, ErrCachePing) {
 			return nil, err
@@ -527,7 +527,7 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 		if _, err := h.PrepareUsage(ctx, projectID, cycle, now); err != nil {
 			return nil, err
 		}
-		if usage, err = h.cache.UsageCache.PeekCost(ctx, key); err != nil {
+		if usage, err = h.cache.UsageCache.PeekUsage(ctx, key); err != nil {
 			return nil, err
 		}
 	}

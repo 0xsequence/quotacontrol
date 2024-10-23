@@ -22,10 +22,10 @@ type QuotaCache interface {
 }
 
 type UsageCache interface {
-	SetCost(ctx context.Context, redisKey string, amount int64) error
-	ClearCost(ctx context.Context, redisKey string) (bool, error)
-	PeekCost(ctx context.Context, redisKey string) (int64, error)
-	SpendCost(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
+	SetUsage(ctx context.Context, redisKey string, amount int64) error
+	ClearUsage(ctx context.Context, redisKey string) (bool, error)
+	PeekUsage(ctx context.Context, redisKey string) (int64, error)
+	SpendUsage(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
 }
 
 type PermissionCache interface {
@@ -116,12 +116,12 @@ func (s *RedisCache) setQuota(ctx context.Context, key string, quota *proto.Acce
 	return nil
 }
 
-func (s *RedisCache) SetCost(ctx context.Context, redisKey string, amount int64) error {
+func (s *RedisCache) SetUsage(ctx context.Context, redisKey string, amount int64) error {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	return s.client.Set(ctx, cacheKey, amount, s.ttl).Err()
 }
 
-func (s *RedisCache) ClearCost(ctx context.Context, redisKey string) (bool, error) {
+func (s *RedisCache) ClearUsage(ctx context.Context, redisKey string) (bool, error) {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	count, err := s.client.Del(ctx, cacheKey).Result()
 	if err != nil {
@@ -130,7 +130,7 @@ func (s *RedisCache) ClearCost(ctx context.Context, redisKey string) (bool, erro
 	return count != 0, nil
 }
 
-func (s *RedisCache) PeekCost(ctx context.Context, redisKey string) (int64, error) {
+func (s *RedisCache) PeekUsage(ctx context.Context, redisKey string) (int64, error) {
 	const SpecialValue = -1
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	v, err := s.client.Get(ctx, cacheKey).Int64()
@@ -153,9 +153,9 @@ func (s *RedisCache) PeekCost(ctx context.Context, redisKey string) (int64, erro
 	return 0, ErrCachePing
 }
 
-func (s *RedisCache) SpendCost(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
+func (s *RedisCache) SpendUsage(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
 	// NOTE: skip redisKeyPrefix as it's already in PeekCost
-	v, err := s.PeekCost(ctx, redisKey)
+	v, err := s.PeekUsage(ctx, redisKey)
 	if err != nil {
 		return 0, err
 	}
