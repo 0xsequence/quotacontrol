@@ -21,14 +21,15 @@ func TestRateLimiter(t *testing.T) {
 		_TestHeader         = "X-Test-Header"
 		_TestHeaderValue    = "test"
 	)
+	eh := func(r *http.Request, w http.ResponseWriter, err error) {
+		w.Header().Set(_TestHeader, _TestHeaderValue)
+		proto.RespondWithError(w, err)
+	}
 	rl := middleware.RateLimit(middleware.RLConfig{
 		Enabled:    true,
 		PublicRate: 10,
 		ErrorMsg:   _CustomErrorMessage,
-	}, redis.Config{}, func(r *http.Request, w http.ResponseWriter, err error) {
-		w.Header().Set(_TestHeader, _TestHeaderValue)
-		proto.RespondWithError(w, err)
-	})
+	}, redis.Config{}, eh)
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

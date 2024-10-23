@@ -1,3 +1,5 @@
+github.com/0xsequence/authcontrol v0.0.0-20241023152638-fd04748438df h1:yCtCVbfXPmal2Kygm+KxnIw+xZ1a+YjTumAuQtkl418=
+github.com/0xsequence/authcontrol v0.0.0-20241023152638-fd04748438df/go.mod h1:K1IlgXPaMZp7f+ZalS9vGax7f74Pwkd3wJjYN4QhyYA=
 github.com/0xsequence/ethkit v1.28.0 h1:11p4UXXvYnixQk01+qmAcOF71N9DlSeMcEMbaCPtjaY=
 github.com/0xsequence/ethkit v1.28.0/go.mod h1:rv0FAIyEyN0hhwGefbduAz4ujmyjyJXhCd6a0/yF3tk=
 github.com/0xsequence/go-sequence v0.43.0 h1:PErMuTg4PeaamJutEJ6tAjrFBA8z0t6lvT9LOVC5RMs=
@@ -20,8 +22,8 @@ github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 h1:rpfIENRNNilwHwZeG5+P150SMrnN
 github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0/go.mod h1:v57UDF4pDQJcEfFUCRop3lJL149eHGSe9Jvczhzjo/0=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
-github.com/go-chi/chi/v5 v5.0.10 h1:rLz5avzKpjqxrYwXNfmjkrYYXOyLJd37pz53UFHC6vk=
-github.com/go-chi/chi/v5 v5.0.10/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
+github.com/go-chi/chi/v5 v5.1.0 h1:acVI1TYaD+hhedDJ3r54HyA6sExp3HfXq7QWEEY/xMw=
+github.com/go-chi/chi/v5 v5.1.0/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
 github.com/go-chi/httprate v0.14.1 h1:EKZHYEZ58Cg6hWcYzoZILsv7ppb46Wt4uQ738IRtpZs=
 github.com/go-chi/httprate v0.14.1/go.mod h1:TUepLXaz/pCjmCtf/obgOQJ2Sz6rC8fSf5cAt5cnTt0=
 github.com/go-chi/httprate-redis v0.5.2 h1:Guel5o38pKaQVjtpGHYhyl2I3Pi62mVUyUji5YTYXxI=

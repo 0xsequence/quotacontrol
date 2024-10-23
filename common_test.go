@@ -63,7 +63,7 @@ func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func mustJWT(t *testing.T, auth *jwtauth.JWTAuth, claims map[string]interface{}) string {
+func mustJWT(t *testing.T, auth *jwtauth.JWTAuth, claims map[string]any) string {
 	t.Helper()
 	if claims == nil {
 		return ""
@@ -98,10 +98,10 @@ func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, 
 	return true, rr.Header(), nil
 }
 
-type addCredits int64
+type addCost int64
 
-func (i addCredits) Middleware(h http.Handler) http.Handler {
+func (i addCost) Middleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(w, r.WithContext(middleware.AddComputeUnits(r.Context(), int64(i))))
+		h.ServeHTTP(w, r.WithContext(middleware.AddCost(r.Context(), int64(i))))
 	})
 }

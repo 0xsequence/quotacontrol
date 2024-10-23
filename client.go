@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
@@ -166,13 +167,13 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 	)
 
 	for i := range 3 {
-		usage, err := c.usageCache.PeekComputeUnits(ctx, key)
+		usage, err := c.usageCache.PeekCost(ctx, key)
 		if err != nil {
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
 				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
-					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
+					if _, err := c.usageCache.ClearCost(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
 					}
 					return 0, nil
@@ -197,7 +198,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
-	if sessionType, _ := middleware.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
+	if sessionType, _ := authcontrol.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
 		return true, nil
 	}
 	perm, _, err := c.FetchPermission(ctx, projectID)
@@ -210,7 +211,7 @@ func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermi
 // FetchPermission fetches the user permission from cache or from the quota server.
 // If an error occurs, it returns nil.
 func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.UserPermission, *proto.ResourceAccess, error) {
-	userID, _ := middleware.GetAccount(ctx)
+	userID, _ := authcontrol.GetAccount(ctx)
 	logger := c.logger.With(
 		slog.String("op", "fetch_permission"),
 		slog.Uint64("project_id", projectID),
@@ -235,9 +236,9 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, computeUnits int64, now time.Time) (spent bool, total int64, err error) {
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (spent bool, total int64, err error) {
 	// quota is nil only on unexpected errors from quota fetch
-	if quota == nil || computeUnits == 0 {
+	if quota == nil || cost == 0 {
 		return false, 0, nil
 	}
 
@@ -254,18 +255,18 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	for i := range 3 {
-		total, err := c.usageCache.SpendComputeUnits(ctx, key, computeUnits, cfg.OverMax)
+		total, err := c.usageCache.SpendCost(ctx, key, cost, cfg.OverMax)
 		if err != nil {
 			// limit exceeded
 			if errors.Is(err, proto.ErrLimitExceeded) {
-				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: computeUnits})
+				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: cost})
 				return false, total, proto.ErrLimitExceeded
 			}
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
 				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
-					if _, err := c.usageCache.ClearComputeUnits(ctx, key); err != nil {
+					if _, err := c.usageCache.ClearCost(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
 					}
 					return false, 0, nil
@@ -284,7 +285,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, compu
 
 		}
 
-		usage, event := cfg.GetSpendResult(computeUnits, total)
+		usage, event := cfg.GetSpendResult(cost, total)
 		if quota.AccessKey.AccessKey == "" {
 			c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
 		} else {

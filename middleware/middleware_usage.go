@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
@@ -12,13 +13,12 @@ const (
 	HeaderQuotaLimit     = "Quota-Limit"
 	HeaderQuotaRemaining = "Quota-Remaining"
 	HeaderQuotaOverage   = "Quota-Overage"
-	HeaderCreditsCost    = "Credits-Cost"
 )
 
 // EnsureUsage is a middleware that checks if the quota has enough usage left.
-func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handler {
+func EnsureUsage(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = defaultErrHandler
+		eh = DefaultErrorHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +35,7 @@ func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Hand
 				return
 			}
 
-			cu, ok := getComputeUnits(ctx)
+			cu, ok := getCost(ctx)
 			if !ok {
 				cu = client.GetDefaultUsage()
 			}
@@ -65,9 +65,9 @@ func EnsureUsage(client Client, eh ErrHandler) func(next http.Handler) http.Hand
 }
 
 // SpendUsage is a middleware that spends the usage from the quota.
-func SpendUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handler {
+func SpendUsage(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = defaultErrHandler
+		eh = DefaultErrorHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func SpendUsage(client Client, eh ErrHandler) func(next http.Handler) http.Handl
 				return
 			}
 
-			cu, ok := getComputeUnits(ctx)
+			cu, ok := getCost(ctx)
 			if !ok {
 				cu = client.GetDefaultUsage()
 			}

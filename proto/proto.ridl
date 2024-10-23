@@ -69,15 +69,6 @@ enum EventType: uint16
   - OverWarn
   - OverMax
 
-enum SessionType: uint16
-  - Public
-  - Wallet
-  - AccessKey
-  - Project
-  - User
-  - Admin
-  - Service
-
 enum UserPermission: uint16
   - UNAUTHORIZED
   - READ

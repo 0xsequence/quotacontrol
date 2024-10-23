@@ -1,11 +1,12 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.22.1
+go 1.23.2
 
 require (
+	github.com/0xsequence/authcontrol v0.0.0-20241023152638-fd04748438df
 	github.com/0xsequence/go-sequence v0.43.0
 	github.com/alicebob/miniredis/v2 v2.33.0
-	github.com/go-chi/chi/v5 v5.0.10
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/httprate v0.14.1
 	github.com/go-chi/httprate-redis v0.5.2
 	github.com/go-chi/jwtauth/v5 v5.3.1
@@ -15,7 +16,6 @@ require (
 	github.com/goware/validation v0.1.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jxskiss/base62 v1.1.0
-	github.com/lestrrat-go/jwx/v2 v2.1.1
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/stretchr/testify v1.9.0
 )
@@ -34,6 +34,7 @@ require (
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc v1.0.6 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
+	github.com/lestrrat-go/jwx/v2 v2.1.1 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
