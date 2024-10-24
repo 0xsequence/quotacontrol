@@ -14,13 +14,13 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/test"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+var secret = "secret"
+
 func TestMiddlewareUseAccessKey(t *testing.T) {
-	auth := jwtauth.New("HS256", []byte("secret"), nil)
 
 	cfg := newConfig()
 	server, cleanup := test.NewServer(&cfg)
@@ -52,18 +52,17 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	counter := spendingCounter(0)
 
 	options := &authcontrol.Options{
-		KeyFuncs: []authcontrol.KeyFunc{middleware.KeyFromHeader},
+		JWTSecret: secret,
+		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
 
 	r := chi.NewRouter()
-	r.Use(
-		authcontrol.Session(auth, options),
-		middleware.VerifyQuota(client, nil),
-		addCost(_credits*2).Middleware,
-		addCost(_credits*-1).Middleware,
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
-		middleware.SpendUsage(client, nil),
-	)
+	r.Use(authcontrol.Session(options))
+	r.Use(middleware.VerifyQuota(client, nil))
+	r.Use(addCost(_credits * 2).Middleware)
+	r.Use(addCost(_credits * -1).Middleware)
+	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(middleware.SpendUsage(client, nil))
 
 	r.Handle("/*", &counter)
 
@@ -349,8 +348,6 @@ func TestDefaultKey(t *testing.T) {
 }
 
 func TestJWT(t *testing.T) {
-	auth := jwtauth.New("HS256", []byte("secret"), nil)
-
 	project := uint64(7)
 	account := "account"
 	key := proto.GenerateAccessKey(project)
@@ -366,10 +363,11 @@ func TestJWT(t *testing.T) {
 	r := chi.NewRouter()
 
 	options := &authcontrol.Options{
-		KeyFuncs: []authcontrol.KeyFunc{middleware.KeyFromHeader},
+		JWTSecret: secret,
+		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
 	r.Use(
-		authcontrol.Session(auth, options),
+		authcontrol.Session(options),
 		middleware.VerifyQuota(client, nil),
 		middleware.EnsureUsage(client, nil),
 		middleware.SpendUsage(client, nil),
@@ -387,7 +385,7 @@ func TestJWT(t *testing.T) {
 	}
 	server.Store.SetAccessLimit(ctx, project, &limit)
 
-	token := mustJWT(t, auth, map[string]any{"project": project, "account": account})
+	token := authcontrol.S2SToken(secret, map[string]any{"project": project, "account": account})
 
 	var expectedHits int64
 
@@ -430,8 +428,6 @@ func TestJWT(t *testing.T) {
 }
 
 func TestJWTAccess(t *testing.T) {
-	auth := jwtauth.New("HS256", []byte("secret"), nil)
-
 	project := uint64(7)
 	service := proto.Service_Indexer
 	account := "account"
@@ -445,14 +441,14 @@ func TestJWTAccess(t *testing.T) {
 
 	r := chi.NewRouter()
 	options := &authcontrol.Options{
-		KeyFuncs: []authcontrol.KeyFunc{middleware.KeyFromHeader},
+		JWTSecret: secret,
+		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
-	r.Use(
-		authcontrol.Session(auth, options),
-		middleware.VerifyQuota(client, nil),
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
-		middleware.EnsurePermission(client, UserPermission_READ_WRITE, nil),
-	)
+	r.Use(authcontrol.Session(options))
+	r.Use(middleware.VerifyQuota(client, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(middleware.EnsurePermission(client, UserPermission_READ_WRITE, nil))
+
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
@@ -465,7 +461,7 @@ func TestJWTAccess(t *testing.T) {
 	}
 	server.Store.SetAccessLimit(ctx, project, &limit)
 
-	token := mustJWT(t, auth, map[string]any{"account": account, "project": project})
+	token := authcontrol.S2SToken(secret, map[string]any{"account": account, "project": project})
 
 	var expectedHits int64
 
@@ -544,7 +540,6 @@ const (
 )
 
 func TestSession(t *testing.T) {
-	auth := jwtauth.New("HS256", []byte("secret"), nil)
 	counter := hitCounter(0)
 
 	cfg := newConfig()
@@ -553,17 +548,17 @@ func TestSession(t *testing.T) {
 	client := newQuotaClient(cfg, Service)
 
 	options := &authcontrol.Options{
+		JWTSecret: secret,
 		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 		UserStore: server.Store,
 	}
 
 	r := chi.NewRouter()
-	r.Use(
-		authcontrol.Session(auth, options),
-		middleware.VerifyQuota(client, nil),
-		authcontrol.AccessControl(ACL, nil),
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
-	)
+	r.Use(authcontrol.Session(options))
+	r.Use(middleware.VerifyQuota(client, nil))
+	r.Use(authcontrol.AccessControl(ACL, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
@@ -616,7 +611,7 @@ func TestSession(t *testing.T) {
 						claims = map[string]any{"service": ServiceName}
 					}
 
-					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, mustJWT(t, auth, claims))
+					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, authcontrol.S2SToken(secret, claims))
 					if !types.Includes(tc.Session) {
 						assert.Error(t, err)
 						assert.False(t, ok)
@@ -645,7 +640,6 @@ func TestSession(t *testing.T) {
 }
 
 func TestSessionDisabled(t *testing.T) {
-	auth := jwtauth.New("HS256", []byte("secret"), nil)
 	counter := hitCounter(0)
 
 	cfg := newConfig()
@@ -655,17 +649,17 @@ func TestSessionDisabled(t *testing.T) {
 	client := newQuotaClient(cfg, Service)
 
 	options := &authcontrol.Options{
+		JWTSecret: secret,
 		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 		UserStore: server.Store,
 	}
 
 	r := chi.NewRouter()
-	r.Use(
-		authcontrol.Session(auth, options),
-		middleware.VerifyQuota(client, nil),
-		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
-		authcontrol.AccessControl(ACL, nil),
-	)
+	r.Use(authcontrol.Session(options))
+	r.Use(middleware.VerifyQuota(client, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(authcontrol.AccessControl(ACL, nil))
+
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
@@ -718,7 +712,7 @@ func TestSessionDisabled(t *testing.T) {
 						claims = map[string]any{"service": ServiceName}
 					}
 
-					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, mustJWT(t, auth, claims))
+					ok, h, err := executeRequest(ctx, r, "/rpc/"+service+"/"+method, tc.AccessKey, authcontrol.S2SToken(secret, claims))
 					if !types.Includes(tc.Session) {
 						assert.Error(t, err)
 						assert.False(t, ok)
