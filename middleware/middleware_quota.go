@@ -10,7 +10,7 @@ import (
 
 func VerifyQuota(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = errHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +25,7 @@ func VerifyQuota(client Client, eh authcontrol.ErrHandler) func(next http.Handle
 			)
 
 			if session == proto.SessionType_Project {
-				id, ok := authcontrol.GetProjectID(ctx)
+				id, ok := authcontrol.GetProject(ctx)
 				if !ok {
 					eh(r, w, proto.ErrUnauthorizedUser)
 					return

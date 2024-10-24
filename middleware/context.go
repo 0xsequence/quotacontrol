@@ -38,7 +38,7 @@ func GetAccessQuota(ctx context.Context) (*proto.AccessQuota, bool) {
 // GetProjectID returns the projectID and if its active from the context.
 // In case its not set, it will return 0.
 func GetProjectID(ctx context.Context) (uint64, bool) {
-	if v, ok := authcontrol.GetProjectID(ctx); ok {
+	if v, ok := authcontrol.GetProject(ctx); ok {
 		return v, true
 	}
 	if q, ok := GetAccessQuota(ctx); ok {

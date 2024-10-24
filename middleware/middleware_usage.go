@@ -18,7 +18,7 @@ const (
 // EnsureUsage is a middleware that checks if the quota has enough usage left.
 func EnsureUsage(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = errHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +67,7 @@ func EnsureUsage(client Client, eh authcontrol.ErrHandler) func(next http.Handle
 // SpendUsage is a middleware that spends the usage from the quota.
 func SpendUsage(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = errHandler
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

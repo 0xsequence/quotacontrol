@@ -10,7 +10,7 @@ import (
 // EnsurePermission middleware that checks if the session type has the required permission.
 func EnsurePermission(client Client, minPermission proto.UserPermission, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = errHandler
 	}
 
 	return func(next http.Handler) http.Handler {

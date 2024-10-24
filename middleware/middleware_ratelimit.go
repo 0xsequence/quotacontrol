@@ -60,7 +60,7 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler)
 	}
 
 	if eh == nil {
-		eh = DefaultErrorHandler
+		eh = errHandler
 	}
 
 	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
@@ -96,6 +96,9 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler)
 			ctx := r.Context()
 			if _, ok := authcontrol.GetService(ctx); ok {
 				return "", nil
+			}
+			if project, ok := GetProjectID(ctx); ok {
+				return ProjectRateKey(project), nil
 			}
 			if q, ok := GetAccessQuota(ctx); ok {
 				return ProjectRateKey(q.GetProjectID()), nil

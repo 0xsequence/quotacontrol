@@ -51,9 +51,13 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	counter := spendingCounter(0)
 
+	options := &authcontrol.Options{
+		KeyFuncs: []authcontrol.KeyFunc{middleware.KeyFromHeader},
+	}
+
 	r := chi.NewRouter()
 	r.Use(
-		authcontrol.Session(auth, nil, middleware.DefaultErrorHandler, middleware.KeyFromHeader),
+		authcontrol.Session(auth, options),
 		middleware.VerifyQuota(client, nil),
 		addCost(_credits*2).Middleware,
 		addCost(_credits*-1).Middleware,
@@ -361,8 +365,11 @@ func TestJWT(t *testing.T) {
 
 	r := chi.NewRouter()
 
+	options := &authcontrol.Options{
+		KeyFuncs: []authcontrol.KeyFunc{middleware.KeyFromHeader},
+	}
 	r.Use(
-		authcontrol.Session(auth, nil, nil, middleware.KeyFromHeader),
+		authcontrol.Session(auth, options),
 		middleware.VerifyQuota(client, nil),
 		middleware.EnsureUsage(client, nil),
 		middleware.SpendUsage(client, nil),
@@ -437,8 +444,11 @@ func TestJWTAccess(t *testing.T) {
 	client := newQuotaClient(cfg, service)
 
 	r := chi.NewRouter()
+	options := &authcontrol.Options{
+		KeyFuncs: []authcontrol.KeyFunc{middleware.KeyFromHeader},
+	}
 	r.Use(
-		authcontrol.Session(auth, nil, nil, middleware.KeyFromHeader),
+		authcontrol.Session(auth, options),
 		middleware.VerifyQuota(client, nil),
 		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
 		middleware.EnsurePermission(client, UserPermission_READ_WRITE, nil),
@@ -542,9 +552,14 @@ func TestSession(t *testing.T) {
 	t.Cleanup(cleanup)
 	client := newQuotaClient(cfg, Service)
 
+	options := &authcontrol.Options{
+		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
+		UserStore: server.Store,
+	}
+
 	r := chi.NewRouter()
 	r.Use(
-		authcontrol.Session(auth, server.Store, nil, middleware.KeyFromHeader),
+		authcontrol.Session(auth, options),
 		middleware.VerifyQuota(client, nil),
 		authcontrol.AccessControl(ACL, nil),
 		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
@@ -562,16 +577,16 @@ func TestSession(t *testing.T) {
 		AccessKey string
 		Session   proto.SessionType
 	}{
-		// {Session: proto.SessionType_Public},
-		// {Session: proto.SessionType_Wallet},
+		{Session: proto.SessionType_Public},
+		{Session: proto.SessionType_Wallet},
 		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
-		// {Session: proto.SessionType_Project},
-		// {Session: proto.SessionType_Project, AccessKey: AccessKey},
-		// {Session: proto.SessionType_User},
-		// {Session: proto.SessionType_Admin},
-		// {Session: proto.SessionType_Admin, AccessKey: AccessKey},
-		// {Session: proto.SessionType_Service},
-		// {Session: proto.SessionType_Service, AccessKey: AccessKey},
+		{Session: proto.SessionType_Project},
+		{Session: proto.SessionType_Project, AccessKey: AccessKey},
+		{Session: proto.SessionType_User},
+		{Session: proto.SessionType_Admin},
+		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
+		{Session: proto.SessionType_Service},
+		{Session: proto.SessionType_Service, AccessKey: AccessKey},
 	}
 
 	var (
@@ -639,9 +654,14 @@ func TestSessionDisabled(t *testing.T) {
 	t.Cleanup(cleanup)
 	client := newQuotaClient(cfg, Service)
 
+	options := &authcontrol.Options{
+		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
+		UserStore: server.Store,
+	}
+
 	r := chi.NewRouter()
 	r.Use(
-		authcontrol.Session(auth, server.Store, nil, middleware.KeyFromHeader),
+		authcontrol.Session(auth, options),
 		middleware.VerifyQuota(client, nil),
 		middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil),
 		authcontrol.AccessControl(ACL, nil),
@@ -659,16 +679,16 @@ func TestSessionDisabled(t *testing.T) {
 		AccessKey string
 		Session   proto.SessionType
 	}{
-		{Session: proto.SessionType_Public},
-		{Session: proto.SessionType_Wallet},
+		// {Session: proto.SessionType_Public},
+		// {Session: proto.SessionType_Wallet},
 		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
 		{Session: proto.SessionType_Project},
 		{Session: proto.SessionType_Project, AccessKey: AccessKey},
-		{Session: proto.SessionType_User},
-		{Session: proto.SessionType_Admin},
-		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
-		{Session: proto.SessionType_Service},
-		{Session: proto.SessionType_Service, AccessKey: AccessKey},
+		// {Session: proto.SessionType_User},
+		// {Session: proto.SessionType_Admin},
+		// {Session: proto.SessionType_Admin, AccessKey: AccessKey},
+		// {Session: proto.SessionType_Service},
+		// {Session: proto.SessionType_Service, AccessKey: AccessKey},
 	}
 
 	var (

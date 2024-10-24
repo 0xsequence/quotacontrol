@@ -1,13 +1,29 @@
-GO_TEST = $(shell if ! command -v gotest &> /dev/null; then echo "go test"; else echo "gotest"; fi)
+TEST_FLAGS ?= -p 8 -failfast -race -shuffle on
 
-.PHONY: build
-build:
-	go build ./...
+all:
+	@echo "make <cmd>:"
+	@echo ""
+	@echo "commands:"
+	@awk -F'[ :]' '/^#+/ {comment=$$0; gsub(/^#+[ ]*/, "", comment)} !/^(_|all:)/ && /^([A-Za-z_-]+):/ && !seen[$$1]++ {printf "  %-24s %s\n", $$1, (comment ? "- " comment : ""); comment=""} !/^#+/ {comment=""}' Makefile
 
-.PHONY: proto
-proto:
-	go generate ./proto
+test-clean:
+	go clean -testcache
 
-.PHONY: test
-test:
-	go clean -testcache && $(GO_TEST) -v -p=1 ./...
+test: test-clean
+	go test -run=$(TEST) $(TEST_FLAGS) -json ./... | tparse --all --follow
+
+test-rerun: test-clean
+	go run github.com/goware/rerun/cmd/rerun -watch ./ -run 'make test'
+
+test-coverage:
+	go test -run=$(TEST) $(TEST_FLAGS) -cover -coverprofile=coverage.out -json ./... | tparse --all --follow
+
+test-coverage-inspect: test-coverage
+	go tool cover -html=coverage.out
+
+generate:
+	go generate -x ./...
+
+lint:
+	golangci-lint run ./... --fix -c .golangci.yml
+
