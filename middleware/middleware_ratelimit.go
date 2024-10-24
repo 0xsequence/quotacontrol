@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	httprateredis "github.com/go-chi/httprate-redis"
@@ -18,6 +19,8 @@ const (
 	HeaderCreditsRemaining = "Credits-Rate-Remaining"
 	HeaderCreditsLimit     = "Credits-Rate-Limit"
 	HeaderCreditsReset     = "Credits-Rate-Reset"
+	HeaderCreditsCost      = "Credits-Rate-Cost"
+	HeaderRetryAfter       = "Retry-After"
 )
 
 const _RateLimitWindow = 1 * time.Minute
@@ -29,27 +32,26 @@ const (
 )
 
 type RLConfig struct {
-	Enabled     bool   `toml:"enabled"`
-	PublicRate  int    `toml:"public_requests_per_minute"`
-	AccountRate int    `toml:"user_requests_per_minute"`
-	ServiceRate int    `toml:"service_requests_per_minute"`
-	ErrorMsg    string `toml:"error_message"`
+	Enabled     bool `toml:"enabled"`
+	PublicRate  int  `toml:"public_requests_per_minute"`
+	AccountRate int  `toml:"user_requests_per_minute"`
+	ServiceRate int  `toml:"service_requests_per_minute"`
 }
 
 func (r RLConfig) getRateLimit(ctx context.Context) int {
-	if _, ok := GetService(ctx); ok {
+	if _, ok := authcontrol.GetService(ctx); ok {
 		return r.ServiceRate
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
 		return int(q.Limit.RateLimit)
 	}
-	if _, ok := GetAccount(ctx); ok {
+	if _, ok := authcontrol.GetAccount(ctx); ok {
 		return r.AccountRate
 	}
 	return r.PublicRate
 }
 
-func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next http.Handler) http.Handler {
+func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
 	if !rlCfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
@@ -57,7 +59,7 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 	}
 
 	if eh == nil {
-		eh = defaultErrHandler
+		eh = errHandler
 	}
 
 	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
@@ -82,21 +84,34 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 
 	options := []httprate.Option{
 		httprate.WithLimitCounter(limitCounter),
+		httprate.WithResponseHeaders(httprate.ResponseHeaders{
+			Limit:      HeaderCreditsLimit,
+			Remaining:  HeaderCreditsRemaining,
+			Increment:  HeaderCreditsCost,
+			Reset:      HeaderCreditsReset,
+			RetryAfter: HeaderRetryAfter,
+		}),
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
 			ctx := r.Context()
-			if _, ok := GetService(ctx); ok {
+			if _, ok := authcontrol.GetService(ctx); ok {
 				return "", nil
+			}
+			if project, ok := GetProjectID(ctx); ok {
+				return ProjectRateKey(project), nil
 			}
 			if q, ok := GetAccessQuota(ctx); ok {
 				return ProjectRateKey(q.GetProjectID()), nil
 			}
-			if account, ok := GetAccount(ctx); ok {
+			if account, ok := authcontrol.GetAccount(ctx); ok {
 				return AccountRateKey(account), nil
 			}
 			return httprate.KeyByRealIP(r)
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			eh(r, w, proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg))
+			ctx := r.Context()
+			session, _ := authcontrol.GetSessionType(ctx)
+			msg := fmt.Sprintf("%s for % ssession", proto.ErrRateLimit.Message, session)
+			eh(r, w, proto.ErrRateLimit.WithMessage(msg))
 		}),
 	}
 
@@ -104,18 +119,11 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh ErrHandler) func(next h
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h := w.Header()
-			swapHeader(h, "X-RateLimit-Limit", HeaderCreditsLimit)
-			swapHeader(h, "X-RateLimit-Remaining", HeaderCreditsRemaining)
-			swapHeader(h, "X-RateLimit-Reset", HeaderCreditsReset)
-			next.ServeHTTP(w, r)
-		})
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			if limit := rlCfg.getRateLimit(ctx); limit > 0 {
 				ctx = httprate.WithRequestLimit(ctx, limit)
-				limiter.Handler(handler).ServeHTTP(w, r.WithContext(ctx))
+				limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 			} else {
 				next.ServeHTTP(w, r)
 			}

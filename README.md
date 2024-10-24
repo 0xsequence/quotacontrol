@@ -43,11 +43,11 @@ The package offers a Redis implementation for the cache, and a Memory version of
 
 The methods that are used to save/load in a permanent storage the 3 entities are not implemented.
 The requests are measure in compute units, if a compute unit is not specified it is assumed that the value it's 1.
-A client can specify the amount of compute units by manipulating the request context using the `WithComputeUnits` function.
+A client can specify the amount of compute units by manipulating the request context using the `WithCost` function.
 
 # Increment operation
 
-The client method `SpendComputeUnits` takes care of doing an increment operation in the cache. And works as follows:
+The client method `SpendCost` takes care of doing an increment operation in the cache. And works as follows:
 - It tries to fetch the usage record from the cache
 - On a hit it executes the INCR operation.
 - On a miss it sets it to `-1` and ask the server to populate it.

@@ -7,17 +7,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/goware/logger"
 
 	"github.com/goware/cachestore/redis"
-	"github.com/stretchr/testify/require"
 )
 
 func newConfig() quotacontrol.Config {
@@ -63,16 +60,6 @@ func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func mustJWT(t *testing.T, auth *jwtauth.JWTAuth, claims map[string]interface{}) string {
-	t.Helper()
-	if claims == nil {
-		return ""
-	}
-	_, token, err := auth.Encode(claims)
-	require.NoError(t, err)
-	return token
-}
-
 func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, jwt string) (bool, http.Header, error) {
 	req, err := http.NewRequest("POST", path, nil)
 	if err != nil {
@@ -98,10 +85,10 @@ func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, 
 	return true, rr.Header(), nil
 }
 
-type addCredits int64
+type addCost int64
 
-func (i addCredits) Middleware(h http.Handler) http.Handler {
+func (i addCost) Middleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(w, r.WithContext(middleware.AddComputeUnits(r.Context(), int64(i))))
+		h.ServeHTTP(w, r.WithContext(middleware.AddCost(r.Context(), int64(i))))
 	})
 }
