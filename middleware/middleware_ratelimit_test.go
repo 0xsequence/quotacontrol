@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/cachestore/redis"
@@ -25,10 +26,15 @@ func TestRateLimiter(t *testing.T) {
 		w.Header().Set(_TestHeader, _TestHeaderValue)
 		proto.RespondWithError(w, err)
 	}
+
+	cfg := quotacontrol.ErrorConfig{
+		MessageRate: _CustomErrorMessage,
+	}
+	cfg.Apply()
+
 	rl := middleware.RateLimit(middleware.RLConfig{
 		Enabled:    true,
 		PublicRate: 10,
-		ErrorMsg:   _CustomErrorMessage,
 	}, redis.Config{}, eh)
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
@@ -51,6 +57,7 @@ func TestRateLimiter(t *testing.T) {
 		assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
 		err := proto.WebRPCError{}
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
-		assert.Equal(t, err.Message, _CustomErrorMessage)
+		assert.Contains(t, err.Message, _CustomErrorMessage)
+		assert.Contains(t, err.Message, proto.SessionType_Public.String())
 	}
 }

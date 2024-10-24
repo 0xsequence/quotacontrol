@@ -25,7 +25,7 @@ func VerifyQuota(client Client, eh authcontrol.ErrHandler) func(next http.Handle
 			)
 
 			if session == proto.SessionType_Project {
-				id, ok := authcontrol.GetProject(ctx)
+				id, ok := authcontrol.GetProjectID(ctx)
 				if !ok {
 					eh(r, w, proto.ErrUnauthorizedUser)
 					return

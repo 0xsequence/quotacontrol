@@ -32,11 +32,10 @@ const (
 )
 
 type RLConfig struct {
-	Enabled     bool   `toml:"enabled"`
-	PublicRate  int    `toml:"public_requests_per_minute"`
-	AccountRate int    `toml:"user_requests_per_minute"`
-	ServiceRate int    `toml:"service_requests_per_minute"`
-	ErrorMsg    string `toml:"error_message"`
+	Enabled     bool `toml:"enabled"`
+	PublicRate  int  `toml:"public_requests_per_minute"`
+	AccountRate int  `toml:"user_requests_per_minute"`
+	ServiceRate int  `toml:"service_requests_per_minute"`
 }
 
 func (r RLConfig) getRateLimit(ctx context.Context) int {
@@ -109,7 +108,10 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler)
 			return httprate.KeyByRealIP(r)
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			eh(r, w, proto.ErrLimitExceeded.WithMessage(rlCfg.ErrorMsg))
+			ctx := r.Context()
+			session, _ := authcontrol.GetSessionType(ctx)
+			msg := fmt.Sprintf("%s for % ssession", proto.ErrRateLimit.Message, session)
+			eh(r, w, proto.ErrRateLimit.WithMessage(msg))
 		}),
 	}
 
