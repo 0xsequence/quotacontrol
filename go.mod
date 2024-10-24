@@ -2,7 +2,7 @@ module github.com/0xsequence/quotacontrol
 
 go 1.23.2
 
-replace github.com/0xsequence/authcontrol => ../authcontrol
+// replace github.com/0xsequence/authcontrol => ../authcontrol
 
 require (
 	github.com/0xsequence/authcontrol v0.0.0-20241024085703-b794f2b62444
