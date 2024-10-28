@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/authcontrol"
+	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/redis/go-redis/v9"
@@ -26,19 +27,19 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 		MaxIdleConns: cfg.Redis.MaxIdle,
 	}
 
-	redisExpiration := time.Hour
-	if cfg.Redis.KeyTTL > 0 {
-		redisExpiration = cfg.Redis.KeyTTL
+	backend := NewRedisCache(redis.NewClient(&options), cfg.Redis.KeyTTL)
+	cache := Cache{
+		UsageCache:      backend,
+		QuotaCache:      backend,
+		PermissionCache: backend,
 	}
-	cache := NewRedisCache(redis.NewClient(&options), redisExpiration)
-
-	quotaCache := QuotaCache(cache)
-	if cfg.LRUSize > 0 {
-		lruExpiration := time.Minute
+	// LRU cache for Quota
+	if size := cfg.LRUSize; size > 0 {
+		exp := time.Minute
 		if cfg.LRUExpiration.Duration > 0 {
-			lruExpiration = cfg.LRUExpiration.Duration
+			exp = cfg.LRUExpiration.Duration
 		}
-		quotaCache = NewLRU(quotaCache, cfg.LRUSize, lruExpiration)
+		cache.QuotaCache = NewLRU(backend, size, exp)
 	}
 
 	if qc == nil {
@@ -53,16 +54,10 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 	}
 
 	return &Client{
-		cfg:     cfg,
-		service: service,
-		usage: &usageTracker{
-			Usage: make(map[time.Time]usageRecord),
-		},
-		cache: Cache{
-			UsageCache:      cache,
-			QuotaCache:      quotaCache,
-			PermissionCache: PermissionCache(cache),
-		},
+		cfg:         cfg,
+		service:     service,
+		usage:       usage.NewTracker(),
+		cache:       cache,
 		quotaClient: qc,
 		ticker:      ticker,
 		logger:      logger.With(slog.String("service", "quotacontrol")),
@@ -74,7 +69,7 @@ type Client struct {
 	logger *slog.Logger
 
 	service     proto.Service
-	usage       *usageTracker
+	usage       *usage.Tracker
 	cache       Cache
 	quotaClient proto.QuotaControl
 

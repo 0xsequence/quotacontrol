@@ -22,7 +22,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	cfg.Redis.Port = uint16(s.Server().Addr().Port)
 	client := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
 
-	store := quotacontrol.NewMemoryStore()
+	store := NewMemoryStore()
 
 	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -71,7 +71,7 @@ type Server struct {
 	listener net.Listener
 	cache    *redisclient.Client
 
-	Store *quotacontrol.MemoryStore
+	Store *MemoryStore
 
 	proto.QuotaControl
 

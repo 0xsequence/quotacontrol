@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/internal/toml"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 
@@ -18,7 +19,7 @@ import (
 func newConfig() quotacontrol.Config {
 	return quotacontrol.Config{
 		Enabled:    true,
-		UpdateFreq: quotacontrol.Duration{time.Minute},
+		UpdateFreq: toml.NewDuration(time.Minute),
 		Redis: redis.Config{
 			Enabled: true,
 		},

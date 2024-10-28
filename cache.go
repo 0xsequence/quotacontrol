@@ -48,6 +48,9 @@ var _ QuotaCache = (*LRU)(nil)
 var _ UsageCache = (*RedisCache)(nil)
 
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
 	return &RedisCache{
 		client: redisClient,
 		ttl:    ttl,

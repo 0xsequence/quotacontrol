@@ -6,8 +6,6 @@ cloud.google.com/go/compute/metadata v0.5.1/go.mod h1:C66sj2AluDcIqakBq/M8lw8/yb
 cloud.google.com/go/iam v1.2.1/go.mod h1:3VUIJDPpwT6p/amXRC5GY8fCCh70lxPygguVtI0Z4/g=
 cloud.google.com/go/monitoring v1.21.0/go.mod h1:tuJ+KNDdJbetSsbSGTqnaBvbauS5kr3Q/koy3Up6r+4=
 cloud.google.com/go/storage v1.44.0/go.mod h1:wpPblkIuMP5jCB/E48Pz9zIo2S/zD8g+ITmxKkPCITE=
-github.com/0xsequence/authcontrol v0.0.2 h1:jdbqoPjTpcsq2dT4gfQh1Q7lxB3ySXBOqadQ2YCT4xE=
-github.com/0xsequence/authcontrol v0.0.2/go.mod h1:ih60YIaz+cQ7izCxZU9oRFEkRpauJqo8x6cRTlRwUZ4=
 github.com/0xsequence/go-ethauth v0.13.0/go.mod h1:f3kx39S9F+W+qvZEB6bkKKbpUstmyB7goUntO3wvlhg=
 github.com/BurntSushi/toml v1.2.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.1/go.mod h1:itPGVDKf9cC/ov4MdvJ2QZ0khw4bfoo9jzwTJlaxy2k=
@@ -55,6 +53,8 @@ github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/ad
 github.com/goware/breaker v0.1.2/go.mod h1:ijCEfXAa0j6w7IoHA4v6Sox2W6U9HUbI/t+5x0zGaug=
 github.com/goware/calc v0.2.0/go.mod h1:BSQUbfS6ICW9RvSV9SikDY+t6/HQKI+CUxIpjE3VD28=
 github.com/goware/channel v0.4.1/go.mod h1:m3JBDrah57BipyVWu8R1eBanf1YacnZRluIVSv0jF/U=
+github.com/goware/logger v0.3.0 h1:pdgnsqj2rSDXtfdu+UuAFuBuOapxeDYNETY39227LMM=
+github.com/goware/logger v0.3.0/go.mod h1:IC34c5H56R1I4/R/d51aQhzHsjSJqkQyIHyuJxOiu0w=
 github.com/goware/pp v0.0.3/go.mod h1:shID9y83CUGdg/BfO0SrVhchPpIAcT3ArfLVkq3x7tQ=
 github.com/goware/superr v0.0.2/go.mod h1:EcKklaJ9ql9J+gKfwThuYsQ1IpUlOdUabO3qkAJrv60=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=

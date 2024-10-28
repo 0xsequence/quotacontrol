@@ -13,7 +13,6 @@ require (
 	github.com/go-chi/httprate-redis v0.5.3
 	github.com/goware/base64 v0.1.0
 	github.com/goware/cachestore v0.10.0
-	github.com/goware/logger v0.3.0
 	github.com/goware/validation v0.1.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jxskiss/base62 v1.1.0
