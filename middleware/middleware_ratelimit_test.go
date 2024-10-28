@@ -12,7 +12,6 @@ import (
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/goware/cachestore/redis"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +34,7 @@ func TestRateLimiter(t *testing.T) {
 	rl := middleware.RateLimit(middleware.RLConfig{
 		Enabled:    true,
 		PublicRate: 10,
-	}, redis.Config{}, &middleware.Options{ErrHandler: eh})
+	}, nil, &middleware.Options{ErrHandler: eh})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

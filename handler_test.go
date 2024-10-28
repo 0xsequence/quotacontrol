@@ -20,7 +20,6 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/test"
 	"github.com/go-chi/chi/v5"
-	"github.com/goware/cachestore/redis"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,12 +76,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
 
+	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+
 	r := chi.NewRouter()
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
 	r.Use(addCost(_credits * 2))
 	r.Use(addCost(_credits * -1))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
 	r.Use(middleware.SpendUsage(client, nil))
 
 	r.Handle("/*", &counter)
@@ -456,6 +457,8 @@ func TestJWTAccess(t *testing.T) {
 	logger := slog.Default()
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
+	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+
 	r := chi.NewRouter()
 	options := &authcontrol.Options{
 		JWTSecret: Secret,
@@ -463,7 +466,7 @@ func TestJWTAccess(t *testing.T) {
 	}
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
 	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, nil))
 
 	r.Handle("/*", &counter)
@@ -562,11 +565,13 @@ func TestSession(t *testing.T) {
 		UserStore: server.Store,
 	}
 
+	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+
 	r := chi.NewRouter()
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
 	r.Use(authcontrol.AccessControl(ACL, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
 
 	r.Handle("/*", &counter)
 
@@ -668,10 +673,12 @@ func TestSessionDisabled(t *testing.T) {
 		UserStore: server.Store,
 	}
 
+	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+
 	r := chi.NewRouter()
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
 	r.Use(authcontrol.AccessControl(ACL, nil))
 
 	r.Handle("/*", &counter)
@@ -762,7 +769,7 @@ func newConfig() quotacontrol.Config {
 	return quotacontrol.Config{
 		Enabled:    true,
 		UpdateFreq: toml.NewDuration(time.Minute),
-		Redis: redis.Config{
+		Redis: quotacontrol.RedisConfig{
 			Enabled: true,
 		},
 		RateLimiter: middleware.RLConfig{

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/httprate"
+	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/redis/go-redis/v9"
 )
@@ -46,6 +49,25 @@ const redisKeyPrefix = "quota:"
 var _ QuotaCache = (*RedisCache)(nil)
 var _ QuotaCache = (*LRU)(nil)
 var _ UsageCache = (*RedisCache)(nil)
+
+func NewLimitCounter(cfg RedisConfig, logger *slog.Logger) httprate.LimitCounter {
+	if !cfg.Enabled {
+		return nil
+	}
+	return httprateredis.NewCounter(&httprateredis.Config{
+		Host:      cfg.Host,
+		Port:      cfg.Port,
+		MaxIdle:   cfg.MaxIdle,
+		MaxActive: cfg.MaxActive,
+		DBIndex:   cfg.DBIndex,
+		OnError: func(err error) {
+			logger.Error("redis counter error", slog.Any("error", err))
+		},
+		OnFallbackChange: func(fallback bool) {
+			logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
+		},
+	})
+}
 
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
 	if ttl <= 0 {

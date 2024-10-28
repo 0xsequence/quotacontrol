@@ -11,8 +11,6 @@ import (
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	httprateredis "github.com/go-chi/httprate-redis"
-	"github.com/goware/cachestore/redis"
 )
 
 const (
@@ -51,7 +49,7 @@ func (r RLConfig) getRateLimit(ctx context.Context) int {
 	return r.PublicRate
 }
 
-func RateLimit(rlCfg RLConfig, redisCfg redis.Config, o *Options) func(next http.Handler) http.Handler {
+func RateLimit(rlCfg RLConfig, counter httprate.LimitCounter, o *Options) func(next http.Handler) http.Handler {
 	if !rlCfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
@@ -73,25 +71,8 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, o *Options) func(next http
 	rlCfg.AccountRate = cmp.Or(rlCfg.AccountRate, DefaultAccountRate)
 	rlCfg.ServiceRate = cmp.Or(rlCfg.ServiceRate, DefaultServiceRate)
 
-	var limitCounter httprate.LimitCounter
-	if redisCfg.Enabled {
-		limitCounter = httprateredis.NewCounter(&httprateredis.Config{
-			Host:      redisCfg.Host,
-			Port:      redisCfg.Port,
-			MaxIdle:   redisCfg.MaxIdle,
-			MaxActive: redisCfg.MaxActive,
-			DBIndex:   redisCfg.DBIndex,
-			OnError: func(err error) {
-				logger.Error("redis counter error", slog.Any("error", err))
-			},
-			OnFallbackChange: func(fallback bool) {
-				logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
-			},
-		})
-	}
-
 	options := []httprate.Option{
-		httprate.WithLimitCounter(limitCounter),
+		httprate.WithLimitCounter(counter),
 		httprate.WithResponseHeaders(httprate.ResponseHeaders{
 			Limit:      HeaderCreditsLimit,
 			Remaining:  HeaderCreditsRemaining,
