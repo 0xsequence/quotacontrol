@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,6 +14,11 @@ const (
 	HeaderAccessKey = "X-Access-Key"
 	HeaderOrigin    = "Origin"
 )
+
+type Options struct {
+	Logger     *slog.Logger
+	ErrHandler func(r *http.Request, w http.ResponseWriter, err error)
+}
 
 func errHandler(r *http.Request, w http.ResponseWriter, err error) {
 	rpcErr, ok := err.(proto.WebRPCError)

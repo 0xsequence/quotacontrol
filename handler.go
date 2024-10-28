@@ -10,7 +10,6 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logger"
 	"github.com/goware/validation"
 )
 
@@ -55,7 +54,10 @@ type Store struct {
 }
 
 // NewHandler returns server implementation for proto.QuotaControl.
-func NewHandler(log logger.Logger, cache Cache, store Store, limitcounter httprate.LimitCounter) proto.QuotaControl {
+func NewHandler(log *slog.Logger, cache Cache, store Store, limitcounter httprate.LimitCounter) proto.QuotaControl {
+	if log == nil {
+		log = slog.Default()
+	}
 	return &handler{
 		log:          log.With("service", "quotacontrol"),
 		cache:        cache,
@@ -67,7 +69,7 @@ func NewHandler(log logger.Logger, cache Cache, store Store, limitcounter httpra
 
 // handler is the quotacontrol handler backend implementation.
 type handler struct {
-	log          logger.Logger
+	log          *slog.Logger
 	cache        Cache
 	store        Store
 	limitCounter httprate.LimitCounter

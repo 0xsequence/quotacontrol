@@ -3,7 +3,6 @@ package quotacontrol_test
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -12,7 +11,6 @@ import (
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/goware/logger"
 
 	"github.com/goware/cachestore/redis"
 )
@@ -28,11 +26,6 @@ func newConfig() quotacontrol.Config {
 			Enabled: true,
 		},
 	}
-}
-
-func newQuotaClient(cfg quotacontrol.Config, service proto.Service) *quotacontrol.Client {
-	logger := logger.NewLogger(logger.LogLevel_DEBUG).With(slog.String("client", "client"))
-	return quotacontrol.NewClient(logger, service, cfg, nil)
 }
 
 type hitCounter int64

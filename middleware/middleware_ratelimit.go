@@ -51,16 +51,23 @@ func (r RLConfig) getRateLimit(ctx context.Context) int {
 	return r.PublicRate
 }
 
-func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
+func RateLimit(rlCfg RLConfig, redisCfg redis.Config, o *Options) func(next http.Handler) http.Handler {
 	if !rlCfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
 
-	if eh == nil {
-		eh = errHandler
+	eh := errHandler
+	if o != nil && o.ErrHandler != nil {
+		eh = o.ErrHandler
 	}
+
+	logger := slog.Default()
+	if o != nil && o.Logger != nil {
+		logger = o.Logger
+	}
+	logger = logger.With(slog.String("middleware", "ratelimit"))
 
 	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
 	rlCfg.AccountRate = cmp.Or(rlCfg.AccountRate, DefaultAccountRate)
@@ -68,18 +75,19 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler)
 
 	var limitCounter httprate.LimitCounter
 	if redisCfg.Enabled {
-		cfg := &httprateredis.Config{
+		limitCounter = httprateredis.NewCounter(&httprateredis.Config{
 			Host:      redisCfg.Host,
 			Port:      redisCfg.Port,
 			MaxIdle:   redisCfg.MaxIdle,
 			MaxActive: redisCfg.MaxActive,
 			DBIndex:   redisCfg.DBIndex,
-		}
-		if c, err := httprateredis.NewRedisLimitCounter(cfg); err != nil {
-			slog.Error("redis counter not available", slog.Any("error", err))
-		} else {
-			limitCounter = c
-		}
+			OnError: func(err error) {
+				logger.Error("redis counter error", slog.Any("error", err))
+			},
+			OnFallbackChange: func(fallback bool) {
+				logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
+			},
+		})
 	}
 
 	options := []httprate.Option{
@@ -110,7 +118,7 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler)
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			session, _ := authcontrol.GetSessionType(ctx)
-			msg := fmt.Sprintf("%s for % ssession", proto.ErrRateLimit.Message, session)
+			msg := fmt.Sprintf("%s for % session", proto.ErrRateLimit.Message, session)
 			eh(r, w, proto.ErrRateLimit.WithMessage(msg))
 		}),
 	}

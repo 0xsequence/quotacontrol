@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -8,10 +9,18 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
-func VerifyQuota(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = errHandler
+func VerifyQuota(client Client, o *Options) func(next http.Handler) http.Handler {
+	eh := errHandler
+	if o != nil && o.ErrHandler != nil {
+		eh = o.ErrHandler
 	}
+
+	logger := slog.Default()
+	if o != nil && o.Logger != nil {
+		logger = o.Logger
+	}
+	logger = logger.With(slog.String("middleware", "verifyQuota"))
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()

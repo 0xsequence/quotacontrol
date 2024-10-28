@@ -1,17 +1,24 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
 // EnsurePermission middleware that checks if the session type has the required permission.
-func EnsurePermission(client Client, minPermission proto.UserPermission, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = errHandler
+func EnsurePermission(client Client, minPermission proto.UserPermission, o *Options) func(next http.Handler) http.Handler {
+	eh := errHandler
+	if o != nil && o.ErrHandler != nil {
+		eh = o.ErrHandler
 	}
+
+	logger := slog.Default()
+	if o != nil && o.Logger != nil {
+		logger = o.Logger
+	}
+	logger = logger.With(slog.String("middleware", "ratelimit"))
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

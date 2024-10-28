@@ -16,10 +16,12 @@ const (
 )
 
 // EnsureUsage is a middleware that checks if the quota has enough usage left.
-func EnsureUsage(client Client, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
-	if eh == nil {
-		eh = errHandler
+func EnsureUsage(client Client, o *Options) func(next http.Handler) http.Handler {
+	eh := errHandler
+	if o != nil && o.ErrHandler != nil {
+		eh = o.ErrHandler
 	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !client.IsEnabled() {
