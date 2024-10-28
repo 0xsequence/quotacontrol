@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 )
 
 // EnsurePermission middleware that checks if the session type has the required permission.
@@ -14,7 +15,7 @@ func EnsurePermission(client Client, minPermission proto.UserPermission, o *Opti
 		eh = o.ErrHandler
 	}
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_DEBUG)
 	if o != nil && o.Logger != nil {
 		logger = o.Logger
 	}

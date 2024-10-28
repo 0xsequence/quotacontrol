@@ -11,6 +11,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	httprateredis "github.com/go-chi/httprate-redis"
+	"github.com/goware/logger"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/redis/go-redis/v9"
 )
@@ -50,7 +51,7 @@ var _ QuotaCache = (*RedisCache)(nil)
 var _ QuotaCache = (*LRU)(nil)
 var _ UsageCache = (*RedisCache)(nil)
 
-func NewLimitCounter(cfg RedisConfig, logger *slog.Logger) httprate.LimitCounter {
+func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounter {
 	if !cfg.Enabled {
 		return nil
 	}

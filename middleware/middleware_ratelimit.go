@@ -11,6 +11,7 @@ import (
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
+	"github.com/goware/logger"
 )
 
 const (
@@ -61,7 +62,7 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) f
 		eh = o.ErrHandler
 	}
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_DEBUG)
 	if o != nil && o.Logger != nil {
 		logger = o.Logger
 	}

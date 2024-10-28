@@ -13,6 +13,7 @@ import (
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -20,7 +21,7 @@ type Notifier interface {
 	Notify(access *proto.AccessKey) error
 }
 
-func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
+func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
 	options := redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
@@ -62,7 +63,7 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 
 type Client struct {
 	cfg    Config
-	logger *slog.Logger
+	logger logger.Logger
 
 	service     proto.Service
 	usage       *usage.Tracker
