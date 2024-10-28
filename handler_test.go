@@ -772,7 +772,7 @@ func newConfig() quotacontrol.Config {
 		Redis: quotacontrol.RedisConfig{
 			Enabled: true,
 		},
-		RateLimiter: middleware.RLConfig{
+		RateLimiter: quotacontrol.RateLimitConfig{
 			Enabled: true,
 		},
 	}

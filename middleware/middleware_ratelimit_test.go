@@ -31,7 +31,7 @@ func TestRateLimiter(t *testing.T) {
 	}
 	cfg.Apply()
 
-	rl := middleware.RateLimit(middleware.RLConfig{
+	rl := middleware.RateLimit(middleware.RateLimitConfig{
 		Enabled:    true,
 		PublicRate: 10,
 	}, nil, &middleware.Options{ErrHandler: eh})

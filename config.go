@@ -9,20 +9,22 @@ import (
 )
 
 type Config struct {
-	Enabled       bool                `toml:"enabled"`
-	URL           string              `toml:"url"`
-	AuthToken     string              `toml:"auth_token"`
-	UpdateFreq    toml.Duration       `toml:"update_freq"`
-	RateLimiter   middleware.RLConfig `toml:"rate_limiter"`
-	Redis         RedisConfig         `toml:"redis"`
-	DefaultUsage  *int64              `toml:"default_usage"`
-	LRUSize       int                 `toml:"lru_size"`
-	LRUExpiration toml.Duration       `toml:"lru_expiration"`
-	ErrorConfig   ErrorConfig         `toml:"error_config"`
+	Enabled       bool            `toml:"enabled"`
+	URL           string          `toml:"url"`
+	AuthToken     string          `toml:"auth_token"`
+	UpdateFreq    toml.Duration   `toml:"update_freq"`
+	RateLimiter   RateLimitConfig `toml:"rate_limiter"`
+	Redis         RedisConfig     `toml:"redis"`
+	DefaultUsage  *int64          `toml:"default_usage"`
+	LRUSize       int             `toml:"lru_size"`
+	LRUExpiration toml.Duration   `toml:"lru_expiration"`
+	ErrorConfig   ErrorConfig     `toml:"error_config"`
 
 	// DangerMode is used for debugging
 	DangerMode bool `toml:"danger_mode"`
 }
+
+type RateLimitConfig = middleware.RateLimitConfig
 
 type RedisConfig struct {
 	Enabled   bool          `toml:"enabled"`

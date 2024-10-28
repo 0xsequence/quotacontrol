@@ -29,14 +29,14 @@ const (
 	DefaultServiceRate = 0
 )
 
-type RLConfig struct {
+type RateLimitConfig struct {
 	Enabled     bool `toml:"enabled"`
 	PublicRate  int  `toml:"public_requests_per_minute"`
 	AccountRate int  `toml:"user_requests_per_minute"`
 	ServiceRate int  `toml:"service_requests_per_minute"`
 }
 
-func (r RLConfig) getRateLimit(ctx context.Context) int {
+func (r RateLimitConfig) getRateLimit(ctx context.Context) int {
 	if _, ok := authcontrol.GetService(ctx); ok {
 		return r.ServiceRate
 	}
@@ -49,8 +49,8 @@ func (r RLConfig) getRateLimit(ctx context.Context) int {
 	return r.PublicRate
 }
 
-func RateLimit(rlCfg RLConfig, counter httprate.LimitCounter, o *Options) func(next http.Handler) http.Handler {
-	if !rlCfg.Enabled {
+func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) func(next http.Handler) http.Handler {
+	if !cfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
@@ -67,9 +67,9 @@ func RateLimit(rlCfg RLConfig, counter httprate.LimitCounter, o *Options) func(n
 	}
 	logger = logger.With(slog.String("middleware", "ratelimit"))
 
-	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
-	rlCfg.AccountRate = cmp.Or(rlCfg.AccountRate, DefaultAccountRate)
-	rlCfg.ServiceRate = cmp.Or(rlCfg.ServiceRate, DefaultServiceRate)
+	cfg.PublicRate = cmp.Or(cfg.PublicRate, DefaultPublicRate)
+	cfg.AccountRate = cmp.Or(cfg.AccountRate, DefaultAccountRate)
+	cfg.ServiceRate = cmp.Or(cfg.ServiceRate, DefaultServiceRate)
 
 	options := []httprate.Option{
 		httprate.WithLimitCounter(counter),
@@ -104,13 +104,13 @@ func RateLimit(rlCfg RLConfig, counter httprate.LimitCounter, o *Options) func(n
 		}),
 	}
 
-	limiter := httprate.NewRateLimiter(rlCfg.PublicRate, _RateLimitWindow, options...)
+	limiter := httprate.NewRateLimiter(cfg.PublicRate, _RateLimitWindow, options...)
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			if limit := rlCfg.getRateLimit(ctx); limit > 0 {
+			if limit := cfg.getRateLimit(ctx); limit > 0 {
 				ctx = httprate.WithRequestLimit(ctx, limit)
 				limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 			} else {
