@@ -2,20 +2,25 @@ package quotacontrol_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol"
-	. "github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/internal/toml"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/test"
 	"github.com/go-chi/chi/v5"
+	"github.com/goware/cachestore/redis"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -59,6 +64,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	counter := spendingCounter(0)
 
+	var addCost = func(i int64) func(http.Handler) http.Handler {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r.WithContext(middleware.AddCost(r.Context(), int64(i))))
+			})
+		}
+	}
+
 	options := &authcontrol.Options{
 		JWTSecret: Secret,
 		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
@@ -67,8 +80,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(addCost(_credits * 2).Middleware)
-	r.Use(addCost(_credits * -1).Middleware)
+	r.Use(addCost(_credits * 2))
+	r.Use(addCost(_credits * -1))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
 	r.Use(middleware.SpendUsage(client, nil))
 
@@ -451,7 +464,7 @@ func TestJWTAccess(t *testing.T) {
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, cfg.Redis, nil))
-	r.Use(middleware.EnsurePermission(client, UserPermission_READ_WRITE, nil))
+	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, nil))
 
 	r.Handle("/*", &counter)
 
@@ -743,4 +756,61 @@ func TestSessionDisabled(t *testing.T) {
 		}
 
 	}
+}
+
+func newConfig() quotacontrol.Config {
+	return quotacontrol.Config{
+		Enabled:    true,
+		UpdateFreq: toml.NewDuration(time.Minute),
+		Redis: redis.Config{
+			Enabled: true,
+		},
+		RateLimiter: middleware.RLConfig{
+			Enabled: true,
+		},
+	}
+}
+
+type hitCounter int64
+
+func (c *hitCounter) GetValue() int64 { return atomic.LoadInt64((*int64)(c)) }
+func (c *hitCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64((*int64)(c), 1)
+	w.WriteHeader(http.StatusOK)
+}
+
+type spendingCounter int64
+
+func (c *spendingCounter) GetValue() int64 { return atomic.LoadInt64((*int64)(c)) }
+func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// up the counter only if quota control run
+	if middleware.HasSpending(r.Context()) {
+		atomic.AddInt64((*int64)(c), 1)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, jwt string) (bool, http.Header, error) {
+	req, err := http.NewRequest("POST", path, nil)
+	if err != nil {
+		return false, nil, err
+	}
+	req.Header.Set("X-Real-IP", "127.0.0.1")
+	if accessKey != "" {
+		req.Header.Set(middleware.HeaderAccessKey, accessKey)
+	}
+	if jwt != "" {
+		req.Header.Set("Authorization", "Bearer "+jwt)
+	}
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req.WithContext(ctx))
+
+	if status := rr.Result().StatusCode; status < http.StatusOK || status >= http.StatusBadRequest {
+		w := proto.WebRPCError{}
+		json.Unmarshal(rr.Body.Bytes(), &w)
+		return false, rr.Header(), w
+	}
+
+	return true, rr.Header(), nil
 }
