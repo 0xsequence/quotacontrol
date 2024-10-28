@@ -44,9 +44,9 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 		})
 	}
 
-	var ticker *time.Ticker
+	tick := time.Minute * 5
 	if cfg.UpdateFreq.Duration > 0 {
-		ticker = time.NewTicker(cfg.UpdateFreq.Duration)
+		tick = cfg.UpdateFreq.Duration
 	}
 
 	return &Client{
@@ -55,7 +55,7 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 		usage:       usage.NewTracker(),
 		cache:       cache,
 		quotaClient: qc,
-		ticker:      ticker,
+		ticker:      time.NewTicker(tick),
 		logger:      logger.With(slog.String("service", "quotacontrol")),
 	}
 }
@@ -332,9 +332,7 @@ func (c *Client) Run(ctx context.Context) error {
 		<-ctx.Done()
 		c.Stop(context.Background())
 	}()
-	if c.ticker == nil {
-		return nil
-	}
+
 	// Start the sync
 	for range c.ticker.C {
 		if err := c.usage.SyncUsage(ctx, c.quotaClient, c.service); err != nil {
@@ -355,9 +353,9 @@ func (c *Client) Stop(timeoutCtx context.Context) {
 	logger := c.logger.With("op", "stop")
 
 	logger.Info("stopping...")
-	if c.ticker != nil {
-		c.ticker.Stop()
-	}
+
+	c.ticker.Stop()
+
 	if err := c.usage.SyncUsage(timeoutCtx, c.quotaClient, c.service); err != nil {
 		logger.Error("sync usage", slog.Any("error", err))
 	}
