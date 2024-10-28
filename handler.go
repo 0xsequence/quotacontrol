@@ -55,14 +55,17 @@ type Store struct {
 }
 
 // NewHandler returns server implementation for proto.QuotaControl.
-func NewHandler(log *slog.Logger, cache Cache, store Store, counter httprate.LimitCounter) proto.QuotaControl {
+func NewHandler(log *slog.Logger, cache Cache, storage Store, counter httprate.LimitCounter) proto.QuotaControl {
 	if log == nil {
 		log = slog.Default()
+	}
+	if storage.CycleStore == nil {
+		storage.CycleStore = store.Cycle{}
 	}
 	return &handler{
 		log:          log.With("service", "quotacontrol"),
 		cache:        cache,
-		store:        store,
+		store:        storage,
 		limitCounter: counter,
 		accessKeyGen: proto.GenerateAccessKey,
 	}
