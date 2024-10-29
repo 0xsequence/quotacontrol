@@ -62,10 +62,14 @@ func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounte
 		MaxActive: cfg.MaxActive,
 		DBIndex:   cfg.DBIndex,
 		OnError: func(err error) {
-			logger.Error("redis counter error", slog.Any("error", err))
+			if logger != nil {
+				logger.Error("redis counter error", slog.Any("error", err))
+			}
 		},
 		OnFallbackChange: func(fallback bool) {
-			logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
+			if logger != nil {
+				logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
+			}
 		},
 	})
 }

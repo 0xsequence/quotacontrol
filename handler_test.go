@@ -14,7 +14,6 @@ import (
 
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol"
-	"github.com/0xsequence/quotacontrol/internal/toml"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/test"
@@ -771,7 +770,7 @@ func TestSessionDisabled(t *testing.T) {
 func newConfig() quotacontrol.Config {
 	return quotacontrol.Config{
 		Enabled:    true,
-		UpdateFreq: toml.NewDuration(time.Minute),
+		UpdateFreq: time.Minute,
 		Redis: quotacontrol.RedisConfig{
 			Enabled: true,
 		},

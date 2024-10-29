@@ -3,7 +3,6 @@ package quotacontrol
 import (
 	"time"
 
-	"github.com/0xsequence/quotacontrol/internal/toml"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 )
@@ -12,12 +11,12 @@ type Config struct {
 	Enabled       bool            `toml:"enabled"`
 	URL           string          `toml:"url"`
 	AuthToken     string          `toml:"auth_token"`
-	UpdateFreq    toml.Duration   `toml:"update_freq"`
+	UpdateFreq    time.Duration   `toml:"update_freq"`
 	RateLimiter   RateLimitConfig `toml:"rate_limiter"`
 	Redis         RedisConfig     `toml:"redis"`
 	DefaultUsage  *int64          `toml:"default_usage"`
 	LRUSize       int             `toml:"lru_size"`
-	LRUExpiration toml.Duration   `toml:"lru_expiration"`
+	LRUExpiration time.Duration   `toml:"lru_expiration"`
 	ErrorConfig   ErrorConfig     `toml:"error_config"`
 
 	// DangerMode is used for debugging

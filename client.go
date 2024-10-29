@@ -36,7 +36,7 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto
 	}
 	// LRU cache for Quota
 	if cfg.LRUSize > 0 {
-		cache.QuotaCache = NewLRU(backend, cfg.LRUSize, cfg.LRUExpiration.Duration)
+		cache.QuotaCache = NewLRU(backend, cfg.LRUSize, cfg.LRUExpiration)
 	}
 
 	if qc == nil {
@@ -46,8 +46,8 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto
 	}
 
 	tick := time.Minute * 5
-	if cfg.UpdateFreq.Duration > 0 {
-		tick = cfg.UpdateFreq.Duration
+	if cfg.UpdateFreq > 0 {
+		tick = cfg.UpdateFreq
 	}
 
 	return &Client{
