@@ -10,7 +10,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/httprate v0.14.1
-	github.com/go-chi/httprate-redis v0.5.3
+	github.com/go-chi/httprate-redis v0.5.4
 	github.com/goware/base64 v0.1.0
 	github.com/goware/logger v0.3.0
 	github.com/goware/validation v0.1.3
