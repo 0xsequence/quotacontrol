@@ -1,22 +1,21 @@
-package quotacontrol
+package test
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/internal/store"
+	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
 // NewMemoryStore returns a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		limits:     map[uint64]proto.Limit{},
-		accessKeys: map[string]proto.AccessKey{},
-		usage: usageRecord{
-			ByProjectID: map[uint64]*proto.AccessUsage{},
-			ByAccessKey: map[string]*proto.AccessUsage{},
-		},
+		limits:      map[uint64]proto.Limit{},
+		accessKeys:  map[string]proto.AccessKey{},
+		usage:       usage.NewRecord(),
 		users:       map[string]bool{},
 		permissions: map[uint64]map[string]userPermission{},
 	}
@@ -33,7 +32,7 @@ type MemoryStore struct {
 	limits      map[uint64]proto.Limit
 	cycles      map[uint64]proto.Cycle
 	accessKeys  map[string]proto.AccessKey
-	usage       usageRecord
+	usage       usage.Record
 	users       map[string]bool
 	permissions map[uint64]map[string]userPermission
 }
@@ -71,7 +70,7 @@ func (m *MemoryStore) GetAccessCycle(ctx context.Context, projectID uint64, now 
 	cycle := m.cycles[projectID]
 	m.Unlock()
 	if cycle.Start.IsZero() && cycle.End.IsZero() {
-		return DefaultCycleStore{}.GetAccessCycle(ctx, projectID, now)
+		return store.Cycle{}.GetAccessCycle(ctx, projectID, now)
 	}
 	return &cycle, nil
 }

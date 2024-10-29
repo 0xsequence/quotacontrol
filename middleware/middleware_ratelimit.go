@@ -11,8 +11,7 @@ import (
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	httprateredis "github.com/go-chi/httprate-redis"
-	"github.com/goware/cachestore/redis"
+	"github.com/goware/logger"
 )
 
 const (
@@ -31,14 +30,14 @@ const (
 	DefaultServiceRate = 0
 )
 
-type RLConfig struct {
+type RateLimitConfig struct {
 	Enabled     bool `toml:"enabled"`
 	PublicRate  int  `toml:"public_requests_per_minute"`
 	AccountRate int  `toml:"user_requests_per_minute"`
 	ServiceRate int  `toml:"service_requests_per_minute"`
 }
 
-func (r RLConfig) getRateLimit(ctx context.Context) int {
+func (r RateLimitConfig) getRateLimit(ctx context.Context) int {
 	if _, ok := authcontrol.GetService(ctx); ok {
 		return r.ServiceRate
 	}
@@ -51,39 +50,30 @@ func (r RLConfig) getRateLimit(ctx context.Context) int {
 	return r.PublicRate
 }
 
-func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler) func(next http.Handler) http.Handler {
-	if !rlCfg.Enabled {
+func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) func(next http.Handler) http.Handler {
+	if !cfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
 
-	if eh == nil {
-		eh = errHandler
+	eh := errHandler
+	if o != nil && o.ErrHandler != nil {
+		eh = o.ErrHandler
 	}
 
-	rlCfg.PublicRate = cmp.Or(rlCfg.PublicRate, DefaultPublicRate)
-	rlCfg.AccountRate = cmp.Or(rlCfg.AccountRate, DefaultAccountRate)
-	rlCfg.ServiceRate = cmp.Or(rlCfg.ServiceRate, DefaultServiceRate)
-
-	var limitCounter httprate.LimitCounter
-	if redisCfg.Enabled {
-		cfg := &httprateredis.Config{
-			Host:      redisCfg.Host,
-			Port:      redisCfg.Port,
-			MaxIdle:   redisCfg.MaxIdle,
-			MaxActive: redisCfg.MaxActive,
-			DBIndex:   redisCfg.DBIndex,
-		}
-		if c, err := httprateredis.NewRedisLimitCounter(cfg); err != nil {
-			slog.Error("redis counter not available", slog.Any("error", err))
-		} else {
-			limitCounter = c
-		}
+	logger := logger.NewLogger(logger.LogLevel_INFO)
+	if o != nil && o.Logger != nil {
+		logger = o.Logger
 	}
+	logger = logger.With(slog.String("middleware", "rateLimit"))
+
+	cfg.PublicRate = cmp.Or(cfg.PublicRate, DefaultPublicRate)
+	cfg.AccountRate = cmp.Or(cfg.AccountRate, DefaultAccountRate)
+	cfg.ServiceRate = cmp.Or(cfg.ServiceRate, DefaultServiceRate)
 
 	options := []httprate.Option{
-		httprate.WithLimitCounter(limitCounter),
+		httprate.WithLimitCounter(counter),
 		httprate.WithResponseHeaders(httprate.ResponseHeaders{
 			Limit:      HeaderCreditsLimit,
 			Remaining:  HeaderCreditsRemaining,
@@ -110,18 +100,18 @@ func RateLimit(rlCfg RLConfig, redisCfg redis.Config, eh authcontrol.ErrHandler)
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			session, _ := authcontrol.GetSessionType(ctx)
-			msg := fmt.Sprintf("%s for % ssession", proto.ErrRateLimit.Message, session)
+			msg := fmt.Sprintf("%s for %s session", proto.ErrRateLimit.Message, session)
 			eh(r, w, proto.ErrRateLimit.WithMessage(msg))
 		}),
 	}
 
-	limiter := httprate.NewRateLimiter(rlCfg.PublicRate, _RateLimitWindow, options...)
+	limiter := httprate.NewRateLimiter(cfg.PublicRate, _RateLimitWindow, options...)
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			if limit := rlCfg.getRateLimit(ctx); limit > 0 {
+			if limit := cfg.getRateLimit(ctx); limit > 0 {
 				ctx = httprate.WithRequestLimit(ctx, limit)
 				limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 			} else {

@@ -7,12 +7,18 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 )
 
 const (
 	HeaderAccessKey = "X-Access-Key"
 	HeaderOrigin    = "Origin"
 )
+
+type Options struct {
+	Logger     logger.Logger
+	ErrHandler func(r *http.Request, w http.ResponseWriter, err error)
+}
 
 func errHandler(r *http.Request, w http.ResponseWriter, err error) {
 	rpcErr, ok := err.(proto.WebRPCError)

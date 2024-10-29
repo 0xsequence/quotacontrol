@@ -5,14 +5,13 @@ go 1.23.2
 // replace github.com/0xsequence/authcontrol => ../authcontrol
 
 require (
-	github.com/0xsequence/authcontrol v0.0.2
+	github.com/0xsequence/authcontrol v0.0.3
 	github.com/0xsequence/go-sequence v0.43.0
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/httprate v0.14.1
 	github.com/go-chi/httprate-redis v0.5.3
 	github.com/goware/base64 v0.1.0
-	github.com/goware/cachestore v0.10.0
 	github.com/goware/logger v0.3.0
 	github.com/goware/validation v0.1.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
@@ -55,12 +56,18 @@ type Store struct {
 }
 
 // NewHandler returns server implementation for proto.QuotaControl.
-func NewHandler(log logger.Logger, cache Cache, store Store, limitcounter httprate.LimitCounter) proto.QuotaControl {
+func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.LimitCounter) proto.QuotaControl {
+	if log == nil {
+		log = logger.NewLogger(logger.LogLevel_INFO)
+	}
+	if storage.CycleStore == nil {
+		storage.CycleStore = store.Cycle{}
+	}
 	return &handler{
 		log:          log.With("service", "quotacontrol"),
 		cache:        cache,
-		store:        store,
-		limitCounter: limitcounter,
+		store:        storage,
+		limitCounter: counter,
 		accessKeyGen: proto.GenerateAccessKey,
 	}
 }
@@ -86,7 +93,7 @@ func (h handler) GetTimeRange(ctx context.Context, projectID uint64, from, to *t
 		return time.Time{}, time.Time{}, err
 	}
 	if from == nil && to == nil {
-		cycle, _ := DefaultCycleStore{}.GetAccessCycle(ctx, projectID, now)
+		cycle, _ := store.Cycle{}.GetAccessCycle(ctx, projectID, now)
 		return cycle.GetStart(now), cycle.GetEnd(now), nil
 	}
 	duration := cycle.GetDuration(now)
@@ -146,6 +153,7 @@ func (h handler) PrepareUsage(ctx context.Context, projectID uint64, cycle *prot
 	if err != nil {
 		return false, err
 	}
+
 	key := getQuotaKey(projectID, cycle, now)
 	if err := h.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
 		return false, err
@@ -518,7 +526,6 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 	status.Limit = limit
 
 	key := getQuotaKey(projectID, cycle, now)
-
 	usage, err := h.cache.UsageCache.PeekUsage(ctx, key)
 	if err != nil {
 		if !errors.Is(err, ErrCachePing) {

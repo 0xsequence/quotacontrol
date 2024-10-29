@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/go-chi/httprate"
+	httprateredis "github.com/go-chi/httprate-redis"
+	"github.com/goware/logger"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/redis/go-redis/v9"
 )
@@ -47,7 +51,38 @@ var _ QuotaCache = (*RedisCache)(nil)
 var _ QuotaCache = (*LRU)(nil)
 var _ UsageCache = (*RedisCache)(nil)
 
+func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounter {
+	if !cfg.Enabled {
+		return nil
+	}
+	return httprateredis.NewCounter(&httprateredis.Config{
+		Host:      cfg.Host,
+		Port:      cfg.Port,
+		MaxIdle:   cfg.MaxIdle,
+		MaxActive: cfg.MaxActive,
+		DBIndex:   cfg.DBIndex,
+		OnError: func(err error) {
+			if logger != nil {
+				logger.Error("redis counter error", slog.Any("error", err))
+			}
+		},
+		OnFallbackChange: func(fallback bool) {
+			if logger != nil {
+				logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
+			}
+		},
+	})
+}
+
+const (
+	defaultExpRedis = time.Hour
+	defaultExpLRU   = time.Minute
+)
+
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
+	if ttl <= 0 {
+		ttl = defaultExpRedis
+	}
 	return &RedisCache{
 		client: redisClient,
 		ttl:    ttl,
@@ -220,8 +255,8 @@ type LRU struct {
 }
 
 func NewLRU(cacheBackend QuotaCache, size int, ttl time.Duration) *LRU {
-	if ttl == 0 {
-		ttl = time.Minute * 5
+	if ttl <= 0 {
+		ttl = defaultExpLRU
 	}
 	lruCache := expirable.NewLRU[string, *proto.AccessQuota](size, nil, ttl)
 	return &LRU{

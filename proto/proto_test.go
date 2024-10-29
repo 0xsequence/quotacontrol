@@ -164,7 +164,7 @@ func TestGetSpendResult(t *testing.T) {
 			Usage: proto.AccessUsage{OverCompute: _CU - 2, LimitedCompute: 2},
 			Event: proto.Ptr(proto.EventType_OverMax),
 		}, {
-			Name:  "Above_OverageLimit_Exact",
+			Name:  "Above_OverageLimit_More",
 			Total: limit.OverMax + _CU,
 			Usage: proto.AccessUsage{LimitedCompute: _CU},
 			Event: nil,
