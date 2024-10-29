@@ -16,7 +16,7 @@ func VerifyQuota(client Client, o *Options) func(next http.Handler) http.Handler
 		eh = o.ErrHandler
 	}
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	if o != nil && o.Logger != nil {
 		logger = o.Logger
 	}

@@ -35,8 +35,8 @@ func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto
 		PermissionCache: backend,
 	}
 	// LRU cache for Quota
-	if size := cfg.LRUSize; size > 0 {
-		cache.QuotaCache = NewLRU(backend, size, cfg.LRUExpiration.Duration)
+	if cfg.LRUSize > 0 {
+		cache.QuotaCache = NewLRU(backend, cfg.LRUSize, cfg.LRUExpiration.Duration)
 	}
 
 	if qc == nil {

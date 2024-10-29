@@ -15,11 +15,11 @@ func EnsurePermission(client Client, minPermission proto.UserPermission, o *Opti
 		eh = o.ErrHandler
 	}
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	if o != nil && o.Logger != nil {
 		logger = o.Logger
 	}
-	logger = logger.With(slog.String("middleware", "ratelimit"))
+	logger = logger.With(slog.String("middleware", "ensurePermission"))
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -70,9 +70,14 @@ func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounte
 	})
 }
 
+const (
+	defaultExpRedis = time.Hour
+	defaultExpLRU   = time.Minute
+)
+
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
 	if ttl <= 0 {
-		ttl = time.Hour
+		ttl = defaultExpRedis
 	}
 	return &RedisCache{
 		client: redisClient,
@@ -247,7 +252,7 @@ type LRU struct {
 
 func NewLRU(cacheBackend QuotaCache, size int, ttl time.Duration) *LRU {
 	if ttl <= 0 {
-		ttl = time.Minute
+		ttl = defaultExpLRU
 	}
 	lruCache := expirable.NewLRU[string, *proto.AccessQuota](size, nil, ttl)
 	return &LRU{

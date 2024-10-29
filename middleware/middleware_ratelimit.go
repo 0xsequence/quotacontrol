@@ -62,11 +62,11 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) f
 		eh = o.ErrHandler
 	}
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	if o != nil && o.Logger != nil {
 		logger = o.Logger
 	}
-	logger = logger.With(slog.String("middleware", "ratelimit"))
+	logger = logger.With(slog.String("middleware", "rateLimit"))
 
 	cfg.PublicRate = cmp.Or(cfg.PublicRate, DefaultPublicRate)
 	cfg.AccountRate = cmp.Or(cfg.AccountRate, DefaultAccountRate)

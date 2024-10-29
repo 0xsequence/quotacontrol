@@ -58,7 +58,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	counter := spendingCounter(0)
@@ -327,7 +327,7 @@ func TestDefaultKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: ProjectID})
 	require.NoError(t, err)
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	aq, err := client.FetchKeyQuota(ctx, keys[0], "", now)
@@ -377,7 +377,7 @@ func TestJWT(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	client := quotacontrol.NewClient(logger.NewLogger(logger.LogLevel_DEBUG), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger.NewLogger(logger.LogLevel_INFO), Service, cfg, nil)
 
 	r := chi.NewRouter()
 
@@ -455,7 +455,7 @@ func TestJWTAccess(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
@@ -558,7 +558,7 @@ func TestSession(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	options := &authcontrol.Options{
@@ -667,7 +667,7 @@ func TestSessionDisabled(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_DEBUG)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	options := &authcontrol.Options{

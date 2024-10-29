@@ -29,59 +29,59 @@ type Record struct {
 
 func NewTracker() *Tracker {
 	return &Tracker{
-		Usage: make(map[time.Time]Record),
+		usage: make(map[time.Time]Record),
 	}
 }
 
 // UsageChanges keeps track of the usage of a service
 type Tracker struct {
 	// Mutex used for usage data
-	DataMutex sync.Mutex
+	dataMutex sync.Mutex
 	// Mutext used for sync (calling Stop while another sync is running will wait for the sync to finish)
-	SyncMutex sync.Mutex
+	syncMutex sync.Mutex
 
-	Usage map[time.Time]Record
+	usage map[time.Time]Record
 }
 
 // AddUsage adds the usage of a access key.
 func (u *Tracker) AddKeyUsage(accessKey string, now time.Time, usage proto.AccessUsage) {
-	u.DataMutex.Lock()
-	if _, ok := u.Usage[now]; !ok {
-		u.Usage[now] = NewRecord()
+	u.dataMutex.Lock()
+	if _, ok := u.usage[now]; !ok {
+		u.usage[now] = NewRecord()
 	}
-	if _, ok := u.Usage[now].ByAccessKey[accessKey]; !ok {
-		u.Usage[now].ByAccessKey[accessKey] = &proto.AccessUsage{}
+	if _, ok := u.usage[now].ByAccessKey[accessKey]; !ok {
+		u.usage[now].ByAccessKey[accessKey] = &proto.AccessUsage{}
 	}
-	u.Usage[now].ByAccessKey[accessKey].Add(usage)
-	u.DataMutex.Unlock()
+	u.usage[now].ByAccessKey[accessKey].Add(usage)
+	u.dataMutex.Unlock()
 }
 
 // AddUsage adds the usage of a access key.
 func (u *Tracker) AddProjectUsage(projectID uint64, now time.Time, usage proto.AccessUsage) {
-	u.DataMutex.Lock()
-	if _, ok := u.Usage[now]; !ok {
-		u.Usage[now] = NewRecord()
+	u.dataMutex.Lock()
+	if _, ok := u.usage[now]; !ok {
+		u.usage[now] = NewRecord()
 	}
-	if _, ok := u.Usage[now].ByProjectID[projectID]; !ok {
-		u.Usage[now].ByProjectID[projectID] = &proto.AccessUsage{}
+	if _, ok := u.usage[now].ByProjectID[projectID]; !ok {
+		u.usage[now].ByProjectID[projectID] = &proto.AccessUsage{}
 	}
-	u.Usage[now].ByProjectID[projectID].Add(usage)
-	u.DataMutex.Unlock()
+	u.usage[now].ByProjectID[projectID].Add(usage)
+	u.dataMutex.Unlock()
 }
 
 // GetUpdates returns the usage of a service and clears the usage
 func (u *Tracker) GetUpdates() map[time.Time]Record {
-	u.DataMutex.Lock()
-	result := u.Usage
-	u.Usage = make(map[time.Time]Record)
-	u.DataMutex.Unlock()
+	u.dataMutex.Lock()
+	result := u.usage
+	u.usage = make(map[time.Time]Record)
+	u.dataMutex.Unlock()
 	return result
 }
 
 // SyncUsage syncs the usage of a service with the UsageUpdater
 func (u *Tracker) SyncUsage(ctx context.Context, updater UsageUpdater, service proto.Service) error {
-	u.SyncMutex.Lock()
-	defer u.SyncMutex.Unlock()
+	u.syncMutex.Lock()
+	defer u.syncMutex.Unlock()
 	var errList []error
 	for now, usages := range u.GetUpdates() {
 		keyResult, err := updater.UpdateKeyUsage(ctx, service, now, usages.ByAccessKey)
