@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	HeaderAccessKey = "X-Access-Key"
-	HeaderOrigin    = "Origin"
+	HeaderOrigin = "Origin"
 )
 
 type Options struct {
@@ -31,10 +30,6 @@ func errHandler(r *http.Request, w http.ResponseWriter, err error) {
 
 	respBody, _ := json.Marshal(rpcErr)
 	w.Write(respBody)
-}
-
-func KeyFromHeader(r *http.Request) string {
-	return r.Header.Get(HeaderAccessKey)
 }
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
