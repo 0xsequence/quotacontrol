@@ -72,7 +72,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	options := &authcontrol.Options{
 		JWTSecret: Secret,
-		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
@@ -382,7 +381,6 @@ func TestJWT(t *testing.T) {
 
 	options := &authcontrol.Options{
 		JWTSecret: Secret,
-		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
 	r.Use(
 		authcontrol.Session(options),
@@ -462,7 +460,6 @@ func TestJWTAccess(t *testing.T) {
 	r := chi.NewRouter()
 	options := &authcontrol.Options{
 		JWTSecret: Secret,
-		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 	}
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
@@ -562,7 +559,6 @@ func TestSession(t *testing.T) {
 
 	options := &authcontrol.Options{
 		JWTSecret: Secret,
-		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
 		UserStore: server.Store,
 	}
 
@@ -571,7 +567,7 @@ func TestSession(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(authcontrol.AccessControl(ACL, nil))
+	r.Use(authcontrol.AccessControl(ACL, &authcontrol.Options{}))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
 
 	r.Handle("/*", &counter)
@@ -670,9 +666,9 @@ func TestSessionDisabled(t *testing.T) {
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	options := &authcontrol.Options{
-		JWTSecret: Secret,
-		KeyFuncs:  []authcontrol.KeyFunc{middleware.KeyFromHeader},
-		UserStore: server.Store,
+		JWTSecret:      Secret,
+		AccessKeyFuncs: []authcontrol.AccessKeyFunc{authcontrol.AccessKeyFromHeader},
+		UserStore:      server.Store,
 	}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
@@ -681,7 +677,7 @@ func TestSessionDisabled(t *testing.T) {
 	r.Use(authcontrol.Session(options))
 	r.Use(middleware.VerifyQuota(client, nil))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(authcontrol.AccessControl(ACL, nil))
+	r.Use(authcontrol.AccessControl(ACL, &authcontrol.Options{}))
 
 	r.Handle("/*", &counter)
 
@@ -806,7 +802,7 @@ func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, 
 	}
 	req.Header.Set("X-Real-IP", "127.0.0.1")
 	if accessKey != "" {
-		req.Header.Set(middleware.HeaderAccessKey, accessKey)
+		req.Header.Set(authcontrol.HeaderAccessKey, accessKey)
 	}
 	if jwt != "" {
 		req.Header.Set("Authorization", "Bearer "+jwt)
