@@ -54,7 +54,7 @@ func EnsureUsage(client Client, o Options) func(next http.Handler) http.Handler 
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 			if usage+cu > quota.Limit.OverMax {
-				o.ErrHandler(r, w, proto.ErrLimitExceeded)
+				o.ErrHandler(r, w, proto.ErrQuotaExceeded)
 				return
 			}
 
@@ -93,7 +93,7 @@ func SpendUsage(client Client, o Options) func(next http.Handler) http.Handler {
 			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
 
 			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
-			if err != nil && !errors.Is(err, proto.ErrLimitExceeded) {
+			if err != nil && !errors.Is(err, proto.ErrQuotaExceeded) {
 				o.ErrHandler(r, w, err)
 				return
 			}
@@ -103,7 +103,7 @@ func SpendUsage(client Client, o Options) func(next http.Handler) http.Handler {
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 
-			if errors.Is(err, proto.ErrLimitExceeded) {
+			if errors.Is(err, proto.ErrQuotaExceeded) {
 				o.ErrHandler(r, w, err)
 				return
 			}

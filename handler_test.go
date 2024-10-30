@@ -164,7 +164,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		// Denied
 		for i := 0; i < 10; i++ {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
-			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
+			assert.ErrorIs(t, err, proto.ErrQuotaExceeded)
 			assert.False(t, ok)
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
@@ -214,14 +214,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		ctx := middleware.WithTime(context.Background(), now)
 
-		for i, max := 0, cfg.RateLimiter.PublicRPM*2; i < max; i += _credits {
+		for i := 0; i < cfg.RateLimiter.PublicRPM*2; i += _credits {
 			ok, headers, err := executeRequest(ctx, r, "", "", "")
 			if i < cfg.RateLimiter.PublicRPM {
 				assert.NoError(t, err, i)
 				assert.True(t, ok, i)
 				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 			} else {
-				assert.ErrorIs(t, err, proto.ErrLimitExceeded, i)
+				assert.ErrorIs(t, err, proto.ErrQuotaExceeded, i)
 				assert.False(t, ok, i)
 				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 			}

@@ -194,7 +194,7 @@ func (s *RedisCache) SpendUsage(ctx context.Context, redisKey string, amount, li
 		return 0, err
 	}
 	if v >= limit {
-		return v, proto.ErrLimitExceeded
+		return v, proto.ErrQuotaExceeded
 	}
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	value, err := s.client.IncrBy(ctx, cacheKey, amount).Result()

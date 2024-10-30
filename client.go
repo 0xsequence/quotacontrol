@@ -249,9 +249,9 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
 		if err != nil {
 			// limit exceeded
-			if errors.Is(err, proto.ErrLimitExceeded) {
+			if errors.Is(err, proto.ErrQuotaExceeded) {
 				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: cost})
-				return false, total, proto.ErrLimitExceeded
+				return false, total, proto.ErrQuotaExceeded
 			}
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
@@ -283,7 +283,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 			c.usage.AddKeyUsage(accessKey, now, usage)
 		}
 		if usage.LimitedCompute != 0 {
-			return false, total, proto.ErrLimitExceeded
+			return false, total, proto.ErrQuotaExceeded
 		}
 		if event != nil {
 			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
