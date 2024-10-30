@@ -51,9 +51,12 @@ var _ QuotaCache = (*RedisCache)(nil)
 var _ QuotaCache = (*LRU)(nil)
 var _ UsageCache = (*RedisCache)(nil)
 
-func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounter {
+func NewLimitCounter(cfg RedisConfig, log logger.Logger) httprate.LimitCounter {
 	if !cfg.Enabled {
 		return nil
+	}
+	if log == nil {
+		log = logger.NewLogger(logger.LogLevel_INFO)
 	}
 	return httprateredis.NewCounter(&httprateredis.Config{
 		Host:      cfg.Host,
@@ -62,14 +65,10 @@ func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounte
 		MaxActive: cfg.MaxActive,
 		DBIndex:   cfg.DBIndex,
 		OnError: func(err error) {
-			if logger != nil {
-				logger.Error("redis counter error", slog.Any("error", err))
-			}
+			log.With(slog.Any("error", err)).Error("redis counter error")
 		},
 		OnFallbackChange: func(fallback bool) {
-			if logger != nil {
-				logger.Warn("redis counter fallback", slog.Bool("fallback", fallback))
-			}
+			log.With(slog.Bool("fallback", fallback)).Warn("redis counter fallback")
 		},
 	})
 }

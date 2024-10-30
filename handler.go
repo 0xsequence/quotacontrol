@@ -193,7 +193,7 @@ func (h handler) GetProjectQuota(ctx context.Context, projectID uint64, now time
 	}
 
 	if err := h.cache.QuotaCache.SetProjectQuota(ctx, &record); err != nil {
-		h.log.Error("set access quota in cache", slog.Any("error", err))
+		h.log.With(slog.Any("error", err)).Error("set access quota in cache")
 	}
 
 	return &record, nil
@@ -219,7 +219,7 @@ func (h handler) GetAccessQuota(ctx context.Context, accessKey string, now time.
 	}
 
 	if err := h.cache.QuotaCache.SetAccessQuota(ctx, &record); err != nil {
-		h.log.Error("set access quota in cache", slog.Any("error", err))
+		h.log.With(slog.Any("error", err)).Error("set access quota in cache")
 	}
 
 	return &record, nil
@@ -273,15 +273,15 @@ func (h handler) UpdateUsage(ctx context.Context, service proto.Service, now tim
 func (h handler) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bool, error) {
 	accessKeys, err := h.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
-		h.log.Error("list access keys", slog.Any("error", err))
+		h.log.With(slog.Any("error", err)).Error("list access keys")
 		return true, nil
 	}
 	if err := h.cache.QuotaCache.DeleteProjectQuota(ctx, projectID); err != nil {
-		h.log.Error("delete access quota from cache", slog.Any("error", err))
+		h.log.With(slog.Any("error", err)).Error("delete access quota from cache")
 	}
 	for _, access := range accessKeys {
 		if err := h.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
-			h.log.Error("delete access quota from cache", slog.Any("error", err))
+			h.log.With(slog.Any("error", err)).Error("delete access quota from cache")
 		}
 	}
 	return true, nil
@@ -488,7 +488,7 @@ func (h handler) GetUserPermission(ctx context.Context, projectID uint64, userID
 
 	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
 		if err := h.cache.PermissionCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
-			h.log.Error("set user perm in cache", slog.Any("error", err))
+			h.log.With(slog.Any("error", err)).Error("set user perm in cache")
 		}
 	}
 
@@ -502,7 +502,7 @@ func (h handler) updateAccessKey(ctx context.Context, access *proto.AccessKey) (
 	}
 
 	if err := h.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
-		h.log.Error("delete access quota from cache", slog.Any("error", err))
+		h.log.With(slog.Any("error", err)).Error("delete access quota from cache")
 	}
 
 	return access, nil
