@@ -3,12 +3,12 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/goware/logger"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 )
 
 type Options struct {
-	Logger          logger.Logger
+	Logger          *slog.Logger
 	BaseRequestCost int
 	ErrHandler      authcontrol.ErrHandler
 }

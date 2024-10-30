@@ -11,7 +11,6 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logger"
 	"github.com/goware/validation"
 )
 
@@ -56,9 +55,9 @@ type Store struct {
 }
 
 // NewHandler returns server implementation for proto.QuotaControl.
-func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.LimitCounter) proto.QuotaControl {
+func NewHandler(log *slog.Logger, cache Cache, storage Store, counter httprate.LimitCounter) proto.QuotaControl {
 	if log == nil {
-		log = logger.NewLogger(logger.LogLevel_INFO)
+		log = slog.Default()
 	}
 	if storage.CycleStore == nil {
 		storage.CycleStore = store.Cycle{}
@@ -74,7 +73,7 @@ func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.
 
 // handler is the quotacontrol handler backend implementation.
 type handler struct {
-	log          logger.Logger
+	log          *slog.Logger
 	cache        Cache
 	store        Store
 	limitCounter httprate.LimitCounter
@@ -193,7 +192,7 @@ func (h handler) GetProjectQuota(ctx context.Context, projectID uint64, now time
 	}
 
 	if err := h.cache.QuotaCache.SetProjectQuota(ctx, &record); err != nil {
-		h.log.With(slog.Any("error", err)).Error("set access quota in cache")
+		h.log.Error("set access quota in cache", slog.Any("error", err))
 	}
 
 	return &record, nil
@@ -219,7 +218,7 @@ func (h handler) GetAccessQuota(ctx context.Context, accessKey string, now time.
 	}
 
 	if err := h.cache.QuotaCache.SetAccessQuota(ctx, &record); err != nil {
-		h.log.With(slog.Any("error", err)).Error("set access quota in cache")
+		h.log.Error("set access quota in cache", slog.Any("error", err))
 	}
 
 	return &record, nil
@@ -273,15 +272,15 @@ func (h handler) UpdateUsage(ctx context.Context, service proto.Service, now tim
 func (h handler) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bool, error) {
 	accessKeys, err := h.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
-		h.log.With(slog.Any("error", err)).Error("list access keys")
+		h.log.Error("list access keys", slog.Any("error", err))
 		return true, nil
 	}
 	if err := h.cache.QuotaCache.DeleteProjectQuota(ctx, projectID); err != nil {
-		h.log.With(slog.Any("error", err)).Error("delete access quota from cache")
+		h.log.Error("delete access quota from cache", slog.Any("error", err))
 	}
 	for _, access := range accessKeys {
 		if err := h.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
-			h.log.With(slog.Any("error", err)).Error("delete access quota from cache")
+			h.log.Error("delete access quota from cache", slog.Any("error", err))
 		}
 	}
 	return true, nil
@@ -488,7 +487,7 @@ func (h handler) GetUserPermission(ctx context.Context, projectID uint64, userID
 
 	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
 		if err := h.cache.PermissionCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
-			h.log.With(slog.Any("error", err)).Error("set user perm in cache")
+			h.log.Error("set user perm in cache", slog.Any("error", err))
 		}
 	}
 
@@ -502,7 +501,7 @@ func (h handler) updateAccessKey(ctx context.Context, access *proto.AccessKey) (
 	}
 
 	if err := h.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
-		h.log.With(slog.Any("error", err)).Error("delete access quota from cache")
+		h.log.Error("delete access quota from cache", slog.Any("error", err))
 	}
 
 	return access, nil

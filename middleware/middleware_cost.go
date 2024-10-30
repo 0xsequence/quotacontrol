@@ -19,7 +19,7 @@ func SetCost(cost authcontrol.Config[int64], o Options) func(next http.Handler) 
 
 			cost, err := cost.Get(r.URL.Path)
 			if err != nil {
-				logger.With(slog.Any("error", err)).Error("get cost")
+				logger.Error("get cost", slog.Any("error", err))
 				cost = int64(o.BaseRequestCost)
 			}
 
