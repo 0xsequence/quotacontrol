@@ -175,14 +175,14 @@ func (m *MemoryStore) AddUser(ctx context.Context, userID string, admin bool) er
 	return nil
 }
 
-func (m *MemoryStore) GetUser(ctx context.Context, userID string) (any, bool, error) {
+func (m *MemoryStore) GetUser(ctx context.Context, userID string) (*struct{}, bool, error) {
 	m.Lock()
 	v, ok := m.users[userID]
 	m.Unlock()
 	if !ok {
 		return nil, false, nil
 	}
-	return userID, v, nil
+	return new(struct{}), v, nil
 }
 
 func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {

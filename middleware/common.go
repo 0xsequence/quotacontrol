@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
 )
@@ -15,8 +16,9 @@ const (
 )
 
 type Options struct {
-	Logger     logger.Logger
-	ErrHandler func(r *http.Request, w http.ResponseWriter, err error)
+	Logger          logger.Logger
+	BaseRequestCost int
+	ErrHandler      authcontrol.ErrHandler
 }
 
 func errHandler(r *http.Request, w http.ResponseWriter, err error) {

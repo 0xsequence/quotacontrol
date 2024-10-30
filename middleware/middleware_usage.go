@@ -12,6 +12,7 @@ const (
 	HeaderQuotaLimit     = "Quota-Limit"
 	HeaderQuotaRemaining = "Quota-Remaining"
 	HeaderQuotaOverage   = "Quota-Overage"
+	HeaderQuotaCost      = "Quota-Cost"
 )
 
 // EnsureUsage is a middleware that checks if the quota has enough usage left.
@@ -44,7 +45,7 @@ func EnsureUsage(client Client, o *Options) func(next http.Handler) http.Handler
 				next.ServeHTTP(w, r)
 				return
 			}
-			w.Header().Set(HeaderCreditsCost, strconv.FormatInt(cu, 10))
+			w.Header().Set("X-RateLimit-Increment", strconv.FormatInt(cu, 10))
 
 			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
@@ -95,7 +96,7 @@ func SpendUsage(client Client, o *Options) func(next http.Handler) http.Handler 
 				next.ServeHTTP(w, r)
 				return
 			}
-			w.Header().Set(HeaderCreditsCost, strconv.FormatInt(cu, 10))
+			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
 
 			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrLimitExceeded) {

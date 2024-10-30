@@ -30,24 +30,29 @@ const (
 	DefaultServiceRate = 0
 )
 
+// RateLimitConfig is the configuration for the rate limiter middleware.
 type RateLimitConfig struct {
-	Enabled     bool `toml:"enabled"`
-	PublicRate  int  `toml:"public_requests_per_minute"`
-	AccountRate int  `toml:"user_requests_per_minute"`
-	ServiceRate int  `toml:"service_requests_per_minute"`
+	// Enabled turns on/off the middleware.
+	Enabled bool `toml:"enabled"`
+	// PublicRPM is the rate limit for Public sessions expressed as number of requests per minute.
+	PublicRPM int `toml:"public_requests_per_minute"`
+	// AccountRPM is the rate limit for Account sessions expressed as number of requests per minute.
+	AccountRPM int `toml:"user_requests_per_minute"`
+	// ServiceRPM is the rate limit for Service sessions expressed as number of requests per minute.
+	ServiceRPM int `toml:"service_requests_per_minute"`
 }
 
-func (r RateLimitConfig) getRateLimit(ctx context.Context) int {
+func (r RateLimitConfig) GetRateLimit(ctx context.Context, baseRequestCost int) int {
 	if _, ok := authcontrol.GetService(ctx); ok {
-		return r.ServiceRate
+		return r.ServiceRPM * baseRequestCost
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
 		return int(q.Limit.RateLimit)
 	}
 	if _, ok := authcontrol.GetAccount(ctx); ok {
-		return r.AccountRate
+		return r.AccountRPM * baseRequestCost
 	}
-	return r.PublicRate
+	return r.PublicRPM * baseRequestCost
 }
 
 func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) func(next http.Handler) http.Handler {
@@ -68,9 +73,9 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) f
 	}
 	logger = logger.With(slog.String("middleware", "rateLimit"))
 
-	cfg.PublicRate = cmp.Or(cfg.PublicRate, DefaultPublicRate)
-	cfg.AccountRate = cmp.Or(cfg.AccountRate, DefaultAccountRate)
-	cfg.ServiceRate = cmp.Or(cfg.ServiceRate, DefaultServiceRate)
+	cfg.PublicRPM = cmp.Or(cfg.PublicRPM, DefaultPublicRate)
+	cfg.AccountRPM = cmp.Or(cfg.AccountRPM, DefaultAccountRate)
+	cfg.ServiceRPM = cmp.Or(cfg.ServiceRPM, DefaultServiceRate)
 
 	options := []httprate.Option{
 		httprate.WithLimitCounter(counter),
@@ -105,13 +110,20 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) f
 		}),
 	}
 
-	limiter := httprate.NewRateLimiter(cfg.PublicRate, _RateLimitWindow, options...)
+	limiter := httprate.NewRateLimiter(cfg.PublicRPM, _RateLimitWindow, options...)
+
+	// Ensure the baseRequestCost is at least 1.
+	baseCost := 1
+	if o != nil && o.BaseRequestCost > 0 {
+		baseCost = o.BaseRequestCost
+	}
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
-			if limit := cfg.getRateLimit(ctx); limit > 0 {
+
+			if limit := cfg.GetRateLimit(ctx, baseCost); limit > 0 {
 				ctx = httprate.WithRequestLimit(ctx, limit)
 				limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 			} else {
