@@ -21,6 +21,16 @@ type Options struct {
 	ErrHandler      authcontrol.ErrHandler
 }
 
+func (o *Options) ApplyDefaults() {
+	// Set default error handler if not provided
+	if o.ErrHandler == nil {
+		o.ErrHandler = errHandler
+	}
+	if o.BaseRequestCost < 1 {
+		o.BaseRequestCost = 1
+	}
+}
+
 func errHandler(r *http.Request, w http.ResponseWriter, err error) {
 	rpcErr, ok := err.(proto.WebRPCError)
 	if !ok {

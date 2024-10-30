@@ -4,14 +4,12 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logger"
 )
 
 const (
@@ -55,23 +53,14 @@ func (r RateLimitConfig) GetRateLimit(ctx context.Context, baseRequestCost int) 
 	return r.PublicRPM * baseRequestCost
 }
 
-func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) func(next http.Handler) http.Handler {
+func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) func(next http.Handler) http.Handler {
 	if !cfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
 
-	eh := errHandler
-	if o != nil && o.ErrHandler != nil {
-		eh = o.ErrHandler
-	}
-
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	if o != nil && o.Logger != nil {
-		logger = o.Logger
-	}
-	logger = logger.With(slog.String("middleware", "rateLimit"))
+	o.ApplyDefaults()
 
 	cfg.PublicRPM = cmp.Or(cfg.PublicRPM, DefaultPublicRate)
 	cfg.AccountRPM = cmp.Or(cfg.AccountRPM, DefaultAccountRate)
@@ -106,24 +95,18 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o *Options) f
 			ctx := r.Context()
 			session, _ := authcontrol.GetSessionType(ctx)
 			msg := fmt.Sprintf("%s for %s session", proto.ErrRateLimit.Message, session)
-			eh(r, w, proto.ErrRateLimit.WithMessage(msg))
+			o.ErrHandler(r, w, proto.ErrRateLimit.WithMessage(msg))
 		}),
 	}
 
 	limiter := httprate.NewRateLimiter(cfg.PublicRPM, _RateLimitWindow, options...)
-
-	// Ensure the baseRequestCost is at least 1.
-	baseCost := 1
-	if o != nil && o.BaseRequestCost > 0 {
-		baseCost = o.BaseRequestCost
-	}
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			if limit := cfg.GetRateLimit(ctx, baseCost); limit > 0 {
+			if limit := cfg.GetRateLimit(ctx, o.BaseRequestCost); limit > 0 {
 				ctx = httprate.WithRequestLimit(ctx, limit)
 				limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 			} else {

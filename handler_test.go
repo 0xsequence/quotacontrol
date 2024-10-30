@@ -70,19 +70,20 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 	}
 
-	options := &authcontrol.Options[any]{
+	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
+	quotaOptions := middleware.Options{}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(addCost(_credits * 2))
 	r.Use(addCost(_credits * -1))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(middleware.SpendUsage(client, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.SpendUsage(client, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -377,17 +378,16 @@ func TestJWT(t *testing.T) {
 
 	client := quotacontrol.NewClient(logger.NewLogger(logger.LogLevel_INFO), Service, cfg, nil)
 
-	r := chi.NewRouter()
-
-	options := &authcontrol.Options[any]{
+	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
-	r.Use(
-		authcontrol.Session(options),
-		middleware.VerifyQuota(client, nil),
-		middleware.EnsureUsage(client, nil),
-		middleware.SpendUsage(client, nil),
-	)
+	quotaOptions := middleware.Options{}
+
+	r := chi.NewRouter()
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.EnsureUsage(client, quotaOptions))
+	r.Use(middleware.SpendUsage(client, quotaOptions))
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
@@ -457,14 +457,16 @@ func TestJWTAccess(t *testing.T) {
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
-	r := chi.NewRouter()
-	options := &authcontrol.Options[any]{
+	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, nil))
+	quotaOptions := middleware.Options{}
+
+	r := chi.NewRouter()
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -557,18 +559,19 @@ func TestSession(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	options := &authcontrol.Options[struct{}]{
+	authOptions := authcontrol.Options[struct{}]{
 		JWTSecret: Secret,
 		UserStore: server.Store,
 	}
+	quotaOptions := middleware.Options{}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(authcontrol.AccessControl(ACL, options))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(authcontrol.AccessControl(ACL, authOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -665,18 +668,19 @@ func TestSessionDisabled(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	options := &authcontrol.Options[struct{}]{
+	authOptions := authcontrol.Options[struct{}]{
 		JWTSecret: Secret,
 		UserStore: server.Store,
 	}
+	quotaOptions := middleware.Options{}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(authcontrol.AccessControl(ACL, options))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(authcontrol.AccessControl(ACL, authOptions))
 
 	r.Handle("/*", &counter)
 
