@@ -94,7 +94,7 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			session, _ := authcontrol.GetSessionType(ctx)
-			msg := fmt.Sprintf("%s for %s session", proto.ErrRateLimit.Message, session)
+			msg := fmt.Sprintf("%s (%s session)", proto.ErrRateLimit.Message, session)
 			o.ErrHandler(r, w, proto.ErrRateLimit.WithMessage(msg))
 		}),
 	}
