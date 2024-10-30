@@ -20,11 +20,12 @@ type Notifier interface {
 	Notify(access *proto.AccessKey) error
 }
 
+// NewClient creates a new quota control client.
+// - logger can't be nil.
+// - service is the service name.
+// - cfg is the configuration.
+// - if qc is not nil, it will be used instead of the proto client.
 func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
-	if logger == nil {
-		logger = slog.Default()
-	}
-
 	backend := NewRedisCache(redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,

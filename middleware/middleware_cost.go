@@ -11,15 +11,15 @@ import (
 func SetCost(cost authcontrol.Config[int64], o Options) func(next http.Handler) http.Handler {
 	o.ApplyDefaults()
 
-	logger := o.Logger.With(slog.String("middleware", "setCost"))
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
 			cost, err := cost.Get(r.URL.Path)
 			if err != nil {
-				logger.Error("get cost", slog.Any("error", err))
+				if o.Logger != nil {
+					o.Logger.Error("get cost", slog.Any("error", err))
+				}
 				cost = int64(o.BaseRequestCost)
 			}
 
