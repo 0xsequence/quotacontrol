@@ -5,14 +5,17 @@
 # Sample usage in makefile:
 #
 # import-errors:
-#	curl https://raw.githubusercontent.com/0xsequence/quotacontrol/refs/heads/minor-improvements/scripts/import.sh | sh;
+#	curl https://raw.githubusercontent.com/0xsequence/quotacontrol/refs/heads/master/scripts/import.sh | sh;
 
 PKG="0xsequence/quotacontrol"
 TAG=$(cat go.mod | grep -v "//" | grep $PKG | awk '{print$ 2}')
 URL="https://raw.githubusercontent.com/$PKG/refs/tags/$TAG/proto/proto.ridl"
 
-printf "webrpc = v1\n\n";
+COMMIT=$(echo $TAG | cut -d'-' -f 3)
+if [ -n "$COMMIT" ]; then
+    URL="https://raw.githubusercontent.com/$PKG/refs/heads/$COMMIT/proto/proto.ridl"
+fi
 
-printf "#\n# $PKG $TAG \n#\n";
+printf "# $PKG $TAG \n";
 curl -s $URL | grep "^error 1";
 printf "\n"
