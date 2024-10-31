@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/test"
 	"github.com/go-chi/chi/v5"
+	"github.com/goware/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -58,7 +58,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	counter := spendingCounter(0)
@@ -327,7 +327,7 @@ func TestDefaultKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: ProjectID})
 	require.NoError(t, err)
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	aq, err := client.FetchKeyQuota(ctx, keys[0], "", now)
@@ -377,7 +377,8 @@ func TestJWT(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	client := quotacontrol.NewClient(slog.Default(), Service, cfg, nil)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
@@ -453,7 +454,7 @@ func TestJWTAccess(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
@@ -557,7 +558,7 @@ func TestSession(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	authOptions := authcontrol.Options[struct{}]{
@@ -666,7 +667,7 @@ func TestSessionDisabled(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := slog.Default()
+	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	authOptions := authcontrol.Options[struct{}]{

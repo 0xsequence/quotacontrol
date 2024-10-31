@@ -12,6 +12,7 @@ import (
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/0xsequence/authcontrol"
@@ -26,7 +27,7 @@ type Notifier interface {
 // - service is the service name.
 // - cfg is the configuration.
 // - if qc is not nil, it will be used instead of the proto client.
-func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
+func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
 	backend := NewRedisCache(redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
@@ -67,7 +68,7 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 
 type Client struct {
 	cfg    Config
-	logger *slog.Logger
+	logger logger.Logger
 
 	service     proto.Service
 	usage       *usage.Tracker
