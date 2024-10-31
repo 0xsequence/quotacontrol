@@ -63,7 +63,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	counter := spendingCounter(0)
 
-	var addCost = func(i int64) func(http.Handler) http.Handler {
+	addCost := func(i int64) func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				next.ServeHTTP(w, r.WithContext(middleware.AddCost(r.Context(), int64(i))))
@@ -655,7 +655,6 @@ func TestSession(t *testing.T) {
 				})
 			}
 		}
-
 	}
 }
 
@@ -764,7 +763,6 @@ func TestSessionDisabled(t *testing.T) {
 				})
 			}
 		}
-
 	}
 }
 
