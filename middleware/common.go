@@ -8,6 +8,8 @@ import (
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 const (
@@ -15,8 +17,19 @@ const (
 )
 
 type Options struct {
-	Logger     logger.Logger
-	ErrHandler func(r *http.Request, w http.ResponseWriter, err error)
+	Logger          logger.Logger
+	BaseRequestCost int
+	ErrHandler      authcontrol.ErrHandler
+}
+
+func (o *Options) ApplyDefaults() {
+	// Set default error handler if not provided
+	if o.ErrHandler == nil {
+		o.ErrHandler = errHandler
+	}
+	if o.BaseRequestCost < 1 {
+		o.BaseRequestCost = 1
+	}
 }
 
 func errHandler(r *http.Request, w http.ResponseWriter, err error) {

@@ -1,5 +1,5 @@
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=golang@v0.15.0 -pkg=proto -server -client -out=./proto.gen.go
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=proto.ridl -target=typescript@v0.12.0 -client -out=./clients/quotacontrol.gen.ts
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=quotacontrol.ridl -target=golang@v0.15.0 -pkg=proto -server -client -out=./quotacontrol.gen.go
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=quotacontrol.ridl -target=typescript@v0.12.0 -client -out=./quotacontrol.gen.ts
 package proto
 
 import (
@@ -16,13 +16,13 @@ func Ptr[T any](v T) *T {
 type SessionType = proto.SessionType
 
 const (
-	SessionType_Public    = proto.SessionType_Public
-	SessionType_Wallet    = proto.SessionType_Wallet
-	SessionType_AccessKey = proto.SessionType_AccessKey
-	SessionType_Project   = proto.SessionType_Project
-	SessionType_User      = proto.SessionType_User
-	SessionType_Admin     = proto.SessionType_Admin
-	SessionType_Service   = proto.SessionType_Service
+	SessionType_Public          = proto.SessionType_Public
+	SessionType_Wallet          = proto.SessionType_Wallet
+	SessionType_AccessKey       = proto.SessionType_AccessKey
+	SessionType_Project         = proto.SessionType_Project
+	SessionType_User            = proto.SessionType_User
+	SessionType_Admin           = proto.SessionType_Admin
+	SessionType_InternalService = proto.SessionType_InternalService
 )
 
 func (u *AccessUsage) Add(usage AccessUsage) {

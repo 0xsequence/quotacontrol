@@ -3,11 +3,10 @@ package proto_test
 import (
 	"testing"
 
+	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/0xsequence/quotacontrol/proto"
 )
 
 func TestAccessKeyValidateOrigin(t *testing.T) {
@@ -87,17 +86,20 @@ func TestGetSpendResult(t *testing.T) {
 			Total: limit.FreeWarn - 1,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: nil,
-		}, {
+		},
+		{
 			Name:  "Within_IncludedAlert_Exact",
 			Total: limit.FreeWarn,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: proto.Ptr(proto.EventType_FreeWarn),
-		}, {
+		},
+		{
 			Name:  "Above_IncludedAlert",
 			Total: limit.FreeWarn + 1,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: proto.Ptr(proto.EventType_FreeWarn),
-		}, {
+		},
+		{
 			Name:  "Above_IncludedAlert_Exact",
 			Total: limit.FreeWarn + _CU,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
@@ -109,17 +111,20 @@ func TestGetSpendResult(t *testing.T) {
 			Total: limit.FreeWarn - 1,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: nil,
-		}, {
+		},
+		{
 			Name:  "Within_IncludedLimit_Exact",
 			Total: limit.FreeMax,
 			Usage: proto.AccessUsage{ValidCompute: _CU},
 			Event: proto.Ptr(proto.EventType_FreeMax),
-		}, {
+		},
+		{
 			Name:  "Above_IncludedLimit",
 			Total: limit.FreeMax + 1,
 			Usage: proto.AccessUsage{ValidCompute: _CU - 1, OverCompute: 1},
 			Event: proto.Ptr(proto.EventType_FreeMax),
-		}, {
+		},
+		{
 			Name:  "Above_IncludedLimit_Exact",
 			Total: limit.FreeMax + _CU,
 			Usage: proto.AccessUsage{OverCompute: _CU},
@@ -131,17 +136,20 @@ func TestGetSpendResult(t *testing.T) {
 			Total: limit.OverWarn - 1,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
-		}, {
+		},
+		{
 			Name:  "Within_OverageAlert_Exact",
 			Total: limit.OverWarn,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: proto.Ptr(proto.EventType_OverWarn),
-		}, {
+		},
+		{
 			Name:  "Above_OverageAlert",
 			Total: limit.OverWarn + 2,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: proto.Ptr(proto.EventType_OverWarn),
-		}, {
+		},
+		{
 			Name:  "Above_OverageAlert_Exact",
 			Total: limit.OverWarn + _CU,
 			Usage: proto.AccessUsage{OverCompute: _CU},
@@ -153,17 +161,20 @@ func TestGetSpendResult(t *testing.T) {
 			Total: limit.OverMax - 1,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: nil,
-		}, {
+		},
+		{
 			Name:  "Above_OverageLimit_Exact",
 			Total: limit.OverMax,
 			Usage: proto.AccessUsage{OverCompute: _CU},
 			Event: proto.Ptr(proto.EventType_OverMax),
-		}, {
+		},
+		{
 			Name:  "Above_OverageLimit",
 			Total: limit.OverMax + 2,
 			Usage: proto.AccessUsage{OverCompute: _CU - 2, LimitedCompute: 2},
 			Event: proto.Ptr(proto.EventType_OverMax),
-		}, {
+		},
+		{
 			Name:  "Above_OverageLimit_More",
 			Total: limit.OverMax + _CU,
 			Usage: proto.AccessUsage{LimitedCompute: _CU},

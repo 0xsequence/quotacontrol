@@ -9,26 +9,31 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 type Notifier interface {
 	Notify(access *proto.AccessKey) error
 }
 
+// NewClient creates a new quota control client.
+// - logger can't be nil.
+// - service is the service name.
+// - cfg is the configuration.
+// - if qc is not nil, it will be used instead of the proto client.
 func NewClient(logger logger.Logger, service proto.Service, cfg Config, qc proto.QuotaControl) *Client {
-	options := redis.Options{
+	backend := NewRedisCache(redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
 		MaxIdleConns: cfg.Redis.MaxIdle,
-	}
+	}), cfg.Redis.KeyTTL)
 
-	backend := NewRedisCache(redis.NewClient(&options), cfg.Redis.KeyTTL)
 	cache := Cache{
 		UsageCache:      backend,
 		QuotaCache:      backend,
@@ -249,9 +254,9 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
 		if err != nil {
 			// limit exceeded
-			if errors.Is(err, proto.ErrLimitExceeded) {
+			if errors.Is(err, proto.ErrQuotaExceeded) {
 				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: cost})
-				return false, total, proto.ErrLimitExceeded
+				return false, total, proto.ErrQuotaExceeded
 			}
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
@@ -283,7 +288,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 			c.usage.AddKeyUsage(accessKey, now, usage)
 		}
 		if usage.LimitedCompute != 0 {
-			return false, total, proto.ErrLimitExceeded
+			return false, total, proto.ErrQuotaExceeded
 		}
 		if event != nil {
 			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {

@@ -1,26 +1,16 @@
 package middleware
 
 import (
-	"log/slog"
 	"net/http"
 	"strconv"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/goware/logger"
+
+	"github.com/0xsequence/authcontrol"
 )
 
-func VerifyQuota(client Client, o *Options) func(next http.Handler) http.Handler {
-	eh := errHandler
-	if o != nil && o.ErrHandler != nil {
-		eh = o.ErrHandler
-	}
-
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	if o != nil && o.Logger != nil {
-		logger = o.Logger
-	}
-	logger = logger.With(slog.String("middleware", "verifyQuota"))
+func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler {
+	o.ApplyDefaults()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,14 +27,14 @@ func VerifyQuota(client Client, o *Options) func(next http.Handler) http.Handler
 			if session == proto.SessionType_Project {
 				id, ok := authcontrol.GetProjectID(ctx)
 				if !ok {
-					eh(r, w, proto.ErrUnauthorizedUser)
+					o.ErrHandler(r, w, proto.ErrUnauthorizedUser)
 					return
 				}
 				projectID = id
 
 				q, err := client.FetchProjectQuota(ctx, projectID, now)
 				if err != nil {
-					eh(r, w, err)
+					o.ErrHandler(r, w, err)
 					return
 				}
 
@@ -53,7 +43,7 @@ func VerifyQuota(client Client, o *Options) func(next http.Handler) http.Handler
 						if err == nil {
 							err = proto.ErrUnauthorizedUser
 						}
-						eh(r, w, err)
+						o.ErrHandler(r, w, err)
 						return
 					}
 					quota = q
@@ -63,30 +53,30 @@ func VerifyQuota(client Client, o *Options) func(next http.Handler) http.Handler
 			if session.Is(proto.SessionType_AccessKey, proto.SessionType_Project) {
 				accessKey, ok := authcontrol.GetAccessKey(ctx)
 				if !ok && session == proto.SessionType_AccessKey {
-					eh(r, w, proto.ErrUnauthorizedUser)
+					o.ErrHandler(r, w, proto.ErrUnauthorizedUser)
 					return
 				}
 
 				if ok {
 					if projectID != 0 {
 						if v, _ := proto.GetProjectID(accessKey); v != projectID {
-							eh(r, w, proto.ErrAccessKeyMismatch)
+							o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
 							return
 						}
 					}
 
 					q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 					if err != nil {
-						eh(r, w, err)
+						o.ErrHandler(r, w, err)
 						return
 					}
 					if q != nil {
 						if !q.IsActive() {
-							eh(r, w, proto.ErrAccessKeyNotFound)
+							o.ErrHandler(r, w, proto.ErrAccessKeyNotFound)
 							return
 						}
 						if quota != nil && quota.AccessKey.ProjectID != q.AccessKey.ProjectID {
-							eh(r, w, proto.ErrAccessKeyMismatch)
+							o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
 							return
 						}
 						quota = q

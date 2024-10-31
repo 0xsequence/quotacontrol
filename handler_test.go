@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -21,6 +20,8 @@ import (
 	"github.com/goware/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 var (
@@ -62,7 +63,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	counter := spendingCounter(0)
 
-	var addCost = func(i int64) func(http.Handler) http.Handler {
+	addCost := func(i int64) func(http.Handler) http.Handler {
 		return func(next http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				next.ServeHTTP(w, r.WithContext(middleware.AddCost(r.Context(), int64(i))))
@@ -70,19 +71,20 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 	}
 
-	options := &authcontrol.Options{
+	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
+	quotaOptions := middleware.Options{}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(addCost(_credits * 2))
 	r.Use(addCost(_credits * -1))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(middleware.SpendUsage(client, nil))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.SpendUsage(client, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -163,7 +165,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		// Denied
 		for i := 0; i < 10; i++ {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
-			assert.ErrorIs(t, err, proto.ErrLimitExceeded)
+			assert.ErrorIs(t, err, proto.ErrQuotaExceeded)
 			assert.False(t, ok)
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
@@ -213,14 +215,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 		ctx := middleware.WithTime(context.Background(), now)
 
-		for i, max := 0, cfg.RateLimiter.PublicRate*2; i < max; i += _credits {
+		for i := 0; i < cfg.RateLimiter.PublicRPM*2; i += _credits {
 			ok, headers, err := executeRequest(ctx, r, "", "", "")
-			if i < cfg.RateLimiter.PublicRate {
+			if i < cfg.RateLimiter.PublicRPM {
 				assert.NoError(t, err, i)
 				assert.True(t, ok, i)
 				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 			} else {
-				assert.ErrorIs(t, err, proto.ErrLimitExceeded, i)
+				assert.ErrorIs(t, err, proto.ErrQuotaExceeded, i)
 				assert.False(t, ok, i)
 				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 			}
@@ -375,19 +377,21 @@ func TestJWT(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	client := quotacontrol.NewClient(logger.NewLogger(logger.LogLevel_INFO), Service, cfg, nil)
+	logger := logger.NewLogger(logger.LogLevel_INFO)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	r := chi.NewRouter()
-
-	options := &authcontrol.Options{
+	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
-	r.Use(
-		authcontrol.Session(options),
-		middleware.VerifyQuota(client, nil),
-		middleware.EnsureUsage(client, nil),
-		middleware.SpendUsage(client, nil),
-	)
+	quotaOptions := middleware.Options{
+		BaseRequestCost: 1,
+	}
+
+	r := chi.NewRouter()
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.EnsureUsage(client, quotaOptions))
+	r.Use(middleware.SpendUsage(client, quotaOptions))
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
@@ -457,14 +461,16 @@ func TestJWTAccess(t *testing.T) {
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
-	r := chi.NewRouter()
-	options := &authcontrol.Options{
+	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, nil))
+	quotaOptions := middleware.Options{}
+
+	r := chi.NewRouter()
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -543,7 +549,7 @@ var ACL = authcontrol.Config[authcontrol.ACL]{
 		MethodProject:   authcontrol.NewACL(proto.SessionType_Project.OrHigher()...),
 		MethodUser:      authcontrol.NewACL(proto.SessionType_User.OrHigher()...),
 		MethodAdmin:     authcontrol.NewACL(proto.SessionType_Admin.OrHigher()...),
-		MethodService:   authcontrol.NewACL(proto.SessionType_Service.OrHigher()...),
+		MethodService:   authcontrol.NewACL(proto.SessionType_InternalService.OrHigher()...),
 	},
 }
 
@@ -557,18 +563,19 @@ func TestSession(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	options := &authcontrol.Options{
+	authOptions := authcontrol.Options[struct{}]{
 		JWTSecret: Secret,
 		UserStore: server.Store,
 	}
+	quotaOptions := middleware.Options{}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(authcontrol.AccessControl(ACL, &authcontrol.Options{}))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(authcontrol.AccessControl(ACL, authOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -591,8 +598,8 @@ func TestSession(t *testing.T) {
 		{Session: proto.SessionType_User},
 		{Session: proto.SessionType_Admin},
 		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
-		{Session: proto.SessionType_Service},
-		{Session: proto.SessionType_Service, AccessKey: AccessKey},
+		{Session: proto.SessionType_InternalService},
+		{Session: proto.SessionType_InternalService, AccessKey: AccessKey},
 	}
 
 	var (
@@ -622,7 +629,7 @@ func TestSession(t *testing.T) {
 						claims = map[string]any{"account": UserAddress}
 					case proto.SessionType_Admin:
 						claims = map[string]any{"account": WalletAddress, "admin": true}
-					case proto.SessionType_Service:
+					case proto.SessionType_InternalService:
 						claims = map[string]any{"service": ServiceName}
 					}
 
@@ -644,13 +651,12 @@ func TestSession(t *testing.T) {
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
 					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
-					case proto.SessionType_Service:
+					case proto.SessionType_InternalService:
 						assert.Equal(t, serviceRPM, rateLimit)
 					}
 				})
 			}
 		}
-
 	}
 }
 
@@ -665,19 +671,19 @@ func TestSessionDisabled(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	options := &authcontrol.Options{
-		JWTSecret:      Secret,
-		AccessKeyFuncs: []authcontrol.AccessKeyFunc{authcontrol.AccessKeyFromHeader},
-		UserStore:      server.Store,
+	authOptions := authcontrol.Options[struct{}]{
+		JWTSecret: Secret,
+		UserStore: server.Store,
 	}
+	quotaOptions := middleware.Options{}
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
-	r.Use(authcontrol.Session(options))
-	r.Use(middleware.VerifyQuota(client, nil))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, nil))
-	r.Use(authcontrol.AccessControl(ACL, &authcontrol.Options{}))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(authcontrol.AccessControl(ACL, authOptions))
 
 	r.Handle("/*", &counter)
 
@@ -700,8 +706,8 @@ func TestSessionDisabled(t *testing.T) {
 		{Session: proto.SessionType_User},
 		{Session: proto.SessionType_Admin},
 		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
-		{Session: proto.SessionType_Service},
-		{Session: proto.SessionType_Service, AccessKey: AccessKey},
+		{Session: proto.SessionType_InternalService},
+		{Session: proto.SessionType_InternalService, AccessKey: AccessKey},
 	}
 
 	var (
@@ -731,7 +737,7 @@ func TestSessionDisabled(t *testing.T) {
 						claims = map[string]any{"account": UserAddress}
 					case proto.SessionType_Admin:
 						claims = map[string]any{"account": WalletAddress, "admin": true}
-					case proto.SessionType_Service:
+					case proto.SessionType_InternalService:
 						claims = map[string]any{"service": ServiceName}
 					}
 
@@ -753,13 +759,12 @@ func TestSessionDisabled(t *testing.T) {
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
 					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
-					case proto.SessionType_Service:
+					case proto.SessionType_InternalService:
 						assert.Equal(t, serviceRPM, rateLimit)
 					}
 				})
 			}
 		}
-
 	}
 }
 

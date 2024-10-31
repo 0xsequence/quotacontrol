@@ -32,9 +32,9 @@ func TestRateLimiter(t *testing.T) {
 	cfg.Apply()
 
 	rl := middleware.RateLimit(middleware.RateLimitConfig{
-		Enabled:    true,
-		PublicRate: 10,
-	}, nil, &middleware.Options{ErrHandler: eh})
+		Enabled:   true,
+		PublicRPM: 10,
+	}, nil, middleware.Options{ErrHandler: eh})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
 	buf := make([]byte, 4)

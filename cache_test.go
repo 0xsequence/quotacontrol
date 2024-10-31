@@ -30,6 +30,7 @@ func (s *mockCache) DeleteAccessQuota(context.Context, string) error {
 func (s *mockCache) GetProjectQuota(context.Context, uint64) (*proto.AccessQuota, error) {
 	return nil, nil
 }
+
 func (s *mockCache) SetProjectQuota(context.Context, *proto.AccessQuota) error {
 	return nil
 }

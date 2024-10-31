@@ -47,9 +47,11 @@ var (
 
 const redisKeyPrefix = "quota:"
 
-var _ QuotaCache = (*RedisCache)(nil)
-var _ QuotaCache = (*LRU)(nil)
-var _ UsageCache = (*RedisCache)(nil)
+var (
+	_ QuotaCache = (*RedisCache)(nil)
+	_ QuotaCache = (*LRU)(nil)
+	_ UsageCache = (*RedisCache)(nil)
+)
 
 func NewLimitCounter(cfg RedisConfig, logger logger.Logger) httprate.LimitCounter {
 	if !cfg.Enabled {
@@ -136,7 +138,10 @@ func (s *RedisCache) getQuota(ctx context.Context, key string) (*proto.AccessQuo
 
 func (s *RedisCache) deleteQuota(ctx context.Context, key string) error {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, key)
-	return s.client.Del(ctx, cacheKey).Err()
+	if err := s.client.Del(ctx, cacheKey).Err(); err != nil {
+		return fmt.Errorf("delete quota: %w", err)
+	}
+	return nil
 }
 
 func (s *RedisCache) setQuota(ctx context.Context, key string, quota *proto.AccessQuota) error {
@@ -153,14 +158,17 @@ func (s *RedisCache) setQuota(ctx context.Context, key string, quota *proto.Acce
 
 func (s *RedisCache) SetUsage(ctx context.Context, redisKey string, amount int64) error {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
-	return s.client.Set(ctx, cacheKey, amount, s.ttl).Err()
+	if err := s.client.Set(ctx, cacheKey, amount, s.ttl).Err(); err != nil {
+		return fmt.Errorf("set usage: %w", err)
+	}
+	return nil
 }
 
 func (s *RedisCache) ClearUsage(ctx context.Context, redisKey string) (bool, error) {
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	count, err := s.client.Del(ctx, cacheKey).Result()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("clear usage: %w", err)
 	}
 	return count != 0, nil
 }
@@ -176,11 +184,11 @@ func (s *RedisCache) PeekUsage(ctx context.Context, redisKey string) (int64, err
 		return v, nil
 	}
 	if !errors.Is(err, redis.Nil) {
-		return 0, err
+		return 0, fmt.Errorf("peek usage - get: %w", err)
 	}
 	ok, err := s.client.SetNX(ctx, cacheKey, SpecialValue, time.Second*2).Result()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("peek usage - setnx: %w", err)
 	}
 	if !ok {
 		return 0, ErrCacheWait
@@ -192,15 +200,15 @@ func (s *RedisCache) SpendUsage(ctx context.Context, redisKey string, amount, li
 	// NOTE: skip redisKeyPrefix as it's already in PeekCost
 	v, err := s.PeekUsage(ctx, redisKey)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("spend usage - peek: %w", err)
 	}
 	if v >= limit {
-		return v, proto.ErrLimitExceeded
+		return v, proto.ErrQuotaExceeded
 	}
 	cacheKey := fmt.Sprintf("%s%s", redisKeyPrefix, redisKey)
 	value, err := s.client.IncrBy(ctx, cacheKey, amount).Result()
 	if err != nil {
-		return v, err
+		return v, fmt.Errorf("spend usage - incrby: %w", err)
 	}
 	return value, nil
 }

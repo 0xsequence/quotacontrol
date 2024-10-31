@@ -42,7 +42,7 @@ type ErrorConfig struct {
 
 func (e ErrorConfig) Apply() {
 	if e.MessageQuota != "" {
-		proto.ErrLimitExceeded.Message = e.MessageQuota
+		proto.ErrQuotaExceeded.Message = e.MessageQuota
 	}
 	if e.MessageRate != "" {
 		proto.ErrRateLimit.Message = e.MessageRate
