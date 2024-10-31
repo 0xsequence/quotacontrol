@@ -383,7 +383,9 @@ func TestJWT(t *testing.T) {
 	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,
 	}
-	quotaOptions := middleware.Options{}
+	quotaOptions := middleware.Options{
+		BaseRequestCost: 1,
+	}
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.Session(authOptions))
