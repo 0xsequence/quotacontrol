@@ -28,7 +28,7 @@ func EnsurePermission(client Client, minPermission proto.UserPermission, o Optio
 
 			ok, err := client.CheckPermission(ctx, q.GetProjectID(), minPermission)
 			if err != nil {
-				o.ErrHandler(r, w, proto.ErrUnauthorized.WithCause(err))
+				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCause(err))
 				return
 			}
 			if !ok {

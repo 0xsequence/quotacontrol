@@ -9,11 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 type Notifier interface {

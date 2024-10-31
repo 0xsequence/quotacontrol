@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler {

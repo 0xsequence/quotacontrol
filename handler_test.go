@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -21,6 +20,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 var (
@@ -376,7 +377,7 @@ func TestJWT(t *testing.T) {
 	server, cleanup := test.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	client := quotacontrol.NewClient(nil, Service, cfg, nil)
+	client := quotacontrol.NewClient(slog.Default(), Service, cfg, nil)
 
 	authOptions := authcontrol.Options[any]{
 		JWTSecret: Secret,

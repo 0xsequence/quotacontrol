@@ -4,9 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
+
+	"github.com/0xsequence/authcontrol"
 )
 
 type contextKey struct {
