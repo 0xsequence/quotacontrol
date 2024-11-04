@@ -27,7 +27,7 @@ func TestRateLimiter(t *testing.T) {
 	}
 
 	cfg := quotacontrol.ErrorConfig{
-		MessageRate: _CustomErrorMessage,
+		MessageRatePublic: _CustomErrorMessage,
 	}
 	cfg.Apply()
 
@@ -57,6 +57,5 @@ func TestRateLimiter(t *testing.T) {
 		err := proto.WebRPCError{}
 		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
 		assert.Contains(t, err.Message, _CustomErrorMessage)
-		assert.Contains(t, err.Message, proto.SessionType_Public.String())
 	}
 }

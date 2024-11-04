@@ -593,6 +593,7 @@ func TestSession(t *testing.T) {
 		{Session: proto.SessionType_Public},
 		{Session: proto.SessionType_Wallet},
 		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
+		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey + "a"},
 		{Session: proto.SessionType_Project},
 		{Session: proto.SessionType_Project, AccessKey: AccessKey},
 		{Session: proto.SessionType_User},
@@ -640,18 +641,34 @@ func TestSession(t *testing.T) {
 						return
 					}
 
-					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
-					assert.True(t, ok)
 					rateLimit := h.Get(middleware.HeaderCreditsLimit)
 					switch tc.Session {
 					case proto.SessionType_Public:
+						assert.True(t, ok)
+						assert.NoError(t, err)
 						assert.Equal(t, publicRPM, rateLimit)
-					case proto.SessionType_AccessKey, proto.SessionType_Project:
+					case proto.SessionType_AccessKey:
+						if tc.AccessKey == AccessKey {
+							assert.True(t, ok)
+							assert.NoError(t, err)
+							assert.Equal(t, quotaRPM, rateLimit)
+							assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
+						} else {
+							assert.False(t, ok)
+							assert.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
+						}
+					case proto.SessionType_Project:
+						assert.True(t, ok)
+						assert.NoError(t, err)
 						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
 					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
+						assert.True(t, ok)
+						assert.NoError(t, err)
 						assert.Equal(t, accountRPM, rateLimit)
 					case proto.SessionType_InternalService:
+						assert.True(t, ok)
+						assert.NoError(t, err)
 						assert.Equal(t, serviceRPM, rateLimit)
 					}
 				})
