@@ -140,6 +140,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
 			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
 				logger.Warn("unexpected client error", slog.Any("error", err))
+				return nil, nil
 			}
 			return nil, err
 		}
