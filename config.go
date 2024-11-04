@@ -18,7 +18,7 @@ type Config struct {
 	DefaultUsage  *int64          `toml:"default_usage"`
 	LRUSize       int             `toml:"lru_size"`
 	LRUExpiration time.Duration   `toml:"lru_expiration"`
-	ErrorConfig   ErrorConfig     `toml:"errors"`
+	Errors        ErrorConfig     `toml:"errors"`
 
 	// DangerMode is used for debugging
 	DangerMode bool `toml:"danger_mode"`
