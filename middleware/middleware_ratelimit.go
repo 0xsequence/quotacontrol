@@ -93,10 +93,11 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 			return httprate.KeyByRealIP(r)
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			session, _ := authcontrol.GetSessionType(ctx)
-			msg := fmt.Sprintf("%s (%s session)", proto.ErrRateLimit.Message, session)
-			o.ErrHandler(r, w, proto.ErrRateLimit.WithMessage(msg))
+			err := proto.ErrRateLimited
+			if _, ok := GetAccessQuota(r.Context()); ok {
+				err = proto.ErrQuotaRateLimit
+			}
+			o.ErrHandler(r, w, err)
 		}),
 	}
 

@@ -1,6 +1,7 @@
 package quotacontrol
 
 import (
+	"cmp"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/middleware"
@@ -36,15 +37,14 @@ type RedisConfig struct {
 }
 
 type ErrorConfig struct {
-	MessageQuota string `toml:"quota_message"`
-	MessageRate  string `toml:"ratelimit_message"`
+	MessageQuota      string `toml:"quota_message"`
+	MessageRate       string `toml:"ratelimit_message"`
+	MessageRatePublic string `toml:"public_message"`
 }
 
+// Apply applies the error configuration globally.
 func (e ErrorConfig) Apply() {
-	if e.MessageQuota != "" {
-		proto.ErrQuotaExceeded.Message = e.MessageQuota
-	}
-	if e.MessageRate != "" {
-		proto.ErrRateLimit.Message = e.MessageRate
-	}
+	proto.ErrQuotaExceeded.Message = cmp.Or(e.MessageQuota, proto.ErrQuotaExceeded.Message)
+	proto.ErrQuotaRateLimit.Message = cmp.Or(e.MessageRate, proto.ErrQuotaRateLimit.Message)
+	proto.ErrRateLimited.Message = cmp.Or(e.MessageRatePublic, proto.ErrRateLimited.Message)
 }
