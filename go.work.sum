@@ -7,8 +7,8 @@ cloud.google.com/go/compute/metadata v0.5.1/go.mod h1:C66sj2AluDcIqakBq/M8lw8/yb
 cloud.google.com/go/iam v1.2.1/go.mod h1:3VUIJDPpwT6p/amXRC5GY8fCCh70lxPygguVtI0Z4/g=
 cloud.google.com/go/monitoring v1.21.0/go.mod h1:tuJ+KNDdJbetSsbSGTqnaBvbauS5kr3Q/koy3Up6r+4=
 cloud.google.com/go/storage v1.44.0/go.mod h1:wpPblkIuMP5jCB/E48Pz9zIo2S/zD8g+ITmxKkPCITE=
-github.com/0xsequence/authcontrol v0.1.0 h1:FB8vsYuhn0Z5tXhl9n/S17GOY+5pJ+iWnCYEgwR/nHY=
-github.com/0xsequence/authcontrol v0.1.0/go.mod h1:wicKJcmJYJU6jn07JBMqwxcAzyFm2BtfAzWpnL/40g8=
+github.com/0xsequence/authcontrol v0.2.0 h1:7enDdLZSP3ngtMD7P6R6/yN1avgUFeHia0J8J8RKV5A=
+github.com/0xsequence/authcontrol v0.2.0/go.mod h1:wicKJcmJYJU6jn07JBMqwxcAzyFm2BtfAzWpnL/40g8=
 github.com/0xsequence/go-ethauth v0.13.0/go.mod h1:f3kx39S9F+W+qvZEB6bkKKbpUstmyB7goUntO3wvlhg=
 github.com/BurntSushi/toml v1.2.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.1/go.mod h1:itPGVDKf9cC/ov4MdvJ2QZ0khw4bfoo9jzwTJlaxy2k=

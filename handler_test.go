@@ -71,7 +71,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 	}
 
-	authOptions := authcontrol.Options[any]{
+	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
 	}
 	quotaOptions := middleware.Options{}
@@ -380,7 +380,7 @@ func TestJWT(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	authOptions := authcontrol.Options[any]{
+	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
 	}
 	quotaOptions := middleware.Options{
@@ -461,7 +461,7 @@ func TestJWTAccess(t *testing.T) {
 
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
-	authOptions := authcontrol.Options[any]{
+	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
 	}
 	quotaOptions := middleware.Options{}
@@ -563,9 +563,10 @@ func TestSession(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	authOptions := authcontrol.Options[struct{}]{
-		JWTSecret: Secret,
-		UserStore: server.Store,
+	authOptions := authcontrol.Options{
+		JWTSecret:    Secret,
+		UserStore:    server.Store,
+		ProjectStore: server.Store,
 	}
 	quotaOptions := middleware.Options{}
 
@@ -582,6 +583,7 @@ func TestSession(t *testing.T) {
 	ctx := context.Background()
 	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
+	server.Store.AddProject(ctx, ProjectID)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
@@ -688,9 +690,10 @@ func TestSessionDisabled(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	authOptions := authcontrol.Options[struct{}]{
-		JWTSecret: Secret,
-		UserStore: server.Store,
+	authOptions := authcontrol.Options{
+		JWTSecret:    Secret,
+		UserStore:    server.Store,
+		ProjectStore: server.Store,
 	}
 	quotaOptions := middleware.Options{}
 
@@ -707,6 +710,7 @@ func TestSessionDisabled(t *testing.T) {
 	ctx := context.Background()
 	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
+	server.Store.AddProject(ctx, ProjectID)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
