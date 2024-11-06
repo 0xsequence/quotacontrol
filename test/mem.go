@@ -17,6 +17,7 @@ func NewMemoryStore() *MemoryStore {
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       usage.NewRecord(),
 		users:       map[string]bool{},
+		projects:    map[uint64]struct{}{},
 		permissions: map[uint64]map[string]userPermission{},
 	}
 }
@@ -34,6 +35,7 @@ type MemoryStore struct {
 	accessKeys  map[string]proto.AccessKey
 	usage       usage.Record
 	users       map[string]bool
+	projects    map[uint64]struct{}
 	permissions map[uint64]map[string]userPermission
 }
 
@@ -175,14 +177,31 @@ func (m *MemoryStore) AddUser(ctx context.Context, userID string, admin bool) er
 	return nil
 }
 
-func (m *MemoryStore) GetUser(ctx context.Context, userID string) (*struct{}, bool, error) {
+func (m *MemoryStore) GetUser(ctx context.Context, userID string) (any, bool, error) {
 	m.Lock()
 	v, ok := m.users[userID]
 	m.Unlock()
 	if !ok {
 		return nil, false, nil
 	}
-	return new(struct{}), v, nil
+	return struct{}{}, v, nil
+}
+
+func (m *MemoryStore) AddProject(ctx context.Context, projectID uint64) error {
+	m.Lock()
+	m.projects[projectID] = struct{}{}
+	m.Unlock()
+	return nil
+}
+
+func (m *MemoryStore) GetProject(ctx context.Context, projectID uint64) (any, error) {
+	m.Lock()
+	_, ok := m.projects[projectID]
+	m.Unlock()
+	if !ok {
+		return nil, nil
+	}
+	return struct{}{}, nil
 }
 
 func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
