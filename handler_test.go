@@ -15,7 +15,7 @@ import (
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/0xsequence/quotacontrol/test"
+	"github.com/0xsequence/quotacontrol/tests/mock"
 	"github.com/go-chi/chi/v5"
 	"github.com/goware/logger"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +36,7 @@ var (
 
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	cfg := newConfig()
-	server, cleanup := test.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
 	now := time.Now()
@@ -298,7 +298,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 func TestDefaultKey(t *testing.T) {
 	cfg := newConfig()
-	server, cleanup := test.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
 	now := time.Now()
@@ -374,7 +374,7 @@ func TestJWT(t *testing.T) {
 	counter := spendingCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := test.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
 	logger := logger.NewLogger(logger.LogLevel_INFO)
@@ -453,7 +453,7 @@ func TestJWTAccess(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := test.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
 	logger := logger.NewLogger(logger.LogLevel_INFO)
@@ -557,7 +557,7 @@ func TestSession(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := test.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
 	logger := logger.NewLogger(logger.LogLevel_INFO)
@@ -684,7 +684,7 @@ func TestSessionDisabled(t *testing.T) {
 
 	cfg := newConfig()
 	cfg.Enabled = false
-	server, cleanup := test.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
 	logger := logger.NewLogger(logger.LogLevel_INFO)
