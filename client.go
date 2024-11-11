@@ -199,7 +199,7 @@ func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermi
 	}
 	perm, _, err := c.FetchPermission(ctx, projectID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("fetch permission: %w", err)
 	}
 	return perm >= minPermission, nil
 }
@@ -227,7 +227,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	perm, access, err = c.quotaClient.GetUserPermission(ctx, projectID, userID)
 	if err != nil {
 		logger.Error("unexpected client error", slog.Any("error", err))
-		return proto.UserPermission_UNAUTHORIZED, nil, err
+		return proto.UserPermission_UNAUTHORIZED, nil, fmt.Errorf("get user permission from quotacontrol server: %w", err)
 	}
 	return perm, access, nil
 }

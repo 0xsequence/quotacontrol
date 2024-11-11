@@ -19,20 +19,20 @@ func EnsurePermission(client Client, minPermission proto.UserPermission, o Optio
 
 			ctx := r.Context()
 
-			// check if we alreayd have a project ID from the JWT
+			// check if we already have a project ID from the JWT
 			q, ok := GetAccessQuota(ctx)
 			if !ok || !q.IsJWT() {
-				o.ErrHandler(r, w, proto.ErrUnauthorizedUser)
+				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("no AccessQuota in context"))
 				return
 			}
 
 			ok, err := client.CheckPermission(ctx, q.GetProjectID(), minPermission)
 			if err != nil {
-				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCause(err))
+				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("check permission: %w", err))
 				return
 			}
 			if !ok {
-				o.ErrHandler(r, w, proto.ErrUnauthorizedUser)
+				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("not enough permissions"))
 				return
 			}
 
