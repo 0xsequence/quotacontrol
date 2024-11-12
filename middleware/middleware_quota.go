@@ -24,6 +24,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			)
 
 			if session == proto.SessionType_Project {
+				// fetch and verify project quota
 				id, ok := authcontrol.GetProjectID(ctx)
 				if !ok {
 					o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no project ID found in context"))
@@ -37,7 +38,8 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 					return
 				}
 
-				if q != nil {
+				// project session + access key = read permissions (no need to verify project permissions)
+				if _, ok := authcontrol.GetAccessKey(ctx); !ok && q != nil {
 					if ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ); !ok {
 						if err == nil {
 							err = proto.ErrUnauthorizedUser.WithCausef("verify quota: no read permission")
@@ -49,6 +51,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				}
 			}
 
+			// fetch and verify access key quota
 			if session.Is(proto.SessionType_AccessKey, proto.SessionType_Project) {
 				accessKey, ok := authcontrol.GetAccessKey(ctx)
 				if !ok && session == proto.SessionType_AccessKey {
@@ -57,6 +60,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				}
 
 				if ok {
+					// check that project ID matches
 					if projectID != 0 {
 						if v, _ := proto.GetProjectID(accessKey); v != projectID {
 							o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
@@ -64,6 +68,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 						}
 					}
 
+					// fetch and verify access key quota
 					q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
 					if err != nil {
 						o.ErrHandler(r, w, err)
@@ -82,6 +87,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 					}
 				}
 			}
+
 			if quota != nil {
 				ctx = withAccessQuota(ctx, quota)
 				w.Header().Set(HeaderQuotaLimit, strconv.FormatInt(quota.Limit.FreeMax, 10))
