@@ -21,7 +21,7 @@ const (
 	HeaderRetryAfter       = "Retry-After"
 )
 
-const _RateLimitWindow = 1 * time.Minute
+const rateLimitWindow = 1 * time.Minute
 
 const (
 	DefaultPublicRate  = 3000
@@ -101,7 +101,7 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 		}),
 	}
 
-	limiter := httprate.NewRateLimiter(cfg.PublicRPM, _RateLimitWindow, options...)
+	limiter := httprate.NewRateLimiter(cfg.PublicRPM, rateLimitWindow, options...)
 
 	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
