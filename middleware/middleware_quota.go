@@ -38,13 +38,19 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 					return
 				}
 
-				// project session + access key = read permissions (no need to verify project permissions)
-				if _, ok := authcontrol.GetAccessKey(ctx); !ok && q != nil {
-					if ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ); !ok {
-						if err == nil {
-							err = proto.ErrUnauthorizedUser.WithCausef("verify quota: no read permission")
+				if q != nil {
+					if _, ok := authcontrol.GetAccount(ctx); ok {
+						// if the jwt has an account, check if the account permission
+						if ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ); !ok {
+							if err == nil {
+								err = proto.ErrUnauthorizedUser.WithCausef("verify quota: no read permission")
+							}
+							o.ErrHandler(r, w, err)
+							return
 						}
-						o.ErrHandler(r, w, err)
+					} else if _, ok := authcontrol.GetAccessKey(ctx); !ok {
+						// otherwise make sure the request has an access key
+						o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no access key found in context"))
 						return
 					}
 					quota = q
