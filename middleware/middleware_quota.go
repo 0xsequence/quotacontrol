@@ -4,9 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/0xsequence/quotacontrol/proto"
-
 	"github.com/0xsequence/authcontrol"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler {
@@ -27,7 +26,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			if session == proto.SessionType_Project {
 				id, ok := authcontrol.GetProjectID(ctx)
 				if !ok {
-					o.ErrHandler(r, w, proto.ErrUnauthorizedUser)
+					o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no project ID found in context"))
 					return
 				}
 				projectID = id
@@ -41,7 +40,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				if q != nil {
 					if ok, err := client.CheckPermission(ctx, projectID, proto.UserPermission_READ); !ok {
 						if err == nil {
-							err = proto.ErrUnauthorizedUser
+							err = proto.ErrUnauthorizedUser.WithCausef("verify quota: no read permission")
 						}
 						o.ErrHandler(r, w, err)
 						return
@@ -53,7 +52,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			if session.Is(proto.SessionType_AccessKey, proto.SessionType_Project) {
 				accessKey, ok := authcontrol.GetAccessKey(ctx)
 				if !ok && session == proto.SessionType_AccessKey {
-					o.ErrHandler(r, w, proto.ErrUnauthorizedUser)
+					o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no access key found in context"))
 					return
 				}
 

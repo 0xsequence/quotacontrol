@@ -2,14 +2,11 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/logger"
-
-	"github.com/0xsequence/authcontrol"
 )
 
 const (
@@ -19,7 +16,7 @@ const (
 type Options struct {
 	Logger          logger.Logger
 	BaseRequestCost int
-	ErrHandler      authcontrol.ErrHandler
+	ErrHandler      func(r *http.Request, w http.ResponseWriter, err error)
 }
 
 func (o *Options) ApplyDefaults() {
@@ -33,16 +30,7 @@ func (o *Options) ApplyDefaults() {
 }
 
 func errHandler(r *http.Request, w http.ResponseWriter, err error) {
-	rpcErr, ok := err.(proto.WebRPCError)
-	if !ok {
-		rpcErr = proto.ErrWebrpcEndpoint.WithCause(err)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(rpcErr.HTTPStatus)
-
-	respBody, _ := json.Marshal(rpcErr)
-	w.Write(respBody)
+	proto.RespondWithError(w, err)
 }
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
