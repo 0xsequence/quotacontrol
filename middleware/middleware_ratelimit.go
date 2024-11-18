@@ -54,6 +54,7 @@ func (r RateLimitConfig) GetRateLimit(ctx context.Context, baseRequestCost int) 
 	return r.PublicRPM * baseRequestCost
 }
 
+// RateLimit is a middleware that limits the number of requests per minute.
 func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) func(next http.Handler) http.Handler {
 	if !cfg.Enabled {
 		return func(next http.Handler) http.Handler {
