@@ -79,6 +79,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(addCost(_credits * 2))
@@ -388,6 +389,7 @@ func TestJWT(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(middleware.EnsureUsage(client, quotaOptions))
@@ -467,6 +469,7 @@ func TestJWTAccess(t *testing.T) {
 	quotaOptions := middleware.Options{}
 
 	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
@@ -573,6 +576,7 @@ func TestSession(t *testing.T) {
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(authcontrol.AccessControl(ACL, authOptions))
@@ -583,7 +587,7 @@ func TestSession(t *testing.T) {
 	ctx := context.Background()
 	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
-	server.Store.AddProject(ctx, ProjectID)
+	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
@@ -664,10 +668,14 @@ func TestSession(t *testing.T) {
 						assert.NoError(t, err)
 						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
-					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
+					case proto.SessionType_Wallet, proto.SessionType_User:
 						assert.True(t, ok)
 						assert.NoError(t, err)
-						assert.Equal(t, accountRPM, rateLimit)
+						if tc.AccessKey != "" {
+							assert.Equal(t, quotaRPM, rateLimit)
+						} else {
+							assert.Equal(t, accountRPM, rateLimit)
+						}
 					case proto.SessionType_InternalService:
 						assert.True(t, ok)
 						assert.NoError(t, err)
@@ -700,6 +708,7 @@ func TestSessionDisabled(t *testing.T) {
 	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
@@ -710,7 +719,7 @@ func TestSessionDisabled(t *testing.T) {
 	ctx := context.Background()
 	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
-	server.Store.AddProject(ctx, ProjectID)
+	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
@@ -778,8 +787,14 @@ func TestSessionDisabled(t *testing.T) {
 					case proto.SessionType_AccessKey, proto.SessionType_Project:
 						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
-					case proto.SessionType_Wallet, proto.SessionType_Admin, proto.SessionType_User:
+					case proto.SessionType_Wallet, proto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
+					case proto.SessionType_Admin:
+						if tc.AccessKey != "" {
+							assert.Equal(t, quotaRPM, rateLimit)
+						} else {
+							assert.Equal(t, accountRPM, rateLimit)
+						}
 					case proto.SessionType_InternalService:
 						assert.Equal(t, serviceRPM, rateLimit)
 					}

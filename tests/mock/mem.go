@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -17,7 +18,7 @@ func NewMemoryStore() *MemoryStore {
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       usage.NewRecord(),
 		users:       map[string]bool{},
-		projects:    map[uint64]struct{}{},
+		projects:    map[uint64]*authcontrol.Auth{},
 		permissions: map[uint64]map[string]userPermission{},
 	}
 }
@@ -35,7 +36,7 @@ type MemoryStore struct {
 	accessKeys  map[string]proto.AccessKey
 	usage       usage.Record
 	users       map[string]bool
-	projects    map[uint64]struct{}
+	projects    map[uint64]*authcontrol.Auth
 	permissions map[uint64]map[string]userPermission
 }
 
@@ -187,21 +188,21 @@ func (m *MemoryStore) GetUser(ctx context.Context, userID string) (any, bool, er
 	return struct{}{}, v, nil
 }
 
-func (m *MemoryStore) AddProject(ctx context.Context, projectID uint64) error {
+func (m *MemoryStore) AddProject(ctx context.Context, projectID uint64, auth *authcontrol.Auth) error {
 	m.Lock()
-	m.projects[projectID] = struct{}{}
+	m.projects[projectID] = auth
 	m.Unlock()
 	return nil
 }
 
-func (m *MemoryStore) GetProject(ctx context.Context, projectID uint64) (any, error) {
+func (m *MemoryStore) GetProject(ctx context.Context, projectID uint64) (any, *authcontrol.Auth, error) {
 	m.Lock()
-	_, ok := m.projects[projectID]
+	auth, ok := m.projects[projectID]
 	m.Unlock()
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return struct{}{}, nil
+	return struct{}{}, auth, nil
 }
 
 func (m *MemoryStore) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
