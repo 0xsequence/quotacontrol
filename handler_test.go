@@ -578,8 +578,8 @@ func TestSession(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
-	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(authcontrol.AccessControl(ACL, authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
 
 	r.Handle("/*", &counter)
@@ -710,9 +710,9 @@ func TestSessionDisabled(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
+	r.Use(authcontrol.AccessControl(ACL, authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
-	r.Use(authcontrol.AccessControl(ACL, authOptions))
 
 	r.Handle("/*", &counter)
 
