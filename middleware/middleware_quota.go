@@ -8,6 +8,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
+// VerifyQuota middleware fetches and verify the quota from access key or project ID.
 func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler {
 	o.ApplyDefaults()
 
@@ -58,39 +59,37 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			}
 
 			// fetch and verify access key quota
-			if session.Is(proto.SessionType_AccessKey, proto.SessionType_Project) {
-				accessKey, ok := authcontrol.GetAccessKey(ctx)
-				if !ok && session == proto.SessionType_AccessKey {
-					o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no access key found in context"))
-					return
-				}
+			accessKey, ok := authcontrol.GetAccessKey(ctx)
+			if !ok && session == proto.SessionType_AccessKey {
+				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no access key found in context"))
+				return
+			}
 
-				if ok {
-					// check that project ID matches
-					if projectID != 0 {
-						if v, _ := proto.GetProjectID(accessKey); v != projectID {
-							o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
-							return
-						}
-					}
-
-					// fetch and verify access key quota
-					q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
-					if err != nil {
-						o.ErrHandler(r, w, err)
+			if ok {
+				// check that project ID matches
+				if projectID != 0 {
+					if v, _ := proto.GetProjectID(accessKey); v != projectID {
+						o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
 						return
 					}
-					if q != nil {
-						if !q.IsActive() {
-							o.ErrHandler(r, w, proto.ErrAccessKeyNotFound)
-							return
-						}
-						if quota != nil && quota.AccessKey.ProjectID != q.AccessKey.ProjectID {
-							o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
-							return
-						}
-						quota = q
+				}
+
+				// fetch and verify access key quota
+				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
+				if err != nil {
+					o.ErrHandler(r, w, err)
+					return
+				}
+				if q != nil {
+					if !q.IsActive() {
+						o.ErrHandler(r, w, proto.ErrAccessKeyNotFound)
+						return
 					}
+					if quota != nil && quota.AccessKey.ProjectID != q.AccessKey.ProjectID {
+						o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
+						return
+					}
+					quota = q
 				}
 			}
 
