@@ -671,11 +671,11 @@ func TestSession(t *testing.T) {
 					case proto.SessionType_Wallet, proto.SessionType_User:
 						assert.True(t, ok)
 						assert.NoError(t, err)
+						limit := accountRPM
 						if tc.AccessKey != "" {
-							assert.Equal(t, quotaRPM, rateLimit)
-						} else {
-							assert.Equal(t, accountRPM, rateLimit)
+							limit = quotaRPM
 						}
+						assert.Equal(t, limit, rateLimit)
 					case proto.SessionType_InternalService:
 						assert.True(t, ok)
 						assert.NoError(t, err)
@@ -790,11 +790,11 @@ func TestSessionDisabled(t *testing.T) {
 					case proto.SessionType_Wallet, proto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
 					case proto.SessionType_Admin:
+						limit := accountRPM
 						if tc.AccessKey != "" {
-							assert.Equal(t, quotaRPM, rateLimit)
-						} else {
-							assert.Equal(t, accountRPM, rateLimit)
+							limit = quotaRPM
 						}
+						assert.Equal(t, limit, rateLimit)
 					case proto.SessionType_InternalService:
 						assert.Equal(t, serviceRPM, rateLimit)
 					}
