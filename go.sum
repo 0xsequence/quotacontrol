@@ -1,5 +1,5 @@
-github.com/0xsequence/authcontrol v0.3.1 h1:2GS5WcmhtXrS3+qkAyGwQpnglijJZ7ZNnW6DS2qS6y0=
-github.com/0xsequence/authcontrol v0.3.1/go.mod h1:wicKJcmJYJU6jn07JBMqwxcAzyFm2BtfAzWpnL/40g8=
+github.com/0xsequence/authcontrol v0.3.2 h1:oiLR2fNVEpeJu3SF1cWHQORRAVs1fRj/K+wRe/OJ5Mo=
+github.com/0xsequence/authcontrol v0.3.2/go.mod h1:wicKJcmJYJU6jn07JBMqwxcAzyFm2BtfAzWpnL/40g8=
 github.com/0xsequence/ethkit v1.28.0 h1:11p4UXXvYnixQk01+qmAcOF71N9DlSeMcEMbaCPtjaY=
 github.com/0xsequence/ethkit v1.28.0/go.mod h1:rv0FAIyEyN0hhwGefbduAz4ujmyjyJXhCd6a0/yF3tk=
 github.com/0xsequence/go-sequence v0.43.0 h1:PErMuTg4PeaamJutEJ6tAjrFBA8z0t6lvT9LOVC5RMs=
