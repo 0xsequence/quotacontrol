@@ -95,31 +95,8 @@ struct ResourceAccess
   - subscription: Subscription
   - minter: Minter
 
-# 1000-1099: AuthControl errors
-error 1000 Unauthorized     "Unauthorized access"                 HTTP 401
-error 1001 PermissionDenied "Permission denied"                   HTTP 403
-error 1002 SessionExpired   "Session expired"                     HTTP 403
-error 1003 MethodNotFound   "Method not found"                    HTTP 404
-error 1004 RequestConflict  "Conflict with target resource"       HTTP 409
-error 1005 Aborted          "Request aborted"                     HTTP 400
-error 1006 Geoblocked       "Geoblocked region"                   HTTP 451
-error 1007 RateLimited      "Rate-limited. Please slow down."     HTTP 429
-# 1100-1199: AccessKey/Project errors
-error 1100 ProjectNotFound   "Project not found"                  HTTP 401
-error 1101 AccessKeyNotFound "Access key not found"               HTTP 401
-error 1102 AccessKeyMismatch "Access key mismatch"                HTTP 409
-error 1103 InvalidOrigin     "Invalid origin for Access Key"      HTTP 403
-error 1104 InvalidService    "Service not enabled for Access key" HTTP 403
-error 1105 UnauthorizedUser  "Unauthorized user"                  HTTP 403
-# 1200-1299: Limit errors
-error 1200 QuotaExceeded     "Quota request exceeded"             HTTP 429
-error 1201 QuotaRateLimit    "Quota rate limit exceeded"          HTTP 429
-# 1300-1399: Access Key management errors
-error 1300 NoDefaultKey      "No default access key found"        HTTP 403
-error 1301 MaxAccessKeys     "Access keys limit reached"          HTTP 403
-error 1302 AtLeastOneKey     "You need at least one Access Key"   HTTP 403
-# 1900-1999: Other errors
-error 1900 Timeout           "Request timed out"                  HTTP 408
+import "authcontrol.errors.ridl"
+import "errors.ridl"
 
 service QuotaControl
   # Project
