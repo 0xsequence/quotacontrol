@@ -15,6 +15,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func makeIP(ipv6 bool) net.IP {
+	size := 4
+	if ipv6 {
+		size = 16
+	}
+	buf := make([]byte, size)
+	for i := 0; i < size/4; i++ {
+		binary.LittleEndian.PutUint32(buf[i*4:], rand.Uint32())
+	}
+	return net.IP(buf)
+}
+
 func TestRateLimiter(t *testing.T) {
 	const (
 		_CustomErrorMessage = "Custom error message"
@@ -37,25 +49,42 @@ func TestRateLimiter(t *testing.T) {
 	}, nil, middleware.Options{ErrHandler: eh})
 	handler := rl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 
-	buf := make([]byte, 4)
 	for i := 0; i < 10; i++ {
-		ip := rand.Uint32()
-		binary.LittleEndian.PutUint32(buf, ip)
-	}
-	ipAddress := net.IP(buf).String()
-	for i := 0; i < 20; i++ {
-		req, _ := http.NewRequest("GET", "/", nil)
-		req.RemoteAddr = ipAddress
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-		if i < 10 {
-			assert.Equal(t, http.StatusOK, w.Code)
-			continue
+		ipAddress := makeIP(false).String()
+		for i := 0; i < 20; i++ {
+			req, _ := http.NewRequest("GET", "/", nil)
+			req.RemoteAddr = ipAddress
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			if i < 10 {
+				assert.Equal(t, http.StatusOK, w.Code)
+				continue
+			}
+			assert.Equal(t, http.StatusTooManyRequests, w.Code)
+			assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
+			err := proto.WebRPCError{}
+			assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
+			assert.Contains(t, err.Message, _CustomErrorMessage)
 		}
-		assert.Equal(t, http.StatusTooManyRequests, w.Code)
-		assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
-		err := proto.WebRPCError{}
-		assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
-		assert.Contains(t, err.Message, _CustomErrorMessage)
 	}
+
+	for i := 0; i < 80; i++ {
+		ipAddress := makeIP(true).String()
+		for i := 0; i < 20; i++ {
+			req, _ := http.NewRequest("GET", "/", nil)
+			req.RemoteAddr = ipAddress
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			if i < 10 {
+				assert.Equal(t, http.StatusOK, w.Code)
+				continue
+			}
+			assert.Equal(t, http.StatusTooManyRequests, w.Code)
+			assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
+			err := proto.WebRPCError{}
+			assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
+			assert.Contains(t, err.Message, _CustomErrorMessage)
+		}
+	}
+
 }
