@@ -5,17 +5,18 @@
 # Sample usage in makefile:
 #
 # import-errors:
-#	curl https://raw.githubusercontent.com/0xsequence/quotacontrol/refs/heads/master/scripts/import.sh | sh;
+#	curl https://raw.githubusercontent.com/0xsequence/quotacontrol/refs/heads/master/scripts/import.sh | [PKG=package] sh;
 
-PKG="0xsequence/quotacontrol"
-TAG=$(cat go.mod | grep -v "//" | grep $PKG | awk '{print$ 2}')
-URL="https://raw.githubusercontent.com/$PKG/refs/tags/$TAG/proto/quotacontrol.ridl"
+PKG="${PKG:-"0xsequence/quotacontrol"}"
 
-COMMIT=$(echo $TAG | cut -d'-' -f 3)
-if [[ "$TAG" != "$COMMIT" ]]; then
-    URL="https://raw.githubusercontent.com/$PKG/refs/heads/$COMMIT/proto/quotacontrol.ridl";
+echo $PKG
+
+VERSION=$(cat go.mod | grep -v "//" | grep $PKG | awk '{print$ 2}')
+REF="tags"
+COMMIT=$(echo $VERSION | cut -d'-' -f 3)
+if [[ "$VERSION" != "$COMMIT" ]]; then
+    REF="heads"
+    VERSION="$COMMIT"
 fi
 
-printf "# $PKG $TAG \n";
-curl -s $URL | grep "^error 1";
-printf "\n"
+curl -s "https://raw.githubusercontent.com/$PKG/refs/$REF/$VERSION/proto/errors.ridl" > ./proto/$(basename "$PKG").errors.ridl

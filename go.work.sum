@@ -83,8 +83,11 @@ github.com/supranational/blst v0.3.12/go.mod h1:jZJtfjgudtNl4en1tzwPIV3KjUnQUvG3
 github.com/supranational/blst v0.3.13/go.mod h1:jZJtfjgudtNl4en1tzwPIV3KjUnQUvG3/j+w+fVonLw=
 github.com/tyler-smith/go-bip39 v1.1.0/go.mod h1:gUYDtqQw1JS3ZJ8UWVcGTGqqr6YIN3CWg+kkNaLt55U=
 github.com/webrpc/gen-golang v0.15.0/go.mod h1:qy1qEWMlTvrRzjSuQLy+176RqNaX1ymUULDtlo7Dapo=
+github.com/webrpc/gen-golang v0.17.0/go.mod h1:qy1qEWMlTvrRzjSuQLy+176RqNaX1ymUULDtlo7Dapo=
 github.com/webrpc/gen-typescript v0.14.1/go.mod h1:xQzYnVaSMfcygDXA5SuW8eYyCLHBHkj15wCF7gcJF5Y=
+github.com/webrpc/gen-typescript v0.16.1/go.mod h1:xQzYnVaSMfcygDXA5SuW8eYyCLHBHkj15wCF7gcJF5Y=
 github.com/webrpc/webrpc v0.20.3/go.mod h1:nplt2iyIXMsMCGyQx1NgEXwQOifWqKNLXcFnQnG9dBU=
+github.com/webrpc/webrpc v0.22.0/go.mod h1:eeABnLz9BC4F9GGw6UKebVPkzkFYLrZRlcOvh6o8n10=
 go.opencensus.io v0.24.0/go.mod h1:vNK8G9p7aAivkbmorf4v+7Hgx+Zs0yY+0fOtgBfjQKo=
 go.opentelemetry.io/contrib/detectors/gcp v1.29.0/go.mod h1:GW2aWZNwR2ZxDLdv8OyC2G8zkRoQBuURgV7RPQgcPoU=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0/go.mod h1:B9yO6b04uB80CzjedvewuqDhxJxi11s7/GtiGa8bAjI=
