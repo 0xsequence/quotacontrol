@@ -11,20 +11,20 @@ import (
 
 // UsageUpdater is an interface that allows to update the usage of a service
 type UsageUpdater interface {
-	UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error)
-	UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error)
+	StoreUsageAccessKey(ctx context.Context, service proto.Service, now time.Time, usage map[string]int64) (map[string]bool, error)
+	StoreUsageProject(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]int64) (map[uint64]bool, error)
 }
 
 func NewRecord() Record {
 	return Record{
-		ByProjectID: make(map[uint64]*proto.AccessUsage),
-		ByAccessKey: make(map[string]*proto.AccessUsage),
+		ByProjectID: make(map[uint64]int64),
+		ByAccessKey: make(map[string]int64),
 	}
 }
 
 type Record struct {
-	ByProjectID map[uint64]*proto.AccessUsage
-	ByAccessKey map[string]*proto.AccessUsage
+	ByProjectID map[uint64]int64
+	ByAccessKey map[string]int64
 }
 
 func NewTracker() *Tracker {
@@ -44,28 +44,22 @@ type Tracker struct {
 }
 
 // AddUsage adds the usage of a access key.
-func (u *Tracker) AddKeyUsage(accessKey string, now time.Time, usage proto.AccessUsage) {
+func (u *Tracker) AddKeyUsage(accessKey string, now time.Time, usage int64) {
 	u.dataMutex.Lock()
 	if _, ok := u.usage[now]; !ok {
 		u.usage[now] = NewRecord()
 	}
-	if _, ok := u.usage[now].ByAccessKey[accessKey]; !ok {
-		u.usage[now].ByAccessKey[accessKey] = &proto.AccessUsage{}
-	}
-	u.usage[now].ByAccessKey[accessKey].Add(usage)
+	u.usage[now].ByAccessKey[accessKey] += usage
 	u.dataMutex.Unlock()
 }
 
 // AddUsage adds the usage of a access key.
-func (u *Tracker) AddProjectUsage(projectID uint64, now time.Time, usage proto.AccessUsage) {
+func (u *Tracker) AddProjectUsage(projectID uint64, now time.Time, usage int64) {
 	u.dataMutex.Lock()
 	if _, ok := u.usage[now]; !ok {
 		u.usage[now] = NewRecord()
 	}
-	if _, ok := u.usage[now].ByProjectID[projectID]; !ok {
-		u.usage[now].ByProjectID[projectID] = &proto.AccessUsage{}
-	}
-	u.usage[now].ByProjectID[projectID].Add(usage)
+	u.usage[now].ByProjectID[projectID] += usage
 	u.dataMutex.Unlock()
 }
 
@@ -84,7 +78,7 @@ func (u *Tracker) SyncUsage(ctx context.Context, updater UsageUpdater, service p
 	defer u.syncMutex.Unlock()
 	var errList []error
 	for now, usages := range u.GetUpdates() {
-		keyResult, err := updater.UpdateKeyUsage(ctx, service, now, usages.ByAccessKey)
+		keyResult, err := updater.StoreUsageAccessKey(ctx, service, now, usages.ByAccessKey)
 		if err != nil {
 			errList = append(errList, err)
 		}
@@ -93,10 +87,10 @@ func (u *Tracker) SyncUsage(ctx context.Context, updater UsageUpdater, service p
 			if v {
 				continue
 			}
-			u.AddKeyUsage(accessKey, now, *usages.ByAccessKey[accessKey])
+			u.AddKeyUsage(accessKey, now, usages.ByAccessKey[accessKey])
 		}
 
-		projectResult, err := updater.UpdateProjectUsage(ctx, service, now, usages.ByProjectID)
+		projectResult, err := updater.StoreUsageProject(ctx, service, now, usages.ByProjectID)
 		if err != nil {
 			errList = append(errList, err)
 		}
@@ -105,7 +99,7 @@ func (u *Tracker) SyncUsage(ctx context.Context, updater UsageUpdater, service p
 			if v {
 				continue
 			}
-			u.AddProjectUsage(projectID, now, *usages.ByProjectID[projectID])
+			u.AddProjectUsage(projectID, now, usages.ByProjectID[projectID])
 		}
 
 	}
