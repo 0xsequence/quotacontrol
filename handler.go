@@ -27,9 +27,9 @@ type AccessKeyStore interface {
 }
 
 type UsageStore interface {
-	GetAccessKeyUsage(ctx context.Context, projectID uint64, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
-	GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
-	UpdateAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
+	GetUsageAccessKey(ctx context.Context, projectID uint64, accessKey string, service *proto.Service, min, max time.Time) (int64, error)
+	GetUsageProject(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (int64, error)
+	UpdateUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage int64) error
 }
 
 type CycleStore interface {
@@ -103,59 +103,86 @@ func (h handler) GetTimeRange(ctx context.Context, projectID uint64, from, to *t
 	return *from, from.Add(duration), nil
 }
 
+func (h handler) GetUsageProject(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (int64, error) {
+	min, max, err := h.GetTimeRange(ctx, projectID, from, to)
+	if err != nil {
+		return 0, fmt.Errorf("get time range: %w", err)
+	}
+
+	usage, err := h.store.UsageStore.GetUsageProject(ctx, projectID, service, min, max)
+	if err != nil {
+		return 0, fmt.Errorf("get project usage: %w", err)
+	}
+	return usage, nil
+}
+
+// deprecated: use GetUsageProject instead
 func (h handler) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	min, max, err := h.GetTimeRange(ctx, projectID, from, to)
+	usage, err := h.GetUsageProject(ctx, projectID, service, from, to)
 	if err != nil {
 		return nil, err
 	}
-
-	usage, err := h.store.UsageStore.GetAccountUsage(ctx, projectID, service, min, max)
-	if err != nil {
-		return nil, err
-	}
-	return &usage, nil
+	return &proto.AccessUsage{ValidCompute: usage}, nil
 }
 
+func (h handler) GetUsageAsync(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (int64, error) {
+	min, max, err := h.GetTimeRange(ctx, projectID, from, to)
+	if err != nil {
+		return 0, fmt.Errorf("get time range: %w", err)
+	}
+
+	usage, err := h.store.UsageStore.GetUsageAccessKey(ctx, projectID, "", service, min, max)
+	if err != nil {
+		return 0, fmt.Errorf("get async usage: %w", err)
+	}
+	return usage, nil
+}
+
+// deprecated: use GetUsageAsync instead
 func (h handler) GetAsyncUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	min, max, err := h.GetTimeRange(ctx, projectID, from, to)
+	usage, err := h.GetUsageAsync(ctx, projectID, service, from, to)
 	if err != nil {
 		return nil, err
 	}
-
-	usage, err := h.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, min, max)
-	if err != nil {
-		return nil, err
-	}
-	return &usage, nil
+	return &proto.AccessUsage{ValidCompute: usage}, nil
 }
 
-func (h handler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+func (h handler) GetUsageAccessKey(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (int64, error) {
 	projectID, err := proto.GetProjectID(accessKey)
 	if err != nil {
-		return nil, err
+		return 0, fmt.Errorf("get project id: %w", err)
 	}
 
 	min, max, err := h.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
-		return nil, err
+		return 0, fmt.Errorf("get time range: %w", err)
 	}
 
-	usage, err := h.store.UsageStore.GetAccessKeyUsage(ctx, projectID, accessKey, service, min, max)
+	usage, err := h.store.UsageStore.GetUsageAccessKey(ctx, projectID, accessKey, service, min, max)
+	if err != nil {
+		return 0, fmt.Errorf("get access key usage: %w", err)
+	}
+	return usage, nil
+}
+
+// deprecated: use GetUsageAccessKey instead
+func (h handler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
+	usage, err := h.GetUsageAccessKey(ctx, accessKey, service, from, to)
 	if err != nil {
 		return nil, err
 	}
-	return &usage, nil
+	return &proto.AccessUsage{ValidCompute: usage}, nil
 }
 
 func (h handler) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
-	usage, err := h.GetAccountUsage(ctx, projectID, nil, &min, &max)
+	usage, err := h.store.GetUsageProject(ctx, projectID, nil, min, max)
 	if err != nil {
 		return false, err
 	}
 
 	key := getQuotaKey(projectID, cycle, now)
-	if err := h.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
+	if err := h.cache.UsageCache.SetUsage(ctx, key, usage); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -230,11 +257,20 @@ func (h handler) NotifyEvent(ctx context.Context, projectID uint64, eventType pr
 	return true, nil
 }
 
+// deprecated: use StoreUsageProject instead
 func (h handler) UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error) {
+	input := make(map[uint64]int64, len(usage))
+	for projectID, accessUsage := range usage {
+		input[projectID] = accessUsage.GetTotalUsage()
+	}
+	return h.StoreUsageProject(ctx, service, now, input)
+}
+
+func (h handler) StoreUsageProject(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]int64) (map[uint64]bool, error) {
 	var errs []error
 	m := make(map[uint64]bool, len(usage))
-	for projectID, accessUsage := range usage {
-		err := h.store.UsageStore.UpdateAccessUsage(ctx, projectID, "", service, now, *accessUsage)
+	for projectID, u := range usage {
+		err := h.store.UsageStore.UpdateUsage(ctx, projectID, "", service, now, u)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%d: %w", projectID, err))
 		}
@@ -246,7 +282,16 @@ func (h handler) UpdateProjectUsage(ctx context.Context, service proto.Service, 
 	return m, nil
 }
 
+// deprecated: use UpdateKeyUsage instead
 func (h handler) UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+	input := make(map[string]int64, len(usage))
+	for key, accessUsage := range usage {
+		input[key] = accessUsage.GetTotalUsage()
+	}
+	return h.StoreUsageAccessKey(ctx, service, now, input)
+}
+
+func (h handler) StoreUsageAccessKey(ctx context.Context, service proto.Service, now time.Time, usage map[string]int64) (map[string]bool, error) {
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for key, u := range usage {
@@ -255,7 +300,7 @@ func (h handler) UpdateKeyUsage(ctx context.Context, service proto.Service, now 
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue
 		}
-		if err = h.store.UsageStore.UpdateAccessUsage(ctx, projectID, key, service, now, *u); err != nil {
+		if err = h.store.UsageStore.UpdateUsage(ctx, projectID, key, service, now, u); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 		}
 		m[key] = err == nil

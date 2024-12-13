@@ -6,7 +6,7 @@ go 1.23.2
 
 require (
 	github.com/0xsequence/authcontrol v0.3.8
-	github.com/0xsequence/go-sequence v0.44.2
+	github.com/0xsequence/go-sequence v0.44.3
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/httprate v0.14.1

@@ -255,7 +255,6 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		if err != nil {
 			// limit exceeded
 			if errors.Is(err, proto.ErrQuotaExceeded) {
-				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: cost})
 				return false, total, proto.ErrQuotaExceeded
 			}
 			// ping the server to prepare usage
@@ -281,19 +280,23 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 
 		}
 
-		usage, event := cfg.GetSpendResult(cost, total)
-		if quota.AccessKey.AccessKey == "" {
-			c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
-		} else {
-			c.usage.AddKeyUsage(accessKey, now, usage)
+		ok, usage, event := cfg.GetSpendResult(cost, total)
+		if usage != 0 {
+			if quota.AccessKey.AccessKey == "" {
+				c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
+			} else {
+				c.usage.AddKeyUsage(accessKey, now, usage)
+			}
 		}
-		if usage.LimitedCompute != 0 {
-			return false, total, proto.ErrQuotaExceeded
-		}
+
 		if event != nil {
 			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
 				logger.Error("notify event failed", slog.Any("error", err))
 			}
+		}
+
+		if !ok {
+			return false, total, proto.ErrQuotaExceeded
 		}
 		return true, total, nil
 	}

@@ -114,20 +114,35 @@ service QuotaControl
   - ListAccessKeys(projectId: uint64, active?: bool, service?: Service) => (accessKeys: []AccessKey)
   - DisableAccessKey(accessKey: string) => (ok: bool)
 
-  # Usage
+  # Quota
   - GetProjectQuota(projectId: uint64, now: timestamp) => (accessQuota: AccessQuota)
   - GetAccessQuota(accessKey: string, now: timestamp) => (accessQuota: AccessQuota)
   - ClearAccessQuotaCache(projectID: uint64) => (ok: bool)
+
+  # Usage
+
+  # deprecated: this is now GetUsageProject, and it will be removed in the future
   - GetAccountUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
+  # deprecated: this is now GetUsageAccessKey, and it will be removed in the future
   - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
+  # deprecated: this is now GetUsageAsync, and it will be removed in the future
   - GetAsyncUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
+
+  - GetUsageProject(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: int64)
+  - GetUsageAccessKey(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: int64)
+  - GetUsageAsync(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: int64)
+  
   - PrepareUsage(projectID: uint64, cycle: Cycle, now: timestamp) => (ok: bool)
   - ClearUsage(projectID: uint64, now: timestamp) => (ok: bool)
   - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
+  
+  # deprecated: this is now StoreUsageProject, and it will be removed in the future
   - UpdateProjectUsage(service: Service, now: timestamp, usage: map<uint64,AccessUsage>) => (ok: map<uint64,bool>)
+  # deprecated: this is now StoreUsageAccessKey, and it will be removed in the future
   - UpdateKeyUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
-  # DEPRECATED: this is now UpdateKeyUsage, and it will be removed in the future
-  - UpdateUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
+
+  - StoreUsageProject(service: Service, now: timestamp, usage: map<uint64,int64>) => (ok: map<uint64,bool>)
+  - StoreUsageAccessKey(service: Service, now: timestamp, usage: map<string,int64>) => (ok: map<string,bool>)
 
   # User permissions for a projectId
   - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: ResourceAccess)
