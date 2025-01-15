@@ -375,7 +375,7 @@ func (h handler) RotateAccessKey(ctx context.Context, accessKey string) (*proto.
 	return newAccess, nil
 }
 
-func (h handler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
+func (h handler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, requireOrigin *bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -383,6 +383,9 @@ func (h handler) UpdateAccessKey(ctx context.Context, accessKey string, displayN
 
 	if displayName != nil {
 		access.DisplayName = *displayName
+	}
+	if requireOrigin != nil {
+		access.RequireOrigin = *requireOrigin
 	}
 	if allowedOrigins != nil {
 		origins, err := validation.NewOrigins(allowedOrigins...)
