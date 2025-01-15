@@ -36,6 +36,8 @@ struct AccessKey
   - default: bool
     + go.field.name = Default
     + go.tag.db = is_default
+  - requireOrigin: bool
+    + go.tag.db = require_origin
   - allowedOrigins: []string
     + go.field.type = validation.Origins
     + go.tag.db = allowed_origins
@@ -105,9 +107,9 @@ service QuotaControl
   # Access Key
   - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
   - GetDefaultAccessKey(projectID: uint64) => (accessKey: AccessKey)
-  - CreateAccessKey(projectId: uint64, displayName: string, allowedOrigins: []string, allowedServices: []Service) => (accessKey: AccessKey)
+  - CreateAccessKey(projectId: uint64, displayName: string, requireOrigin: bool, allowedOrigins: []string, allowedServices: []Service) => (accessKey: AccessKey)
   - RotateAccessKey(accessKey: string) => (accessKey: AccessKey)
-  - UpdateAccessKey(accessKey: string, displayName?: string, allowedOrigins?: []string, allowedServices?: []Service) => (accessKey: AccessKey)
+  - UpdateAccessKey(accessKey: string, displayName?: string, requireOrigin?: bool, allowedOrigins?: []string, allowedServices?: []Service) => (accessKey: AccessKey)
   - UpdateDefaultAccessKey(projectID: uint64, accessKey: string) => (ok: bool)
   - ListAccessKeys(projectId: uint64, active?: bool, service?: Service) => (accessKeys: []AccessKey)
   - DisableAccessKey(accessKey: string) => (ok: bool)

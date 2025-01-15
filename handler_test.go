@@ -341,7 +341,7 @@ func TestDefaultKey(t *testing.T) {
 	assert.Equal(t, access, aq.AccessKey)
 	assert.Equal(t, &limit, aq.Limit)
 
-	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, []proto.Service{Service})
+	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, nil, []proto.Service{Service})
 	require.NoError(t, err)
 
 	aq, err = client.FetchKeyQuota(ctx, keys[0], "", now)

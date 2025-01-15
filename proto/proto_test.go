@@ -58,6 +58,15 @@ func TestAccessKeyValidateOrigin(t *testing.T) {
 		}
 		assert.True(t, tk.ValidateOrigin(""))
 	})
+
+	t.Run("enforce origin", func(t *testing.T) {
+		tk := &proto.AccessKey{
+			RequireOrigin:  true,
+			AllowedOrigins: []validation.Origin{},
+		}
+		assert.False(t, tk.ValidateOrigin(""))
+		assert.True(t, tk.ValidateOrigin("http://localhost:8080"))
+	})
 }
 
 func TestGetSpendResult(t *testing.T) {
