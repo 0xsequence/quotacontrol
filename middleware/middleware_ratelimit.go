@@ -104,17 +104,25 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 
 	limiter := httprate.NewRateLimiter(cfg.PublicRPM, rateLimitWindow, options...)
 
-	// The rate limiter middleware
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			if limit := cfg.GetRateLimit(ctx, o.BaseRequestCost); limit > 0 {
-				ctx = httprate.WithRequestLimit(ctx, limit)
-				limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
-			} else {
+			// if the rate limit is 0 or less, skip the rate limiter
+			limit := cfg.GetRateLimit(ctx, o.BaseRequestCost)
+			if limit <= 0 {
 				next.ServeHTTP(w, r)
+				return
 			}
+
+			// if the cost is set to 0, skip the rate limiter
+			if cost, ok := getCost(ctx); ok && cost == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ctx = httprate.WithRequestLimit(ctx, limit)
+			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
