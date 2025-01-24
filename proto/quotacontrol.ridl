@@ -98,7 +98,7 @@ struct ResourceAccess
   - minter: Minter
 
 import "authcontrol.errors.ridl"
-import "errors.ridl"
+import "quotacontrol.errors.ridl"
 
 service QuotaControl
   # Project
@@ -131,3 +131,4 @@ service QuotaControl
 
   # User permissions for a projectId
   - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: ResourceAccess)
+
