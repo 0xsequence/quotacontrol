@@ -6,7 +6,6 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestAccessKeyValidateOrigin(t *testing.T) {
@@ -84,121 +83,86 @@ func TestGetSpendResult(t *testing.T) {
 		Name  string
 		Total int64
 
-		Usage proto.AccessUsage
+		Ok    bool
+		Spent int64
 		Event *proto.EventType
 	}
 
 	for _, tc := range []TestCase{
 		// Include Alert
 		{
-			Name:  "Within_IncludedAlert",
-			Total: limit.FreeWarn - 1,
-			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: nil,
+			Name: "Within_IncludedAlert", Total: limit.FreeWarn - 1,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		{
-			Name:  "Within_IncludedAlert_Exact",
-			Total: limit.FreeWarn,
-			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: proto.Ptr(proto.EventType_FreeWarn),
+			Name: "Within_IncludedAlert_Exact", Total: limit.FreeWarn,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_FreeWarn),
 		},
 		{
-			Name:  "Above_IncludedAlert",
-			Total: limit.FreeWarn + 1,
-			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: proto.Ptr(proto.EventType_FreeWarn),
+			Name: "Above_IncludedAlert", Total: limit.FreeWarn + 1,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_FreeWarn),
 		},
 		{
-			Name:  "Above_IncludedAlert_Exact",
-			Total: limit.FreeWarn + _CU,
-			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: nil,
+			Name: "Above_IncludedAlert_Exact", Total: limit.FreeWarn + _CU,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		// Include Limit
 		{
-			Name:  "Within_IncludedLimit",
-			Total: limit.FreeWarn - 1,
-			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: nil,
+			Name: "Within_IncludedLimit", Total: limit.FreeWarn - 1,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		{
-			Name:  "Within_IncludedLimit_Exact",
-			Total: limit.FreeMax,
-			Usage: proto.AccessUsage{ValidCompute: _CU},
-			Event: proto.Ptr(proto.EventType_FreeMax),
+			Name: "Within_IncludedLimit_Exact", Total: limit.FreeMax,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_FreeMax),
 		},
 		{
-			Name:  "Above_IncludedLimit",
-			Total: limit.FreeMax + 1,
-			Usage: proto.AccessUsage{ValidCompute: _CU - 1, OverCompute: 1},
-			Event: proto.Ptr(proto.EventType_FreeMax),
+			Name: "Above_IncludedLimit", Total: limit.FreeMax + 1,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_FreeMax),
 		},
 		{
-			Name:  "Above_IncludedLimit_Exact",
-			Total: limit.FreeMax + _CU,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: nil,
+			Name: "Above_IncludedLimit_Exact", Total: limit.FreeMax + _CU,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		// Overage Alert
 		{
-			Name:  "Within_OverageAlert",
-			Total: limit.OverWarn - 1,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: nil,
+			Name: "Within_OverageAlert", Total: limit.OverWarn - 1,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		{
-			Name:  "Within_OverageAlert_Exact",
-			Total: limit.OverWarn,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.Ptr(proto.EventType_OverWarn),
+			Name: "Within_OverageAlert_Exact", Total: limit.OverWarn,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_OverWarn),
 		},
 		{
-			Name:  "Above_OverageAlert",
-			Total: limit.OverWarn + 2,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.Ptr(proto.EventType_OverWarn),
+			Name: "Above_OverageAlert", Total: limit.OverWarn + 2,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_OverWarn),
 		},
 		{
-			Name:  "Above_OverageAlert_Exact",
-			Total: limit.OverWarn + _CU,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: nil,
+			Name: "Above_OverageAlert_Exact", Total: limit.OverWarn + _CU,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		// Overage Limit
 		{
-			Name:  "Within_OverageLimit",
-			Total: limit.OverMax - 1,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: nil,
+			Name: "Within_OverageLimit", Total: limit.OverMax - 1,
+			Ok: true, Spent: _CU, Event: nil,
 		},
 		{
-			Name:  "Above_OverageLimit_Exact",
-			Total: limit.OverMax,
-			Usage: proto.AccessUsage{OverCompute: _CU},
-			Event: proto.Ptr(proto.EventType_OverMax),
+			Name: "Above_OverageLimit_Exact", Total: limit.OverMax,
+			Ok: true, Spent: _CU, Event: proto.Ptr(proto.EventType_OverMax),
 		},
 		{
-			Name:  "Above_OverageLimit",
-			Total: limit.OverMax + 2,
-			Usage: proto.AccessUsage{OverCompute: _CU - 2, LimitedCompute: 2},
-			Event: proto.Ptr(proto.EventType_OverMax),
+			Name: "Above_OverageLimit", Total: limit.OverMax + 2,
+			Ok: false, Spent: 3, Event: proto.Ptr(proto.EventType_OverMax),
 		},
 		{
-			Name:  "Above_OverageLimit_More",
-			Total: limit.OverMax + _CU,
-			Usage: proto.AccessUsage{LimitedCompute: _CU},
-			Event: nil,
+			Name: "Above_OverageLimit_More", Total: limit.OverMax + _CU,
+			Ok: false, Spent: 0, Event: nil,
 		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
-			u, evt := limit.GetSpendResult(_CU, tc.Total)
-			assert.Equal(t, tc.Usage, u)
-			if tc.Event == nil {
-				assert.Nil(t, evt)
-				return
-			}
-			require.NotNil(t, evt)
-			assert.Equal(t, tc.Event.String(), evt.String())
+			ok, u, evt := limit.GetSpendResult(_CU, tc.Total)
+			assert.Equal(t, tc.Ok, ok)
+			assert.Equal(t, tc.Spent, u)
+			assert.Equal(t, tc.Event, evt)
 		})
 	}
 
@@ -207,24 +171,40 @@ func TestGetSpendResult(t *testing.T) {
 		t.Run("NoFreeWarn", func(t *testing.T) {
 			// it works for freeMax and 0
 			limit.FreeWarn = limit.FreeMax
-			u, evt := limit.GetSpendResult(1, limit.FreeMax)
-			assert.Equal(t, proto.AccessUsage{ValidCompute: 1}, u)
-			assert.Equal(t, proto.EventType_FreeMax.String(), evt.String())
+			ok, u, evt := limit.GetSpendResult(1, limit.FreeMax)
+			assert.True(t, ok)
+			assert.Equal(t, int64(1), u)
+			assert.Equal(t, proto.EventType_FreeMax, *evt)
 			limit.FreeWarn = 0
-			u, evt = limit.GetSpendResult(1, limit.FreeMax)
-			assert.Equal(t, proto.AccessUsage{ValidCompute: 1}, u)
-			assert.Equal(t, proto.EventType_FreeMax.String(), evt.String())
+			ok, u, evt = limit.GetSpendResult(1, limit.FreeMax)
+			assert.Equal(t, int64(1), u)
+			assert.Equal(t, proto.EventType_FreeMax, *evt)
 		})
 		t.Run("NoOverWarn", func(t *testing.T) {
 			// it works for overMax and 0
 			limit.OverWarn = limit.OverMax
-			u, evt := limit.GetSpendResult(1, limit.OverMax)
-			assert.Equal(t, proto.AccessUsage{OverCompute: 1}, u)
-			assert.Equal(t, proto.EventType_OverMax.String(), evt.String())
+
+			ok, u, evt := limit.GetSpendResult(1, limit.OverMax)
+			assert.True(t, ok)
+			assert.Equal(t, int64(1), u)
+			assert.Equal(t, proto.EventType_OverMax, *evt)
+
+			ok, u, evt = limit.GetSpendResult(2, limit.OverMax+1)
+			assert.False(t, ok)
+			assert.Equal(t, int64(1), u)
+			assert.Equal(t, proto.EventType_OverMax, *evt)
+
 			limit.OverWarn = 0
-			u, evt = limit.GetSpendResult(1, limit.OverMax)
-			assert.Equal(t, proto.AccessUsage{OverCompute: 1}, u)
-			assert.Equal(t, proto.EventType_OverMax.String(), evt.String())
+
+			ok, u, evt = limit.GetSpendResult(1, limit.OverMax)
+			assert.True(t, ok)
+			assert.Equal(t, int64(1), u)
+			assert.Equal(t, proto.EventType_OverMax, *evt)
+
+			ok, u, evt = limit.GetSpendResult(2, limit.OverMax+1)
+			assert.False(t, ok)
+			assert.Equal(t, int64(1), u)
+			assert.Equal(t, proto.EventType_OverMax, *evt)
 		})
 	})
 }
