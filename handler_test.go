@@ -40,7 +40,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	now := time.Now()
-	key := proto.GenerateAccessKey(ProjectID)
+	key := proto.GenerateAccessKey(1, ProjectID, 0)
 
 	const _credits = middleware.DefaultPublicRate / 10
 
@@ -304,8 +304,8 @@ func TestDefaultKey(t *testing.T) {
 
 	now := time.Now()
 	keys := []string{
-		proto.GenerateAccessKey(ProjectID),
-		proto.GenerateAccessKey(ProjectID),
+		proto.GenerateAccessKey(1, ProjectID, 0),
+		proto.GenerateAccessKey(1, ProjectID, 0),
 	}
 
 	limit := proto.Limit{
@@ -370,7 +370,7 @@ func TestDefaultKey(t *testing.T) {
 }
 
 func TestJWT(t *testing.T) {
-	key := proto.GenerateAccessKey(ProjectID)
+	key := proto.GenerateAccessKey(1, ProjectID, 0)
 
 	counter := spendingCounter(0)
 
@@ -440,7 +440,7 @@ func TestJWT(t *testing.T) {
 	})
 
 	t.Run("AccessKeyMismatch", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", proto.GenerateAccessKey(ProjectID+1), token)
+		ok, headers, err := executeRequest(ctx, r, "", proto.GenerateAccessKey(1, ProjectID+1, 0), token)
 		require.ErrorIs(t, err, proto.ErrAccessKeyMismatch)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
