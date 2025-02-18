@@ -64,21 +64,21 @@ func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.
 		storage.CycleStore = store.Cycle{}
 	}
 	return &handler{
-		log:                log.With("service", "quotacontrol"),
-		cache:              cache,
-		store:              storage,
-		limitCounter:       counter,
-		keyEncodingVersion: proto.AccessKeyVersion,
+		log:          log.With("service", "quotacontrol"),
+		cache:        cache,
+		store:        storage,
+		limitCounter: counter,
+		keyVersion:   proto.AccessKeyVersion,
 	}
 }
 
 // handler is the quotacontrol handler backend implementation.
 type handler struct {
-	log                logger.Logger
-	cache              Cache
-	store              Store
-	limitCounter       httprate.LimitCounter
-	keyEncodingVersion int
+	log          logger.Logger
+	cache        Cache
+	store        Store
+	limitCounter httprate.LimitCounter
+	keyVersion   int
 }
 
 var _ proto.QuotaControl = &handler{}
@@ -334,7 +334,7 @@ func (h handler) CreateAccessKey(ctx context.Context, projectID, parentProjectID
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
-		AccessKey:       proto.GenerateAccessKey(h.keyEncodingVersion, projectID, 0),
+		AccessKey:       proto.GenerateAccessKey(h.keyVersion, projectID, 0),
 		Active:          true,
 		Default:         len(list) == 0,
 		RequireOrigin:   requireOrigin,
