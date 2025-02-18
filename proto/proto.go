@@ -3,14 +3,46 @@
 package proto
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/0xsequence/authcontrol/proto"
+	"github.com/0xsequence/quotacontrol/proto/internal/encoding"
 )
 
 func Ptr[T any](v T) *T {
 	return &v
+}
+
+var supportedEncodings = []encoding.Encoding{
+	encoding.V0{},
+	encoding.V1{},
+	encoding.V2{},
+}
+
+var AccessKeyVersion = encoding.V2{}.Version()
+
+func GetProjectID(accessKey string) (projectID, parentProjectID uint64, err error) {
+	var errs []error
+	for _, e := range supportedEncodings {
+		projectID, parentProjectID, err := e.Decode(accessKey)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("decode v%d: %w", e.Version(), err))
+			continue
+		}
+		return projectID, parentProjectID, nil
+	}
+	return 0, 0, errors.Join(errs...)
+}
+
+func GenerateAccessKey(version int, projectID, parentProjectID uint64) string {
+	for _, e := range supportedEncodings {
+		if e.Version() == version {
+			return e.Encode(projectID, parentProjectID)
+		}
+	}
+	return ""
 }
 
 type SessionType = proto.SessionType

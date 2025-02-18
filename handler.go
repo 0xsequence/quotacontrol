@@ -64,21 +64,21 @@ func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.
 		storage.CycleStore = store.Cycle{}
 	}
 	return &handler{
-		log:          log.With("service", "quotacontrol"),
-		cache:        cache,
-		store:        storage,
-		limitCounter: counter,
-		accessKeyGen: proto.GenerateAccessKey,
+		log:                log.With("service", "quotacontrol"),
+		cache:              cache,
+		store:              storage,
+		limitCounter:       counter,
+		keyEncodingVersion: proto.AccessKeyVersion,
 	}
 }
 
 // handler is the quotacontrol handler backend implementation.
 type handler struct {
-	log          logger.Logger
-	cache        Cache
-	store        Store
-	limitCounter httprate.LimitCounter
-	accessKeyGen func(projectID uint64) string
+	log                logger.Logger
+	cache              Cache
+	store              Store
+	limitCounter       httprate.LimitCounter
+	keyEncodingVersion int
 }
 
 var _ proto.QuotaControl = &handler{}
@@ -130,7 +130,7 @@ func (h handler) GetAsyncUsage(ctx context.Context, projectID uint64, service *p
 }
 
 func (h handler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	projectID, err := proto.GetProjectID(accessKey)
+	projectID, _, err := proto.GetProjectID(accessKey)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (h handler) UpdateKeyUsage(ctx context.Context, service proto.Service, now 
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for key, u := range usage {
-		projectID, err := proto.GetProjectID(key)
+		projectID, _, err := proto.GetProjectID(key)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue
@@ -305,7 +305,7 @@ func (h handler) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*pr
 	return nil, proto.ErrNoDefaultKey
 }
 
-func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, requireOrigin bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
+func (h handler) CreateAccessKey(ctx context.Context, projectID, parentProjectID uint64, displayName string, requireOrigin bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	cycle, err := h.store.CycleStore.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
 	if err != nil {
 		return nil, err
@@ -334,7 +334,7 @@ func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayN
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
-		AccessKey:       h.accessKeyGen(projectID),
+		AccessKey:       proto.GenerateAccessKey(h.keyEncodingVersion, projectID, 0),
 		Active:          true,
 		Default:         len(list) == 0,
 		RequireOrigin:   requireOrigin,
@@ -362,7 +362,7 @@ func (h handler) RotateAccessKey(ctx context.Context, accessKey string) (*proto.
 		return nil, err
 	}
 
-	newAccess, err := h.CreateAccessKey(ctx, access.ProjectID, access.DisplayName, access.RequireOrigin, access.AllowedOrigins.ToStrings(), access.AllowedServices)
+	newAccess, err := h.CreateAccessKey(ctx, access.ProjectID, access.ParentProjectID, access.DisplayName, access.RequireOrigin, access.AllowedOrigins.ToStrings(), access.AllowedServices)
 	if err != nil {
 		return nil, err
 	}
