@@ -23,23 +23,23 @@ var supportedEncodings = []encoding.Encoding{
 
 var AccessKeyVersion = encoding.V2{}.Version()
 
-func GetProjectID(accessKey string) (projectID, parentProjectID uint64, err error) {
+func GetProjectID(accessKey string) (projectID, ecosystemID uint64, err error) {
 	var errs []error
 	for _, e := range supportedEncodings {
-		projectID, parentProjectID, err := e.Decode(accessKey)
+		projectID, ecosystemID, err := e.Decode(accessKey)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("decode v%d: %w", e.Version(), err))
 			continue
 		}
-		return projectID, parentProjectID, nil
+		return projectID, ecosystemID, nil
 	}
 	return 0, 0, errors.Join(errs...)
 }
 
-func GenerateAccessKey(version int, projectID, parentProjectID uint64) string {
+func GenerateAccessKey(version int, projectID, ecosystemID uint64) string {
 	for _, e := range supportedEncodings {
 		if e.Version() == version {
-			return e.Encode(projectID, parentProjectID)
+			return e.Encode(projectID, ecosystemID)
 		}
 	}
 	return ""

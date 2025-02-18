@@ -15,31 +15,31 @@ func TestAccessKeyEncoding(t *testing.T) {
 		accessKey := proto.GenerateAccessKey(0, projectID, 0)
 		t.Log("=> k", accessKey)
 
-		outID, outParentID, err := proto.GetProjectID(accessKey)
+		outID, outecosystemID, err := proto.GetProjectID(accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
-		require.Equal(t, uint64(0), outParentID)
+		require.Equal(t, uint64(0), outecosystemID)
 	})
 
 	t.Run("v1", func(t *testing.T) {
 		projectID := uint64(12345)
 		accessKey := proto.GenerateAccessKey(1, projectID, 0)
 		t.Log("=> k", accessKey)
-		outID, parentID, err := proto.GetProjectID(accessKey)
+		outID, ecosystemID, err := proto.GetProjectID(accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
-		require.Equal(t, uint64(0), parentID)
+		require.Equal(t, uint64(0), ecosystemID)
 	})
 	t.Run("v1", func(t *testing.T) {
 		projectID := uint64(12345)
-		parentID := uint64(54321)
-		accessKey := proto.GenerateAccessKey(2, projectID, parentID)
+		ecosystemID := uint64(54321)
+		accessKey := proto.GenerateAccessKey(2, projectID, ecosystemID)
 		t.Log("=> k", accessKey)
 
-		outID, outParentID, err := proto.GetProjectID(accessKey)
+		outID, outecosystemID, err := proto.GetProjectID(accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
-		require.Equal(t, parentID, outParentID)
+		require.Equal(t, ecosystemID, outecosystemID)
 	})
 }
 
