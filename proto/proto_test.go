@@ -30,7 +30,7 @@ func TestAccessKeyEncoding(t *testing.T) {
 		require.Equal(t, projectID, outID)
 		require.Equal(t, uint64(0), ecosystemID)
 	})
-	t.Run("v1", func(t *testing.T) {
+	t.Run("v2", func(t *testing.T) {
 		projectID := uint64(12345)
 		ecosystemID := uint64(54321)
 		accessKey := proto.GenerateAccessKey(2, projectID, ecosystemID)
@@ -40,6 +40,25 @@ func TestAccessKeyEncoding(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
 		require.Equal(t, ecosystemID, outecosystemID)
+	})
+	t.Run("v3", func(t *testing.T) {
+		for _, input := range [][]uint64{
+			{1, 2},
+			{255, 256},
+			{65535, 65536},
+			{4294967295, 4294967296},
+			{18446744073709551615, 1},
+		} {
+			projectID := input[0]
+			ecosystemID := input[1]
+			accessKey := proto.GenerateAccessKey(3, projectID, ecosystemID)
+			t.Logf("=> key: [%d/%d] %s", projectID, ecosystemID, accessKey)
+
+			outID, outecosystemID, err := proto.GetProjectID(accessKey)
+			require.NoError(t, err)
+			require.Equal(t, projectID, outID)
+			require.Equal(t, ecosystemID, outecosystemID)
+		}
 	})
 }
 

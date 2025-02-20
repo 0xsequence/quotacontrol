@@ -78,7 +78,7 @@ type handler struct {
 	cache        Cache
 	store        Store
 	limitCounter httprate.LimitCounter
-	keyVersion   int
+	keyVersion   byte
 }
 
 var _ proto.QuotaControl = &handler{}
