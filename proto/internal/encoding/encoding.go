@@ -111,12 +111,11 @@ func (v V3) Encode(projectID uint64, ecosystemID uint64) string {
 
 	encodedProjectID := encodeUint64(projectID)
 	encodedEcosystemID := encodeUint64(ecosystemID)
-	buf[1] = byte(len(encodedProjectID))
-	buf[2] = byte(len(encodedEcosystemID))
-	copy(buf[3:], encodedProjectID)
-	copy(buf[3+len(encodedProjectID):], encodedEcosystemID)
+	buf[1] = byte(len(encodedProjectID)) + (byte(len(encodedEcosystemID) << 4))
+	copy(buf[2:], encodedProjectID)
+	copy(buf[2+len(encodedProjectID):], encodedEcosystemID)
 
-	rand.Read(buf[3+len(encodedProjectID)+len(encodedEcosystemID):])
+	rand.Read(buf[2+len(encodedProjectID)+len(encodedEcosystemID):])
 
 	return base64.Base64UrlEncode(buf)
 }
@@ -133,11 +132,14 @@ func (v V3) Decode(accessKey string) (projectID uint64, ecosystemID uint64, err 
 		return 0, 0, fmt.Errorf("version mismatch")
 	}
 
-	if projectID, err = decodeUint64(buf[3 : 3+buf[1]]); err != nil {
+	projectLength := buf[1] & 0x0f
+	ecosystemLength := buf[1] >> 4
+
+	if projectID, err = decodeUint64(buf[2 : 2+projectLength]); err != nil {
 		return 0, 0, fmt.Errorf("decode projectID: %w", err)
 	}
 
-	if ecosystemID, err = decodeUint64(buf[3+buf[1] : 3+buf[1]+buf[2]]); err != nil {
+	if ecosystemID, err = decodeUint64(buf[2+projectLength : 2+projectLength+ecosystemLength]); err != nil {
 		return 0, 0, fmt.Errorf("decode ecosystemID: %w", err)
 	}
 
@@ -146,13 +148,13 @@ func (v V3) Decode(accessKey string) (projectID uint64, ecosystemID uint64, err 
 
 func encodeUint64(n uint64) []byte {
 	switch {
-	case n < math.MaxInt8:
+	case n <= math.MaxUint8:
 		return []byte{byte(n)}
-	case n < math.MaxInt16:
+	case n <= math.MaxUint16:
 		buf := make([]byte, 2)
 		binary.BigEndian.PutUint16(buf, uint16(n))
 		return buf
-	case n < math.MaxInt32:
+	case n <= math.MaxUint32:
 		buf := make([]byte, 4)
 		binary.BigEndian.PutUint32(buf, uint32(n))
 		return buf

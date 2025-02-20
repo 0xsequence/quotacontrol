@@ -44,6 +44,7 @@ func TestAccessKeyEncoding(t *testing.T) {
 	t.Run("v3", func(t *testing.T) {
 		for _, input := range [][]uint64{
 			{1, 2},
+			{127, 128},
 			{255, 256},
 			{65535, 65536},
 			{4294967295, 4294967296},
