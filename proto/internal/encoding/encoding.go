@@ -81,22 +81,25 @@ type V2 struct{}
 
 func (V2) Version() byte { return 2 }
 
-func (V2) Encode(projectID uint64, ecosystemID uint64) string {
+func (v V2) Encode(projectID uint64, ecosystemID uint64) string {
 	buf := make([]byte, sizeV2)
-	buf[0] = byte(2)
+	buf[0] = v.Version()
 	binary.BigEndian.PutUint64(buf[1:], projectID)
 	binary.BigEndian.PutUint64(buf[9:], ecosystemID)
 	rand.Read(buf[17:])
 	return base64.Base64UrlEncode(buf)
 }
 
-func (V2) Decode(accessKey string) (projectID uint64, ecosystemID uint64, err error) {
+func (v V2) Decode(accessKey string) (projectID uint64, ecosystemID uint64, err error) {
 	buf, err := base64.Base64UrlDecode(accessKey)
 	if err != nil {
 		return 0, 0, fmt.Errorf("base64 decode: %w", err)
 	}
 	if len(buf) != sizeV2 {
 		return 0, 0, ErrInvalidKeyLength
+	}
+	if buf[0] != v.Version() {
+		return 0, 0, ErrVersionMismatch
 	}
 	return binary.BigEndian.Uint64(buf[1:9]), binary.BigEndian.Uint64(buf[9:17]), nil
 }
