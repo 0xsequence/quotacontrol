@@ -25,7 +25,6 @@ const (
 	sizeV0 = 24
 	sizeV1 = 26
 	sizeV2 = 32
-	sizeV3 = 32
 )
 
 // V0 is the v0 encoding format for project access keys
@@ -82,7 +81,7 @@ type V2 struct{}
 func (V2) Version() byte { return 2 }
 
 func (v V2) Encode(projectID uint64, ecosystemID uint64) string {
-	buf := make([]byte, sizeV3)
+	buf := make([]byte, sizeV2)
 	buf[0] = v.Version()
 
 	encodedProjectID := encodeUint64(projectID)
@@ -101,7 +100,7 @@ func (v V2) Decode(accessKey string) (projectID uint64, ecosystemID uint64, err 
 	if err != nil {
 		return 0, 0, fmt.Errorf("base64 decode: %w", err)
 	}
-	if len(buf) != sizeV3 {
+	if len(buf) != sizeV2 {
 		return 0, 0, ErrInvalidKeyLength
 	}
 	if buf[0] != v.Version() {
