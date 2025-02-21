@@ -15,19 +15,18 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
-var supportedEncodings = []encoding.Encoding{
+var SupportedEncodings = []encoding.Encoding{
 	encoding.V0{},
 	encoding.V1{},
 	encoding.V2{},
-	encoding.V3{},
 }
 
 var AccessKeyVersion = encoding.V2{}.Version()
 
 func GetProjectID(accessKey string) (projectID, ecosystemID uint64, err error) {
 	var errs []error
-	for i := len(supportedEncodings) - 1; i >= 0; i-- {
-		e := supportedEncodings[i]
+	for i := len(SupportedEncodings) - 1; i >= 0; i-- {
+		e := SupportedEncodings[i]
 
 		projectID, ecosystemID, err := e.Decode(accessKey)
 		if err != nil {
@@ -41,7 +40,7 @@ func GetProjectID(accessKey string) (projectID, ecosystemID uint64, err error) {
 }
 
 func GenerateAccessKey(version byte, projectID, ecosystemID uint64) string {
-	for _, e := range supportedEncodings {
+	for _, e := range SupportedEncodings {
 		if e.Version() == version {
 			return e.Encode(projectID, ecosystemID)
 		}

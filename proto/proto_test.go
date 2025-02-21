@@ -1,6 +1,8 @@
 package proto_test
 
 import (
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -10,57 +12,34 @@ import (
 )
 
 func TestAccessKeyEncoding(t *testing.T) {
-	t.Run("v0", func(t *testing.T) {
-		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(0, projectID, 0)
-		t.Log("=> k", accessKey)
+	inputList := [][]uint64{
+		{1, 2},
+		{127, 128},
+		{math.MaxUint8, math.MaxUint8 + 1},
+		{math.MaxUint16, math.MaxUint16 + 1},
+		{math.MaxUint32, math.MaxUint32 + 1},
+		{math.MaxUint64, 1},
+	}
+	for _, e := range proto.SupportedEncodings {
+		version := e.Version()
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			for _, input := range inputList {
+				projectID := input[0]
+				ecosystemID := input[1]
+				accessKey := proto.GenerateAccessKey(version, projectID, ecosystemID)
+				t.Logf("=> key: [%d/%d] %s", projectID, ecosystemID, accessKey)
 
-		outID, outecosystemID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-		require.Equal(t, uint64(0), outecosystemID)
-	})
-
-	t.Run("v1", func(t *testing.T) {
-		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(1, projectID, 0)
-		t.Log("=> k", accessKey)
-		outID, ecosystemID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-		require.Equal(t, uint64(0), ecosystemID)
-	})
-	t.Run("v2", func(t *testing.T) {
-		projectID := uint64(12345)
-		ecosystemID := uint64(54321)
-		accessKey := proto.GenerateAccessKey(2, projectID, ecosystemID)
-		t.Log("=> k", accessKey)
-
-		outID, outecosystemID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-		require.Equal(t, ecosystemID, outecosystemID)
-	})
-	t.Run("v3", func(t *testing.T) {
-		for _, input := range [][]uint64{
-			{1, 2},
-			{127, 128},
-			{255, 256},
-			{65535, 65536},
-			{4294967295, 4294967296},
-			{18446744073709551615, 1},
-		} {
-			projectID := input[0]
-			ecosystemID := input[1]
-			accessKey := proto.GenerateAccessKey(3, projectID, ecosystemID)
-			t.Logf("=> key: [%d/%d] %s", projectID, ecosystemID, accessKey)
-
-			outID, outecosystemID, err := proto.GetProjectID(accessKey)
-			require.NoError(t, err)
-			require.Equal(t, projectID, outID)
-			require.Equal(t, ecosystemID, outecosystemID)
-		}
-	})
+				outID, outecosystemID, err := proto.GetProjectID(accessKey)
+				require.NoError(t, err)
+				require.Equal(t, projectID, outID)
+				if version < 2 {
+					require.Equal(t, uint64(0), outecosystemID)
+				} else {
+					require.Equal(t, ecosystemID, outecosystemID)
+				}
+			}
+		})
+	}
 }
 
 func TestAccessKeyValidateOrigin(t *testing.T) {
