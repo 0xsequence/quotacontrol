@@ -68,7 +68,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			if ok {
 				// check that project ID matches
 				if projectID != 0 {
-					if v, _, _ := proto.GetProjectID(accessKey); v != projectID {
+					if v, _ := proto.GetProjectID(accessKey); v != projectID {
 						o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
 						return
 					}
