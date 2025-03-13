@@ -24,12 +24,12 @@ struct Limit
   - blockTransactions: bool
 
 struct AccessKey
-  - ecosystemID: uint64
-    + go.field.name = EcosystemID
-    + go.tag.db = -
   - projectId: uint64
     + go.field.name = ProjectID
     + go.tag.db = project_id
+  - chainIds: []uint64
+    + go.field.name = ChainIDs
+    + go.tag.db = chain_ids
   - displayName: string
     + go.tag.db = display_name
   - accessKey: string
@@ -37,7 +37,6 @@ struct AccessKey
   - active: bool
     + go.tag.db = active
   - default: bool
-    + go.field.name = Default
     + go.tag.db = is_default
   - requireOrigin: bool
     + go.tag.db = require_origin
@@ -47,7 +46,6 @@ struct AccessKey
   - allowedServices: []Service
     + go.tag.db = allowed_services
   - createdAt?: timestamp
-    + json = createdAt
     + go.tag.json = createdAt,omitempty
     + go.tag.db = created_at,omitempty
 

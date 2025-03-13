@@ -3,29 +3,32 @@
 package proto
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/0xsequence/authcontrol/proto"
-	"github.com/0xsequence/quotacontrol/proto/internal/encoding"
+	"github.com/0xsequence/quotacontrol/encoding"
 )
 
 func Ptr[T any](v T) *T {
 	return &v
 }
 
-var supportedEncodings = []encoding.Encoding{
-	encoding.V0{},
+// SupportedEncodings is a list of supported encodings. If more versions of the same version are added, the first one will be used.
+var SupportedEncodings = []encoding.Encoding{
+	encoding.V2{},
 	encoding.V1{},
+	encoding.V0{},
 }
 
 var AccessKeyVersion = encoding.V1{}.Version()
 
-func GetProjectID(accessKey string) (projectID uint64, err error) {
+func GetProjectID(ctx context.Context, accessKey string) (projectID uint64, err error) {
 	var errs []error
-	for _, e := range supportedEncodings {
-		projectID, err := e.Decode(accessKey)
+	for _, e := range SupportedEncodings {
+		projectID, err := e.Decode(ctx, accessKey)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("decode v%d: %w", e.Version(), err))
 			continue
@@ -35,10 +38,14 @@ func GetProjectID(accessKey string) (projectID uint64, err error) {
 	return 0, errors.Join(errs...)
 }
 
-func GenerateAccessKey(version int, projectID uint64) string {
-	for _, e := range supportedEncodings {
+func GenerateAccessKey(ctx context.Context, projectID uint64) string {
+	version, ok := encoding.GetVersion(ctx)
+	if !ok {
+		version = AccessKeyVersion
+	}
+	for _, e := range SupportedEncodings {
 		if e.Version() == version {
-			return e.Encode(projectID)
+			return e.Encode(ctx, projectID)
 		}
 	}
 	return ""

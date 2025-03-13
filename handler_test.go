@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/encoding"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/tests/mock"
@@ -40,7 +41,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	now := time.Now()
-	key := proto.GenerateAccessKey(1, ProjectID)
+	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
 
 	const _credits = middleware.DefaultPublicRate / 10
 
@@ -304,8 +305,8 @@ func TestDefaultKey(t *testing.T) {
 
 	now := time.Now()
 	keys := []string{
-		proto.GenerateAccessKey(1, ProjectID),
-		proto.GenerateAccessKey(1, ProjectID),
+		proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID),
+		proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID),
 	}
 
 	limit := proto.Limit{
@@ -370,7 +371,7 @@ func TestDefaultKey(t *testing.T) {
 }
 
 func TestJWT(t *testing.T) {
-	key := proto.GenerateAccessKey(1, ProjectID)
+	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
 
 	counter := spendingCounter(0)
 
@@ -440,7 +441,7 @@ func TestJWT(t *testing.T) {
 	})
 
 	t.Run("AccessKeyMismatch", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", proto.GenerateAccessKey(1, ProjectID+1), token)
+		ok, headers, err := executeRequest(ctx, r, "", proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID+1), token)
 		require.ErrorIs(t, err, proto.ErrAccessKeyMismatch)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
