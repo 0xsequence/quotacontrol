@@ -36,15 +36,15 @@ func TestAccessKeyEncoding(t *testing.T) {
 		ctx := encoding.WithVersion(context.Background(), 2)
 		projectID := uint64(12345)
 		accessKey := proto.GenerateAccessKey(ctx, projectID)
-		t.Log("=> k", accessKey)
+		t.Log("=> k", accessKey, "| prefix =>", proto.GetAccessKeyPrefix(accessKey))
 		outID, err := proto.GetProjectID(ctx, accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
 
-		ctx = encoding.WithPrefix(ctx, "newprefix")
+		ctx = encoding.WithPrefix(ctx, "newprefix:dev")
 
 		accessKey2 := proto.GenerateAccessKey(ctx, projectID)
-		t.Log("=> k", accessKey2)
+		t.Log("=> k", accessKey2, "| prefix =>", proto.GetAccessKeyPrefix(accessKey2))
 		outID, err = proto.GetProjectID(ctx, accessKey2)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)

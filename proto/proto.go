@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0xsequence/authcontrol/proto"
@@ -49,6 +50,14 @@ func GenerateAccessKey(ctx context.Context, projectID uint64) string {
 		}
 	}
 	return ""
+}
+
+func GetAccessKeyPrefix(accessKey string) string {
+	parts := strings.Split(accessKey, encoding.Separator)
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts[:len(parts)-1], encoding.Separator)
 }
 
 type SessionType = proto.SessionType

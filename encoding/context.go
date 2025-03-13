@@ -30,12 +30,12 @@ func getPrefix(ctx context.Context) string {
 }
 
 // WithVersion sets the version to the context.
-func WithVersion(ctx context.Context, version int) context.Context {
+func WithVersion(ctx context.Context, version byte) context.Context {
 	return context.WithValue(ctx, ctxKeyVersion, version)
 }
 
 // GetVersion returns the version from the context. If not set, it returns AccessKeyVersion.
-func GetVersion(ctx context.Context) (int, bool) {
-	v, ok := ctx.Value(ctxKeyVersion).(int)
+func GetVersion(ctx context.Context) (byte, bool) {
+	v, ok := ctx.Value(ctxKeyVersion).(byte)
 	return v, ok
 }
