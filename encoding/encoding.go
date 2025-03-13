@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	ErrInvalidKeyLength = fmt.Errorf("invalid access key length")
+	ErrInvalidKeyLength = errors.New("invalid access key length")
 )
 
 type Encoding interface {

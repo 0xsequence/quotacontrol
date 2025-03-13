@@ -22,11 +22,10 @@ func WithPrefix(ctx context.Context, prefix string) context.Context {
 
 // getPrefix returns the prefix from the context. If not set, it returns DefaultPrefix.
 func getPrefix(ctx context.Context) string {
-	v, _ := ctx.Value(ctxKeyPrefix).(string)
-	if v == "" {
-		return DefaultPrefix
+	if v, _ := ctx.Value(ctxKeyPrefix).(string); v != "" {
+		return v
 	}
-	return v
+	return DefaultPrefix
 }
 
 // WithVersion sets the version to the context.
