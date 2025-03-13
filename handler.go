@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/encoding"
 	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -334,7 +335,7 @@ func (h handler) CreateAccessKey(ctx context.Context, projectID, ecosystemID uin
 	access := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
-		AccessKey:       proto.GenerateAccessKey(ctx, projectID),
+		AccessKey:       proto.GenerateAccessKey(encoding.WithVersion(ctx, h.keyVersion), projectID),
 		Active:          true,
 		Default:         len(list) == 0,
 		RequireOrigin:   requireOrigin,
