@@ -12,34 +12,21 @@ import (
 func TestAccessKeyEncoding(t *testing.T) {
 	t.Run("v0", func(t *testing.T) {
 		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(0, projectID, 0)
+		accessKey := proto.GenerateAccessKey(0, projectID)
 		t.Log("=> k", accessKey)
 
-		outID, outecosystemID, err := proto.GetProjectID(accessKey)
+		outID, err := proto.GetProjectID(accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
-		require.Equal(t, uint64(0), outecosystemID)
 	})
 
 	t.Run("v1", func(t *testing.T) {
 		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(1, projectID, 0)
+		accessKey := proto.GenerateAccessKey(1, projectID)
 		t.Log("=> k", accessKey)
-		outID, ecosystemID, err := proto.GetProjectID(accessKey)
+		outID, err := proto.GetProjectID(accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
-		require.Equal(t, uint64(0), ecosystemID)
-	})
-	t.Run("v1", func(t *testing.T) {
-		projectID := uint64(12345)
-		ecosystemID := uint64(54321)
-		accessKey := proto.GenerateAccessKey(2, projectID, ecosystemID)
-		t.Log("=> k", accessKey)
-
-		outID, outecosystemID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-		require.Equal(t, ecosystemID, outecosystemID)
 	})
 }
 
