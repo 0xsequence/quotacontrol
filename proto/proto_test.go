@@ -1,8 +1,10 @@
 package proto_test
 
 import (
+	"context"
 	"testing"
 
+	"github.com/0xsequence/quotacontrol/encoding"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
@@ -11,8 +13,9 @@ import (
 
 func TestAccessKeyEncoding(t *testing.T) {
 	t.Run("v0", func(t *testing.T) {
+		ctx := encoding.WithVersion(context.Background(), 0)
 		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(0, projectID)
+		accessKey := proto.GenerateAccessKey(ctx, projectID)
 		t.Log("=> k", accessKey)
 
 		outID, err := proto.GetProjectID(accessKey)
@@ -21,10 +24,32 @@ func TestAccessKeyEncoding(t *testing.T) {
 	})
 
 	t.Run("v1", func(t *testing.T) {
+		ctx := encoding.WithVersion(context.Background(), 1)
 		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(1, projectID)
+		accessKey := proto.GenerateAccessKey(ctx, projectID)
 		t.Log("=> k", accessKey)
 		outID, err := proto.GetProjectID(accessKey)
+		require.NoError(t, err)
+		require.Equal(t, projectID, outID)
+	})
+	t.Run("v2", func(t *testing.T) {
+		ctx := encoding.WithVersion(context.Background(), 2)
+		projectID := uint64(12345)
+		accessKey := proto.GenerateAccessKey(ctx, projectID)
+		t.Log("=> k", accessKey, "| prefix =>", proto.GetAccessKeyPrefix(accessKey))
+		outID, err := proto.GetProjectID(accessKey)
+		require.NoError(t, err)
+		require.Equal(t, projectID, outID)
+
+		ctx = encoding.WithPrefix(ctx, "newprefix:dev")
+
+		accessKey2 := proto.GenerateAccessKey(ctx, projectID)
+		t.Log("=> k", accessKey2, "| prefix =>", proto.GetAccessKeyPrefix(accessKey2))
+		outID, err = proto.GetProjectID(accessKey2)
+		require.NoError(t, err)
+		require.Equal(t, projectID, outID)
+		// retrocompatibility with the older prefix
+		outID, err = proto.GetProjectID(accessKey)
 		require.NoError(t, err)
 		require.Equal(t, projectID, outID)
 	})

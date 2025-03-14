@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/0xsequence/quotacontrol/encoding"
 	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -68,7 +69,7 @@ func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.
 		cache:        cache,
 		store:        storage,
 		limitCounter: counter,
-		keyVersion:   proto.AccessKeyVersion,
+		keyVersion:   proto.DefaultEncoding.Version(),
 	}
 }
 
@@ -78,7 +79,7 @@ type handler struct {
 	cache        Cache
 	store        Store
 	limitCounter httprate.LimitCounter
-	keyVersion   int
+	keyVersion   byte
 }
 
 var _ proto.QuotaControl = &handler{}
@@ -154,7 +155,7 @@ func (h handler) PrepareUsage(ctx context.Context, projectID uint64, cycle *prot
 		return false, err
 	}
 
-	key := getQuotaKey(projectID, cycle, now)
+	key := cacheKeyQuota(projectID, cycle, now)
 	if err := h.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
@@ -167,7 +168,7 @@ func (h handler) ClearUsage(ctx context.Context, projectID uint64, now time.Time
 		return false, err
 	}
 
-	key := getQuotaKey(projectID, cycle, now)
+	key := cacheKeyQuota(projectID, cycle, now)
 	ok, err := h.cache.UsageCache.ClearUsage(ctx, key)
 	if err != nil {
 		return false, err
@@ -305,7 +306,7 @@ func (h handler) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*pr
 	return nil, proto.ErrNoDefaultKey
 }
 
-func (h handler) CreateAccessKey(ctx context.Context, projectID, ecosystemID uint64, displayName string, requireOrigin bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
+func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, requireOrigin bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	cycle, err := h.store.CycleStore.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
 	if err != nil {
 		return nil, err
@@ -331,44 +332,49 @@ func (h handler) CreateAccessKey(ctx context.Context, projectID, ecosystemID uin
 		return nil, err
 	}
 
-	access := proto.AccessKey{
+	// set key version if not set
+	if _, ok := encoding.GetVersion(ctx); !ok {
+		ctx = encoding.WithVersion(ctx, h.keyVersion)
+	}
+
+	k := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
-		AccessKey:       proto.GenerateAccessKey(h.keyVersion, projectID),
+		AccessKey:       proto.GenerateAccessKey(ctx, projectID),
 		Active:          true,
 		Default:         len(list) == 0,
 		RequireOrigin:   requireOrigin,
 		AllowedOrigins:  origins,
 		AllowedServices: allowedServices,
 	}
-	if err := h.store.AccessKeyStore.InsertAccessKey(ctx, &access); err != nil {
+	if err := h.store.AccessKeyStore.InsertAccessKey(ctx, &k); err != nil {
 		return nil, err
 	}
-	return &access, nil
+	return &k, nil
 }
 
 func (h handler) RotateAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
-	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
+	k, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
 	}
 
-	isDefaultKey := access.Default
+	isDefaultKey := k.Default
 
-	access.Active = false
-	access.Default = false
+	k.Active = false
+	k.Default = false
 
-	if _, err := h.updateAccessKey(ctx, access); err != nil {
+	if _, err := h.updateAccessKey(ctx, k); err != nil {
 		return nil, err
 	}
 
-	newAccess, err := h.CreateAccessKey(ctx, access.ProjectID, access.EcosystemID, access.DisplayName, access.RequireOrigin, access.AllowedOrigins.ToStrings(), access.AllowedServices)
+	newAccess, err := h.CreateAccessKey(ctx, k.ProjectID, k.DisplayName, k.RequireOrigin, k.AllowedOrigins.ToStrings(), k.AllowedServices)
 	if err != nil {
 		return nil, err
 	}
 
+	// set new key as default
 	if isDefaultKey {
-		// set new key as default
 		newAccess.Default = true
 		return h.updateAccessKey(ctx, newAccess)
 	}
@@ -377,64 +383,64 @@ func (h handler) RotateAccessKey(ctx context.Context, accessKey string) (*proto.
 }
 
 func (h handler) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, requireOrigin *bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
-	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
+	k, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
 	}
 
 	if displayName != nil {
-		access.DisplayName = *displayName
+		k.DisplayName = *displayName
 	}
 	if requireOrigin != nil {
-		access.RequireOrigin = *requireOrigin
+		k.RequireOrigin = *requireOrigin
 	}
 	if allowedOrigins != nil {
 		origins, err := validation.NewOrigins(allowedOrigins...)
 		if err != nil {
 			return nil, err
 		}
-		access.AllowedOrigins = origins
+		k.AllowedOrigins = origins
 	}
 	if allowedServices != nil {
-		access.AllowedServices = allowedServices
+		k.AllowedServices = allowedServices
 	}
 
-	if access, err = h.updateAccessKey(ctx, access); err != nil {
+	if k, err = h.updateAccessKey(ctx, k); err != nil {
 		return nil, err
 	}
-	return access, nil
+	return k, nil
 }
 
 func (h handler) UpdateDefaultAccessKey(ctx context.Context, projectID uint64, accessKey string) (bool, error) {
 	// make sure accessKey exists
-	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
+	k, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return false, err
 	}
 
-	if access.ProjectID != projectID {
+	if k.ProjectID != projectID {
 		return false, fmt.Errorf("project doesn't own the given access key")
 	}
 
-	defaultAccess, err := h.GetDefaultAccessKey(ctx, projectID)
+	defaultKey, err := h.GetDefaultAccessKey(ctx, projectID)
 	if err != nil {
 		return false, err
 	}
 
 	// make sure new default access key & old default access key are different
-	if defaultAccess.AccessKey == access.AccessKey {
+	if defaultKey.AccessKey == k.AccessKey {
 		return true, nil
 	}
 
 	// update old default access
-	defaultAccess.Default = false
-	if _, err := h.updateAccessKey(ctx, defaultAccess); err != nil {
+	defaultKey.Default = false
+	if _, err := h.updateAccessKey(ctx, defaultKey); err != nil {
 		return false, err
 	}
 
 	// set new access key to default
-	access.Default = true
-	if _, err = h.updateAccessKey(ctx, access); err != nil {
+	k.Default = true
+	if _, err = h.updateAccessKey(ctx, k); err != nil {
 		return false, err
 	}
 
@@ -446,12 +452,12 @@ func (h handler) ListAccessKeys(ctx context.Context, projectID uint64, active *b
 }
 
 func (h handler) DisableAccessKey(ctx context.Context, accessKey string) (bool, error) {
-	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
+	k, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return false, err
 	}
 
-	list, err := h.store.AccessKeyStore.ListAccessKeys(ctx, access.ProjectID, proto.Ptr(true), nil)
+	list, err := h.store.AccessKeyStore.ListAccessKeys(ctx, k.ProjectID, proto.Ptr(true), nil)
 	if err != nil {
 		return false, err
 	}
@@ -460,15 +466,15 @@ func (h handler) DisableAccessKey(ctx context.Context, accessKey string) (bool, 
 		return false, proto.ErrAtLeastOneKey
 	}
 
-	access.Active = false
-	access.Default = false
-	if _, err := h.updateAccessKey(ctx, access); err != nil {
+	k.Active = false
+	k.Default = false
+	if _, err := h.updateAccessKey(ctx, k); err != nil {
 		return false, err
 	}
 
 	// set another project accessKey to default
-	if _, err := h.GetDefaultAccessKey(ctx, access.ProjectID); err == proto.ErrNoDefaultKey {
-		listUpdated, err := h.store.AccessKeyStore.ListAccessKeys(ctx, access.ProjectID, proto.Ptr(true), nil)
+	if _, err := h.GetDefaultAccessKey(ctx, k.ProjectID); err == proto.ErrNoDefaultKey {
+		listUpdated, err := h.store.AccessKeyStore.ListAccessKeys(ctx, k.ProjectID, proto.Ptr(true), nil)
 		if err != nil {
 			return false, err
 		}
@@ -499,17 +505,17 @@ func (h handler) GetUserPermission(ctx context.Context, projectID uint64, userID
 	return perm, access, nil
 }
 
-func (h handler) updateAccessKey(ctx context.Context, access *proto.AccessKey) (*proto.AccessKey, error) {
-	access, err := h.store.AccessKeyStore.UpdateAccessKey(ctx, access)
+func (h handler) updateAccessKey(ctx context.Context, k *proto.AccessKey) (*proto.AccessKey, error) {
+	k, err := h.store.AccessKeyStore.UpdateAccessKey(ctx, k)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := h.cache.QuotaCache.DeleteAccessQuota(ctx, access.AccessKey); err != nil {
+	if err := h.cache.QuotaCache.DeleteAccessQuota(ctx, k.AccessKey); err != nil {
 		h.log.Error("delete access quota from cache", slog.Any("error", err))
 	}
 
-	return access, nil
+	return k, nil
 }
 
 func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.ProjectStatus, error) {
@@ -529,8 +535,8 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 	}
 	status.Limit = limit
 
-	key := getQuotaKey(projectID, cycle, now)
-	usage, err := h.cache.UsageCache.PeekUsage(ctx, key)
+	cacheKey := cacheKeyQuota(projectID, cycle, now)
+	usage, err := h.cache.UsageCache.PeekUsage(ctx, cacheKey)
 	if err != nil {
 		if !errors.Is(err, ErrCachePing) {
 			return nil, err
@@ -538,7 +544,7 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 		if _, err := h.PrepareUsage(ctx, projectID, cycle, now); err != nil {
 			return nil, err
 		}
-		if usage, err = h.cache.UsageCache.PeekUsage(ctx, key); err != nil {
+		if usage, err = h.cache.UsageCache.PeekUsage(ctx, cacheKey); err != nil {
 			return nil, err
 		}
 	}
