@@ -78,3 +78,17 @@ type Client interface {
 	CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (bool, int64, error)
 }
+
+func VerifyChains(ctx context.Context, chainIDs ...uint64) error {
+	if len(chainIDs) == 0 {
+		return nil
+	}
+	quota, ok := GetAccessQuota(ctx)
+	if !ok {
+		return nil
+	}
+	if !quota.AccessKey.ValidateChains(chainIDs) {
+		return proto.ErrInvalidChain
+	}
+	return nil
+}

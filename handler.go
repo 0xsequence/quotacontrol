@@ -69,7 +69,7 @@ func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.
 		cache:        cache,
 		store:        storage,
 		limitCounter: counter,
-		keyVersion:   proto.AccessKeyVersion,
+		keyVersion:   proto.DefaultEncoding.Version(),
 	}
 }
 

@@ -25,7 +25,7 @@ var SupportedEncodings = []encoding.Encoding{
 	encoding.V0{},
 }
 
-var AccessKeyVersion = encoding.V1{}.Version()
+var DefaultEncoding encoding.Encoding = encoding.V1{}
 
 func GetProjectID(accessKey string) (projectID uint64, err error) {
 	var errs []error
@@ -43,8 +43,9 @@ func GetProjectID(accessKey string) (projectID uint64, err error) {
 func GenerateAccessKey(ctx context.Context, projectID uint64) string {
 	version, ok := encoding.GetVersion(ctx)
 	if !ok {
-		version = AccessKeyVersion
+		return DefaultEncoding.Encode(ctx, projectID)
 	}
+
 	for _, e := range SupportedEncodings {
 		if e.Version() == version {
 			return e.Encode(ctx, projectID)
