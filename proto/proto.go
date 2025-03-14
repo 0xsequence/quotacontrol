@@ -27,10 +27,10 @@ var SupportedEncodings = []encoding.Encoding{
 
 var AccessKeyVersion = encoding.V1{}.Version()
 
-func GetProjectID(ctx context.Context, accessKey string) (projectID uint64, err error) {
+func GetProjectID(accessKey string) (projectID uint64, err error) {
 	var errs []error
 	for _, e := range SupportedEncodings {
-		projectID, err := e.Decode(ctx, accessKey)
+		projectID, err := e.Decode(accessKey)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("decode v%d: %w", e.Version(), err))
 			continue

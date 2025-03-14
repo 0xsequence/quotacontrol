@@ -131,7 +131,7 @@ func (h handler) GetAsyncUsage(ctx context.Context, projectID uint64, service *p
 }
 
 func (h handler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	projectID, err := proto.GetProjectID(ctx, accessKey)
+	projectID, err := proto.GetProjectID(accessKey)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (h handler) UpdateKeyUsage(ctx context.Context, service proto.Service, now 
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for key, u := range usage {
-		projectID, err := proto.GetProjectID(ctx, key)
+		projectID, err := proto.GetProjectID(key)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue

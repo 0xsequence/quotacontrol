@@ -19,7 +19,7 @@ var (
 type Encoding interface {
 	Version() byte
 	Encode(ctx context.Context, projectID uint64) string
-	Decode(ctx context.Context, accessKey string) (projectID uint64, err error)
+	Decode(accessKey string) (projectID uint64, err error)
 }
 
 const (
@@ -41,7 +41,7 @@ func (V0) Encode(_ context.Context, projectID uint64) string {
 	return base62.EncodeToString(buf)
 }
 
-func (V0) Decode(_ context.Context, accessKey string) (projectID uint64, err error) {
+func (V0) Decode(accessKey string) (projectID uint64, err error) {
 	buf, err := base62.DecodeString(accessKey)
 	if err != nil {
 		return 0, fmt.Errorf("base62 decode: %w", err)
@@ -66,7 +66,7 @@ func (v V1) Encode(_ context.Context, projectID uint64) string {
 	return base64.Base64UrlEncode(buf)
 }
 
-func (V1) Decode(_ context.Context, accessKey string) (projectID uint64, err error) {
+func (V1) Decode(accessKey string) (projectID uint64, err error) {
 	buf, err := base64.Base64UrlDecode(accessKey)
 	if err != nil {
 		return 0, fmt.Errorf("base64 decode: %w", err)
@@ -96,7 +96,7 @@ func (v V2) Encode(ctx context.Context, projectID uint64) string {
 	return getPrefix(ctx) + Separator + base64.Base64UrlEncode(buf)
 }
 
-func (V2) Decode(ctx context.Context, accessKey string) (projectID uint64, err error) {
+func (V2) Decode(accessKey string) (projectID uint64, err error) {
 	parts := strings.Split(accessKey, Separator)
 	if len(parts) < 2 {
 		return 0, ErrInvalidKeyLength
