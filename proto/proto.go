@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -99,6 +100,19 @@ func (t *AccessKey) ValidateService(service Service) bool {
 		}
 	}
 	return false
+}
+
+func (t *AccessKey) ValidateChains(chainIDs []uint64) bool {
+	if len(t.ChainIDs) == 0 {
+		return true
+	}
+
+	for _, id := range chainIDs {
+		if !slices.Contains(t.ChainIDs, id) {
+			return false
+		}
+	}
+	return true
 }
 
 func (l Limit) Validate() error {

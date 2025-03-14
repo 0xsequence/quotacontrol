@@ -309,7 +309,7 @@ func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey strin
 	return c.cache.QuotaCache.DeleteAccessQuota(ctx, accessKey)
 }
 
-func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {
+func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chainIDs ...uint64) (err error) {
 	if !access.Active {
 		return proto.ErrAccessKeyNotFound
 	}
@@ -318,6 +318,9 @@ func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err 
 	}
 	if !access.ValidateService(c.service) {
 		return proto.ErrInvalidService
+	}
+	if !access.ValidateChains(chainIDs) {
+		return proto.ErrInvalidChain
 	}
 	return nil
 }

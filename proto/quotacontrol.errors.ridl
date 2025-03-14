@@ -6,6 +6,7 @@ error 1102 AccessKeyMismatch   "Access key mismatch"                HTTP 409
 error 1103 InvalidOrigin       "Invalid origin for Access Key"      HTTP 403
 error 1104 InvalidService      "Service not enabled for Access key" HTTP 403
 error 1105 UnauthorizedUser    "Unauthorized user"                  HTTP 403
+error 1106 InvalidChain        "Network not enabled for Access key" HTTP 403
 # 1200-1299: Limit errors
 error 1200 QuotaExceeded       "Quota request exceeded"             HTTP 429
 error 1201 QuotaRateLimit      "Quota rate limit exceeded"          HTTP 429
