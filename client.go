@@ -101,7 +101,7 @@ func (c *Client) GetDefaultUsage() int64 {
 }
 
 // FetchProjectQuota fetches the project quota from cache or from the quota server.
-func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.cache.QuotaCache.GetProjectQuota(ctx, projectID)
 	if err != nil {
@@ -120,6 +120,9 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 			}
 			return nil, err
 		}
+	}
+	if !quota.AccessKey.ValidateChains(chainIDs) {
+		return nil, proto.ErrInvalidChain
 	}
 	return quota, nil
 }

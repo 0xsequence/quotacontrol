@@ -22,7 +22,12 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			var (
 				projectID uint64
 				quota     *proto.AccessQuota
+				chainIDs  []uint64
 			)
+
+			if o.ChainFunc != nil {
+				chainIDs = o.ChainFunc(r)
+			}
 
 			if session == proto.SessionType_Project {
 				// fetch and verify project quota
@@ -33,7 +38,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				}
 				projectID = id
 
-				q, err := client.FetchProjectQuota(ctx, projectID, now)
+				q, err := client.FetchProjectQuota(ctx, projectID, chainIDs, now)
 				if err != nil {
 					o.ErrHandler(r, w, err)
 					return
@@ -72,11 +77,6 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 						o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
 						return
 					}
-				}
-
-				var chainIDs []uint64
-				if o.ChainFunc != nil {
-					chainIDs = o.ChainFunc(r)
 				}
 
 				// fetch and verify access key quota
