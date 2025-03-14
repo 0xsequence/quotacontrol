@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,43 +14,58 @@ const (
 	HeaderOrigin = "Origin"
 )
 
-type ChainIDsFunc func(*http.Request) []uint64
+// ChainFunc is a function that returns the chain IDs for a given request.
+type ChainFunc func(*http.Request) []uint64
 
-// StaticChainIDs returns a ChainIDsFunc that always returns the given chainIDs.
-func StaticChainIDs(chainIDs ...uint64) ChainIDsFunc {
+// StaticChainIDs always returns the given chainIDs.
+func StaticChainIDs(chainIDs ...uint64) ChainFunc {
 	return func(*http.Request) []uint64 {
 		return chainIDs
 	}
 }
 
-// ChainFromPath returns a ChainIDsFunc that extracts the chain ID from the first part of the URL path.
-func ChainFromPath(r *http.Request) []uint64 {
-	chainID, err := strconv.ParseUint(strings.Split(r.URL.Path, "/")[0], 10, 64)
-	if err != nil {
-		return nil
-	}
-	return []uint64{chainID}
+// ChainFinder is an interface that can find a chain ID by its name or id.
+type ChainFinder[T any] interface {
+	FindChain(chainID string) (uint64, T, error)
 }
 
+// ChainFromPath extracts the chain from the first path segment of the request URL.
+func ChainFromPath[T any](finder ChainFinder[T]) func(r *http.Request) []uint64 {
+	return func(r *http.Request) []uint64 {
+		parts := strings.Split(r.URL.Path, "/")
+		if len(parts) < 2 {
+			return nil
+		}
+		chainID, _, err := finder.FindChain(parts[1])
+		if err != nil {
+			return nil
+		}
+		return []uint64{chainID}
+	}
+}
+
+// Options is the configuration for the quota middleware.
 type Options struct {
-	Logger          logger.Logger
+	// Logger is the logger to use for logging.
+	Logger logger.Logger
+	// BaseRequestCost is the cost of a single request.
 	BaseRequestCost int
-	ChainIDsFunc    ChainIDsFunc
-	ErrHandler      func(r *http.Request, w http.ResponseWriter, err error)
+	// ChainFunc is the function that returns the chain IDs for a given request.
+	ChainFunc ChainFunc
+	// ErrHandler is the error handler to use when an error occurs.
+	ErrHandler func(r *http.Request, w http.ResponseWriter, err error)
 }
 
 func (o *Options) ApplyDefaults() {
 	// Set default error handler if not provided
 	if o.ErrHandler == nil {
-		o.ErrHandler = errHandler
+		o.ErrHandler = func(r *http.Request, w http.ResponseWriter, err error) {
+			proto.RespondWithError(w, err)
+		}
 	}
 	if o.BaseRequestCost < 1 {
 		o.BaseRequestCost = 1
 	}
-}
-
-func errHandler(r *http.Request, w http.ResponseWriter, err error) {
-	proto.RespondWithError(w, err)
 }
 
 // Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.

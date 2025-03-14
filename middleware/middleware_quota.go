@@ -75,8 +75,8 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				}
 
 				var chainIDs []uint64
-				if o.ChainIDsFunc != nil {
-					chainIDs = o.ChainIDsFunc(r)
+				if o.ChainFunc != nil {
+					chainIDs = o.ChainFunc(r)
 				}
 
 				// fetch and verify access key quota

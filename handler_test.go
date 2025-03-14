@@ -805,6 +805,69 @@ func TestSessionDisabled(t *testing.T) {
 	}
 }
 
+func TestChainID(t *testing.T) {
+	counter := hitCounter(0)
+
+	cfg := newConfig()
+	server, cleanup := mock.NewServer(&cfg)
+	t.Cleanup(cleanup)
+
+	logger := logger.NewLogger(logger.LogLevel_INFO)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	chains := chainFinder{"a": 1, "b": 2, "c": 3}
+
+	authOptions := authcontrol.Options{
+		JWTSecret:    Secret,
+		UserStore:    server.Store,
+		ProjectStore: server.Store,
+	}
+	quotaOptions := middleware.Options{
+		ChainFunc: middleware.ChainFromPath(chains),
+	}
+
+	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+
+	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(authcontrol.AccessControl(ACL, authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+
+	r.Handle("/*", &counter)
+
+	ctx := context.Background()
+	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	server.Store.AddUser(ctx, UserAddress, false)
+	server.Store.AddProject(ctx, ProjectID, nil)
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID, ChainIDs: []uint64{1, 2}})
+
+	path := "rpc/Service/MethodAccessKey"
+
+	ok, _, err := executeRequest(ctx, r, "/a/"+path, AccessKey, "")
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	ok, _, err = executeRequest(ctx, r, "/1/"+path, AccessKey, "")
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, _, err = executeRequest(ctx, r, "/b/"+path, AccessKey, "")
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	ok, _, err = executeRequest(ctx, r, "/2/"+path, AccessKey, "")
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, _, err = executeRequest(ctx, r, "/c/"+path, AccessKey, "")
+	assert.ErrorIs(t, err, proto.ErrInvalidChain)
+	assert.False(t, ok)
+	ok, _, err = executeRequest(ctx, r, "/3/"+path, AccessKey, "")
+	assert.ErrorIs(t, err, proto.ErrInvalidChain)
+	assert.False(t, ok)
+}
+
 func newConfig() quotacontrol.Config {
 	return quotacontrol.Config{
 		Enabled:    true,
@@ -860,4 +923,15 @@ func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, 
 	}
 
 	return true, rr.Header(), nil
+}
+
+type chainFinder map[string]uint64
+
+func (c chainFinder) FindChain(chainID string) (uint64, struct{}, error) {
+	for name, id := range c {
+		if name == chainID || strconv.FormatUint(id, 10) == chainID {
+			return id, struct{}{}, nil
+		}
+	}
+	return 0, struct{}{}, errors.New("not found")
 }
