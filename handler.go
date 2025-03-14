@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/0xsequence/quotacontrol/encoding"
@@ -43,10 +42,6 @@ type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error)
 }
 
-type PrefixStore interface {
-	GetPrefix(ctx context.Context, projectID uint64) (prefix string, env string, err error)
-}
-
 type Cache struct {
 	QuotaCache
 	UsageCache
@@ -59,7 +54,6 @@ type Store struct {
 	UsageStore
 	CycleStore
 	PermissionStore
-	PrefixStore
 }
 
 // NewHandler returns server implementation for proto.QuotaControl.
@@ -69,9 +63,6 @@ func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.
 	}
 	if storage.CycleStore == nil {
 		storage.CycleStore = store.Cycle{}
-	}
-	if storage.PrefixStore == nil {
-		storage.PrefixStore = store.Prefix{}
 	}
 	return &handler{
 		log:          log.With("service", "quotacontrol"),
@@ -210,24 +201,6 @@ func (h handler) GetProjectQuota(ctx context.Context, projectID uint64, now time
 }
 
 func (h handler) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
-	if prefix, env, ok := parseAccessKey(accessKey); ok {
-		projectID, err := proto.GetProjectID(ctx, accessKey)
-		if err != nil {
-			return nil, proto.ErrAccessKeyNotFound.WithCause(err)
-		}
-
-		_prefix, _env, err := h.store.PrefixStore.GetPrefix(ctx, projectID)
-		if err != nil {
-			return nil, fmt.Errorf("get prefix: %w", err)
-		}
-		if prefix != _prefix {
-			return nil, proto.ErrPrefixMismatch
-		}
-		if env != _env {
-			return nil, proto.ErrEnvironmentMismatch
-		}
-	}
-
 	access, err := h.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -359,16 +332,10 @@ func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayN
 		return nil, err
 	}
 
-	prefix, env, err := h.store.PrefixStore.GetPrefix(ctx, projectID)
-	if err != nil {
-		return nil, err
+	// set key version if not set
+	if _, ok := encoding.GetVersion(ctx); !ok {
+		ctx = encoding.WithVersion(ctx, h.keyVersion)
 	}
-	if env != "" {
-		prefix = fmt.Sprintf("%s%s%s", prefix, encoding.Separator, env)
-	}
-
-	ctx = encoding.WithVersion(ctx, h.keyVersion)
-	ctx = encoding.WithPrefix(ctx, prefix)
 
 	k := proto.AccessKey{
 		ProjectID:       projectID,
@@ -591,21 +558,4 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 	status.RatelimitCounter = int64(rate)
 
 	return &status, nil
-}
-
-func parseAccessKey(accessKey string) (prefix, env string, ok bool) {
-	if !strings.Contains(accessKey, encoding.Separator) {
-		return "", "", false
-	}
-
-	switch parts := strings.Split(accessKey, encoding.Separator); len(parts) {
-	case 1:
-		return "", "", false
-	case 2:
-		return parts[0], "", true
-	case 3:
-		return parts[0], parts[1], true
-	default:
-		return "", "", false
-	}
 }
