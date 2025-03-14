@@ -108,7 +108,7 @@ service QuotaControl
   # Access Key
   - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
   - GetDefaultAccessKey(projectID: uint64) => (accessKey: AccessKey)
-  - CreateAccessKey(projectId: uint64, ecosystemId: uint64, displayName: string, requireOrigin: bool, allowedOrigins: []string, allowedServices: []Service) => (accessKey: AccessKey)
+  - CreateAccessKey(projectId: uint64, displayName: string, requireOrigin: bool, allowedOrigins: []string, allowedServices: []Service) => (accessKey: AccessKey)
   - RotateAccessKey(accessKey: string) => (accessKey: AccessKey)
   - UpdateAccessKey(accessKey: string, displayName?: string, requireOrigin?: bool, allowedOrigins?: []string, allowedServices?: []Service) => (accessKey: AccessKey)
   - UpdateDefaultAccessKey(projectID: uint64, accessKey: string) => (ok: bool)
