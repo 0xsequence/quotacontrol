@@ -125,7 +125,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 }
 
 // FetchKeyQuota fetches and validates the accessKey from cache or from the quota server.
-func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
+func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_key_quota"),
 		slog.String("access_key", accessKey),
@@ -146,7 +146,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 		}
 	}
 	// validate access key
-	if err := c.validateAccessKey(quota.AccessKey, origin); err != nil {
+	if err := c.validateAccessKey(quota.AccessKey, origin, chainIDs); err != nil {
 		return quota, err
 	}
 	return quota, nil
@@ -309,7 +309,7 @@ func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey strin
 	return c.cache.QuotaCache.DeleteAccessQuota(ctx, accessKey)
 }
 
-func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chainIDs ...uint64) (err error) {
+func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chainIDs []uint64) (err error) {
 	if !access.Active {
 		return proto.ErrAccessKeyNotFound
 	}

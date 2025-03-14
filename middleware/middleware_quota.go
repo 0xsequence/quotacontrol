@@ -74,8 +74,13 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 					}
 				}
 
+				var chainIDs []uint64
+				if o.ChainIDsFunc != nil {
+					chainIDs = o.ChainIDsFunc(r)
+				}
+
 				// fetch and verify access key quota
-				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), now)
+				q, err := client.FetchKeyQuota(ctx, accessKey, r.Header.Get(HeaderOrigin), chainIDs, now)
 				if err != nil {
 					o.ErrHandler(r, w, err)
 					return
