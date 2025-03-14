@@ -154,7 +154,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 
 // FetchUsage fetches the current usage of the access key.
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
-	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
+	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
@@ -248,7 +248,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 	cfg := quota.Limit
 
 	// spend compute units
-	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
+	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	for i := range 3 {
 		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
@@ -383,7 +383,7 @@ func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func getQuotaKey(projectID uint64, cycle *proto.Cycle, now time.Time) string {
+func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, now time.Time) string {
 	start, end := cycle.GetStart(now), cycle.GetEnd(now)
 	return fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 }
