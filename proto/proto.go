@@ -3,28 +3,33 @@
 package proto
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/0xsequence/authcontrol/proto"
-	"github.com/0xsequence/quotacontrol/proto/internal/encoding"
+	"github.com/0xsequence/quotacontrol/encoding"
 )
 
 func Ptr[T any](v T) *T {
 	return &v
 }
 
-var supportedEncodings = []encoding.Encoding{
-	encoding.V0{},
+// SupportedEncodings is a list of supported encodings. If more versions of the same version are added, the first one will be used.
+var SupportedEncodings = []encoding.Encoding{
+	encoding.V2{},
 	encoding.V1{},
+	encoding.V0{},
 }
 
-var AccessKeyVersion = encoding.V1{}.Version()
+var DefaultEncoding encoding.Encoding = encoding.V1{}
 
 func GetProjectID(accessKey string) (projectID uint64, err error) {
 	var errs []error
-	for _, e := range supportedEncodings {
+	for _, e := range SupportedEncodings {
 		projectID, err := e.Decode(accessKey)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("decode v%d: %w", e.Version(), err))
@@ -35,13 +40,26 @@ func GetProjectID(accessKey string) (projectID uint64, err error) {
 	return 0, errors.Join(errs...)
 }
 
-func GenerateAccessKey(version int, projectID uint64) string {
-	for _, e := range supportedEncodings {
+func GenerateAccessKey(ctx context.Context, projectID uint64) string {
+	version, ok := encoding.GetVersion(ctx)
+	if !ok {
+		return DefaultEncoding.Encode(ctx, projectID)
+	}
+
+	for _, e := range SupportedEncodings {
 		if e.Version() == version {
-			return e.Encode(projectID)
+			return e.Encode(ctx, projectID)
 		}
 	}
 	return ""
+}
+
+func GetAccessKeyPrefix(accessKey string) string {
+	parts := strings.Split(accessKey, encoding.Separator)
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts[:len(parts)-1], encoding.Separator)
 }
 
 type SessionType = proto.SessionType
@@ -83,6 +101,24 @@ func (t *AccessKey) ValidateService(service Service) bool {
 		}
 	}
 	return false
+}
+
+func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
+	if len(t.ChainIDs) == 0 {
+		return nil
+	}
+
+	invalid := make([]uint64, 0, len(chainIDs))
+	for _, id := range chainIDs {
+		if !slices.Contains(t.ChainIDs, id) {
+			invalid = append(invalid, id)
+		}
+	}
+
+	if len(invalid) != 0 {
+		return fmt.Errorf("invalid chain IDs: %v", invalid)
+	}
+	return nil
 }
 
 func (l Limit) Validate() error {

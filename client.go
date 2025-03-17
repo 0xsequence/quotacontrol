@@ -101,7 +101,7 @@ func (c *Client) GetDefaultUsage() int64 {
 }
 
 // FetchProjectQuota fetches the project quota from cache or from the quota server.
-func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error) {
 	// fetch access quota
 	quota, err := c.cache.QuotaCache.GetProjectQuota(ctx, projectID)
 	if err != nil {
@@ -121,11 +121,14 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, now ti
 			return nil, err
 		}
 	}
+	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
+		return quota, err
+	}
 	return quota, nil
 }
 
 // FetchKeyQuota fetches and validates the accessKey from cache or from the quota server.
-func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, now time.Time) (*proto.AccessQuota, error) {
+func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_key_quota"),
 		slog.String("access_key", accessKey),
@@ -146,7 +149,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 		}
 	}
 	// validate access key
-	if err := c.validateAccessKey(quota.AccessKey, origin); err != nil {
+	if err := c.validateAccessKey(quota.AccessKey, origin, chainIDs); err != nil {
 		return quota, err
 	}
 	return quota, nil
@@ -154,7 +157,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, no
 
 // FetchUsage fetches the current usage of the access key.
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
-	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
+	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
@@ -248,7 +251,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 	cfg := quota.Limit
 
 	// spend compute units
-	key := getQuotaKey(quota.AccessKey.ProjectID, quota.Cycle, now)
+	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, now)
 
 	for i := range 3 {
 		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
@@ -309,7 +312,7 @@ func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey strin
 	return c.cache.QuotaCache.DeleteAccessQuota(ctx, accessKey)
 }
 
-func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {
+func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chainIDs []uint64) (err error) {
 	if !access.Active {
 		return proto.ErrAccessKeyNotFound
 	}
@@ -318,6 +321,9 @@ func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err 
 	}
 	if !access.ValidateService(c.service) {
 		return proto.ErrInvalidService
+	}
+	if err := access.ValidateChains(chainIDs); err != nil {
+		return proto.ErrInvalidChain.WithCause(err)
 	}
 	return nil
 }
@@ -383,7 +389,7 @@ func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func getQuotaKey(projectID uint64, cycle *proto.Cycle, now time.Time) string {
+func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, now time.Time) string {
 	start, end := cycle.GetStart(now), cycle.GetEnd(now)
 	return fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))
 }
