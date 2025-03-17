@@ -87,8 +87,8 @@ func VerifyChains(ctx context.Context, chainIDs ...uint64) error {
 	if !ok {
 		return nil
 	}
-	if !quota.AccessKey.ValidateChains(chainIDs) {
-		return proto.ErrInvalidChain
+	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
+		return proto.ErrInvalidChain.WithCause(err)
 	}
 	return nil
 }

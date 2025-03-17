@@ -103,17 +103,22 @@ func (t *AccessKey) ValidateService(service Service) bool {
 	return false
 }
 
-func (t *AccessKey) ValidateChains(chainIDs []uint64) bool {
+func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 	if len(t.ChainIDs) == 0 {
-		return true
+		return nil
 	}
 
+	invalid := make([]uint64, 0, len(chainIDs))
 	for _, id := range chainIDs {
 		if !slices.Contains(t.ChainIDs, id) {
-			return false
+			invalid = append(invalid, id)
 		}
 	}
-	return true
+
+	if len(invalid) != 0 {
+		return fmt.Errorf("invalid chain IDs: %v", invalid)
+	}
+	return nil
 }
 
 func (l Limit) Validate() error {

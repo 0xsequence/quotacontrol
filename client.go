@@ -121,8 +121,8 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 			return nil, err
 		}
 	}
-	if !quota.AccessKey.ValidateChains(chainIDs) {
-		return nil, proto.ErrInvalidChain
+	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
+		return quota, err
 	}
 	return quota, nil
 }
@@ -322,8 +322,8 @@ func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chain
 	if !access.ValidateService(c.service) {
 		return proto.ErrInvalidService
 	}
-	if !access.ValidateChains(chainIDs) {
-		return proto.ErrInvalidChain
+	if err := access.ValidateChains(chainIDs); err != nil {
+		return proto.ErrInvalidChain.WithCause(err)
 	}
 	return nil
 }
