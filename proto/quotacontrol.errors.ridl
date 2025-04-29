@@ -2,7 +2,7 @@ webrpc = v1
 
 # 1100-1199: AccessKey/Project errors
 error 1101 AccessKeyNotFound   "Access key not found"               HTTP 401
-error 1102 AccessKeyMismatch   "Access key mismatch"                HTTP 409
+error 1102 AccessKeyMismatch   "Access key mismatch"                HTTP 403
 error 1103 InvalidOrigin       "Invalid origin for Access Key"      HTTP 403
 error 1104 InvalidService      "Service not enabled for Access key" HTTP 403
 error 1105 UnauthorizedUser    "Unauthorized user"                  HTTP 403
