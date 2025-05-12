@@ -98,9 +98,6 @@ func (v V2) Encode(ctx context.Context, projectID uint64) string {
 
 func (V2) Decode(accessKey string) (projectID uint64, err error) {
 	parts := strings.Split(accessKey, Separator)
-	if len(parts) < 2 {
-		return 0, ErrInvalidKeyLength
-	}
 	accessKey = parts[len(parts)-1]
 
 	buf, err := base64.Base64UrlDecode(accessKey)
