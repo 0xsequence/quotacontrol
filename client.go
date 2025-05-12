@@ -141,7 +141,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
-			if !errors.Is(err, proto.ErrAccessKeyNotFound) {
+			if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
 				logger.Warn("unexpected client error", slog.Any("error", err))
 				return nil, nil
 			}
