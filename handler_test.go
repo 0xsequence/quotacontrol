@@ -85,7 +85,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
 	r.Use(addCost(_credits * 2))
 	r.Use(addCost(_credits * -1))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
 	r.Use(middleware.SpendUsage(client, quotaOptions))
 
 	r.Handle("/*", &counter)
@@ -473,7 +473,7 @@ func TestJWTAccess(t *testing.T) {
 	r.Use(authcontrol.VerifyToken(authOptions))
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
 	r.Use(middleware.EnsurePermission(client, proto.UserPermission_READ_WRITE, quotaOptions))
 
 	r.Handle("/*", &counter)
@@ -505,7 +505,7 @@ func TestJWTAccess(t *testing.T) {
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderCreditsLimit))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 	})
 
 	server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: ProjectID})
@@ -515,7 +515,7 @@ func TestJWTAccess(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderCreditsLimit))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 		expectedHits++
 	})
 
@@ -526,7 +526,7 @@ func TestJWTAccess(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, ok)
 		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderCreditsLimit))
+		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 		expectedHits++
 	})
 
@@ -581,7 +581,7 @@ func TestSession(t *testing.T) {
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(authcontrol.AccessControl(ACL, authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -648,7 +648,7 @@ func TestSession(t *testing.T) {
 						return
 					}
 
-					rateLimit := h.Get(middleware.HeaderCreditsLimit)
+					rateLimit := h.Get(middleware.HeaderRateLimit)
 					switch tc.Session {
 					case proto.SessionType_Public:
 						assert.True(t, ok)
@@ -713,7 +713,7 @@ func TestSessionDisabled(t *testing.T) {
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(authcontrol.AccessControl(ACL, authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -781,7 +781,7 @@ func TestSessionDisabled(t *testing.T) {
 
 					assert.NoError(t, err, "%s/%s %+v", service, method, tc)
 					assert.True(t, ok)
-					rateLimit := h.Get(middleware.HeaderCreditsLimit)
+					rateLimit := h.Get(middleware.HeaderRateLimit)
 					switch tc.Session {
 					case proto.SessionType_Public:
 						assert.Equal(t, publicRPM, rateLimit)
@@ -832,7 +832,7 @@ func TestChainID(t *testing.T) {
 	r.Use(authcontrol.Session(authOptions))
 	r.Use(authcontrol.AccessControl(ACL, authOptions))
 	r.Use(middleware.VerifyQuota(client, quotaOptions))
-	r.Use(middleware.RateLimit(cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
 
 	r.Handle("/*", &counter)
 
@@ -866,6 +866,94 @@ func TestChainID(t *testing.T) {
 	ok, _, err = executeRequest(ctx, r, "/3/"+path, AccessKey, "")
 	assert.ErrorIs(t, err, proto.ErrInvalidChain)
 	assert.False(t, ok)
+}
+
+func TestPerServiceRateLimit(t *testing.T) {
+	counter := hitCounter(0)
+
+	cfg := newConfig()
+	server, cleanup := mock.NewServer(&cfg)
+	t.Cleanup(cleanup)
+
+	authOptions := authcontrol.Options{
+		JWTSecret:    Secret,
+		UserStore:    server.Store,
+		ProjectStore: server.Store,
+	}
+	quotaOptions := middleware.Options{}
+
+	logger := logger.NewLogger(logger.LogLevel_INFO)
+	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+
+	svc1 := proto.Service_Indexer
+	svc2 := proto.Service_Metadata
+	svc3 := proto.Service_NodeGateway
+
+	client1 := quotacontrol.NewClient(logger, svc1, cfg, nil)
+	client2 := quotacontrol.NewClient(logger, svc2, cfg, nil)
+	client3 := quotacontrol.NewClient(logger, svc3, cfg, nil)
+
+	var newRouter = func(client middleware.Client) *chi.Mux {
+		r := chi.NewRouter()
+		r.Use(authcontrol.VerifyToken(authOptions))
+		r.Use(authcontrol.Session(authOptions))
+		r.Use(authcontrol.AccessControl(ACL, authOptions))
+		r.Use(middleware.VerifyQuota(client, quotaOptions))
+		r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
+		r.Use(middleware.SpendUsage(client, quotaOptions))
+		r.Handle("/*", &counter)
+		return r
+	}
+
+	r1 := newRouter(client1)
+	r2 := newRouter(client2)
+	r3 := newRouter(client3)
+
+	limit := proto.Limit{
+		RateLimit: 10,
+		FreeWarn:  100,
+		FreeMax:   100,
+		OverWarn:  100,
+		OverMax:   100,
+		SvcRateLimit: map[proto.Service]int64{
+			svc1: 5,
+			svc2: 7,
+		},
+	}
+
+	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
+
+	ctx := context.Background()
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
+	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
+	require.NoError(t, err)
+
+	for _, svc := range []struct {
+		proto.Service
+		http.Handler
+	}{
+		{Service: svc1, Handler: r1},
+		{Service: svc2, Handler: r2},
+		{Service: svc3, Handler: r3},
+	} {
+		t.Run(svc.Service.String(), func(t *testing.T) {
+			rl := int(limit.GetRateLimit(&svc.Service))
+			for i := 0; i < (rl * 2); i++ {
+				ok, headers, err := executeRequest(ctx, svc.Handler, "/rpc/Service/MethodAccessKey", key, "")
+				require.Equal(t, strconv.Itoa(rl), headers.Get(middleware.HeaderRateLimit))
+				require.Equal(t, strconv.Itoa(max(rl-i-1, 0)), headers.Get(middleware.HeaderRateRemaining))
+				if i < int(rl) {
+					require.NoError(t, err)
+					require.True(t, ok)
+				} else {
+					require.ErrorIs(t, err, proto.ErrQuotaRateLimit)
+					require.False(t, ok)
+				}
+			}
+		})
+	}
+
 }
 
 func newConfig() quotacontrol.Config {

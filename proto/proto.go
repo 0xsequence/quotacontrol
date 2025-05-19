@@ -121,6 +121,19 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 	return nil
 }
 
+// GetRateLimit returns the rate limit for the given service. If the service is nil, it returns the default rate limit.
+func (l Limit) GetRateLimit(svc *Service) int64 {
+	if svc == nil {
+		return l.RateLimit
+	}
+
+	rl, ok := l.SvcRateLimit[*svc]
+	if !ok {
+		return l.RateLimit
+	}
+	return rl
+}
+
 func (l Limit) Validate() error {
 	if l.RateLimit < 1 {
 		return fmt.Errorf("rateLimit must be > 0")

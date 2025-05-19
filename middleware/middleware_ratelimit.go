@@ -14,11 +14,11 @@ import (
 )
 
 const (
-	HeaderCreditsRemaining = "Credits-Rate-Remaining"
-	HeaderCreditsLimit     = "Credits-Rate-Limit"
-	HeaderCreditsReset     = "Credits-Rate-Reset"
-	HeaderCreditsCost      = "Credits-Rate-Cost"
-	HeaderRetryAfter       = "Retry-After"
+	HeaderRateRemaining = "Credits-Rate-Remaining"
+	HeaderRateLimit     = "Credits-Rate-Limit"
+	HeaderRateReset     = "Credits-Rate-Reset"
+	HeaderRateCost      = "Credits-Rate-Cost"
+	HeaderRetryAfter    = "Retry-After"
 )
 
 const rateLimitWindow = 1 * time.Minute
@@ -41,12 +41,12 @@ type RateLimitConfig struct {
 	ServiceRPM int `toml:"service_requests_per_minute"`
 }
 
-func (r RateLimitConfig) GetRateLimit(ctx context.Context, baseRequestCost int) int {
+func (r RateLimitConfig) GetRateLimit(ctx context.Context, svc *proto.Service, baseRequestCost int) int {
 	if _, ok := authcontrol.GetService(ctx); ok {
 		return r.ServiceRPM * baseRequestCost
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
-		return int(q.Limit.RateLimit)
+		return int(q.Limit.GetRateLimit(svc)) * baseRequestCost
 	}
 	if _, ok := authcontrol.GetAccount(ctx); ok {
 		return r.AccountRPM * baseRequestCost
@@ -55,7 +55,7 @@ func (r RateLimitConfig) GetRateLimit(ctx context.Context, baseRequestCost int) 
 }
 
 // RateLimit is a middleware that limits the number of requests per minute.
-func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) func(next http.Handler) http.Handler {
+func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter, o Options) func(next http.Handler) http.Handler {
 	if !cfg.Enabled {
 		return func(next http.Handler) http.Handler {
 			return next
@@ -71,10 +71,10 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 	options := []httprate.Option{
 		httprate.WithLimitCounter(counter),
 		httprate.WithResponseHeaders(httprate.ResponseHeaders{
-			Limit:      HeaderCreditsLimit,
-			Remaining:  HeaderCreditsRemaining,
-			Increment:  HeaderCreditsCost,
-			Reset:      HeaderCreditsReset,
+			Limit:      HeaderRateLimit,
+			Remaining:  HeaderRateRemaining,
+			Increment:  HeaderRateCost,
+			Reset:      HeaderRateReset,
 			RetryAfter: HeaderRetryAfter,
 		}),
 		httprate.WithKeyFuncs(func(r *http.Request) (string, error) {
@@ -92,6 +92,8 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 				return AccountRateKey(account), nil
 			}
 			return httprate.KeyByRealIP(r)
+		}, func(_ *http.Request) (string, error) {
+			return fmt.Sprintf("service:%s", client.GetService()), nil
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			err := proto.ErrRateLimited
@@ -108,8 +110,10 @@ func RateLimit(cfg RateLimitConfig, counter httprate.LimitCounter, o Options) fu
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
+			svc := client.GetService()
+
 			// if the rate limit is 0 or less, skip the rate limiter
-			limit := cfg.GetRateLimit(ctx, o.BaseRequestCost)
+			limit := cfg.GetRateLimit(ctx, &svc, o.BaseRequestCost)
 			if limit <= 0 {
 				next.ServeHTTP(w, r)
 				return
