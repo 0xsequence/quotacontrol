@@ -950,6 +950,18 @@ func TestPerServiceRateLimit(t *testing.T) {
 					require.ErrorIs(t, err, proto.ErrQuotaRateLimit)
 					require.False(t, ok)
 				}
+
+				ok, headers, err = executeRequest(ctx, svc.Handler, "/rpc/Service/MethodPublic", "", "")
+				require.Equal(t, strconv.Itoa(middleware.DefaultPublicRate), headers.Get(middleware.HeaderRateLimit))
+				require.Equal(t, strconv.Itoa(max(middleware.DefaultPublicRate-i-1, 0)), headers.Get(middleware.HeaderRateRemaining))
+				if i < int(middleware.DefaultPublicRate) {
+					require.NoError(t, err)
+					require.True(t, ok)
+				} else {
+					require.ErrorIs(t, err, proto.ErrRateLimited)
+					require.False(t, ok)
+				}
+
 			}
 		})
 	}
