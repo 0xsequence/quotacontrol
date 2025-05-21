@@ -21,7 +21,9 @@ struct Limit
   - freeMax: int64
   - overWarn: int64
   - overMax: int64
-  - blockTransactions: bool
+  - svcRateLimit?: map<int,int64>
+    + go.field.type = map[Service]int64
+    + go.tag.json = svcRateLimit,omitempty
 
 struct AccessKey
   - projectId: uint64

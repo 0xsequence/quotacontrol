@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -98,6 +99,14 @@ func (c *Client) GetDefaultUsage() int64 {
 		return *c.cfg.DefaultUsage
 	}
 	return 1
+}
+
+// GetService returns the client service.
+func (c *Client) GetService() proto.Service {
+	if c == nil {
+		return math.MaxUint16
+	}
+	return c.service
 }
 
 // FetchProjectQuota fetches the project quota from cache or from the quota server.

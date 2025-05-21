@@ -287,3 +287,9 @@ func TestValidateLimit(t *testing.T) {
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
 }
+
+func TestDecode(t *testing.T) {
+	ctx := encoding.WithVersion(context.Background(), 2)
+	accessKey := proto.GenerateAccessKey(ctx, 237)
+	t.Log("=> k", accessKey, "| prefix =>", proto.GetAccessKeyPrefix(accessKey))
+}

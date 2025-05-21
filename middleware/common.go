@@ -72,6 +72,7 @@ func (o *Options) ApplyDefaults() {
 type Client interface {
 	IsEnabled() bool
 	GetDefaultUsage() int64
+	GetService() proto.Service
 	FetchProjectQuota(ctx context.Context, projectID uint64, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
