@@ -92,8 +92,6 @@ func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter
 				return AccountRateKey(account), nil
 			}
 			return httprate.KeyByRealIP(r)
-		}, func(_ *http.Request) (string, error) {
-			return fmt.Sprintf("service:%s", client.GetService()), nil
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			err := proto.ErrRateLimited

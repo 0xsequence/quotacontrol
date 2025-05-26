@@ -18,6 +18,7 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/tests/mock"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httprate"
 	"github.com/goware/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +78,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -462,7 +463,7 @@ func TestJWTAccess(t *testing.T) {
 	logger := logger.NewLogger(logger.LogLevel_INFO)
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
 	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
@@ -574,7 +575,7 @@ func TestSession(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -706,7 +707,7 @@ func TestSessionDisabled(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -825,7 +826,7 @@ func TestChainID(t *testing.T) {
 		ChainFunc: middleware.ChainFromPath(chains),
 	}
 
-	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -883,31 +884,34 @@ func TestPerServiceRateLimit(t *testing.T) {
 	quotaOptions := middleware.Options{}
 
 	logger := logger.NewLogger(logger.LogLevel_INFO)
-	limitCounter := quotacontrol.NewLimitCounter(cfg.Redis, logger)
 
 	svc1 := proto.Service_Indexer
 	svc2 := proto.Service_Metadata
 	svc3 := proto.Service_NodeGateway
 
+	rlCounter1 := quotacontrol.NewLimitCounter(svc1, cfg.Redis, logger)
+	rlCounter2 := quotacontrol.NewLimitCounter(svc2, cfg.Redis, logger)
+	rlCounter3 := quotacontrol.NewLimitCounter(svc3, cfg.Redis, logger)
+
 	client1 := quotacontrol.NewClient(logger, svc1, cfg, nil)
 	client2 := quotacontrol.NewClient(logger, svc2, cfg, nil)
 	client3 := quotacontrol.NewClient(logger, svc3, cfg, nil)
 
-	var newRouter = func(client middleware.Client) *chi.Mux {
+	var newRouter = func(client middleware.Client, rlCounter httprate.LimitCounter) *chi.Mux {
 		r := chi.NewRouter()
 		r.Use(authcontrol.VerifyToken(authOptions))
 		r.Use(authcontrol.Session(authOptions))
 		r.Use(authcontrol.AccessControl(ACL, authOptions))
 		r.Use(middleware.VerifyQuota(client, quotaOptions))
-		r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
+		r.Use(middleware.RateLimit(client, cfg.RateLimiter, rlCounter, quotaOptions))
 		r.Use(middleware.SpendUsage(client, quotaOptions))
 		r.Handle("/*", &counter)
 		return r
 	}
 
-	r1 := newRouter(client1)
-	r2 := newRouter(client2)
-	r3 := newRouter(client3)
+	r1 := newRouter(client1, rlCounter1)
+	r2 := newRouter(client2, rlCounter2)
+	r3 := newRouter(client3, rlCounter3)
 
 	limit := proto.Limit{
 		RateLimit: 10,
