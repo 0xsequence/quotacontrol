@@ -12,6 +12,7 @@ import (
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/goware/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,7 +44,9 @@ func TestRateLimiter(t *testing.T) {
 	}
 	cfg.Apply()
 
-	rl := middleware.RateLimit(middleware.RateLimitConfig{
+	client := quotacontrol.NewClient(logger.NewLogger(logger.LogLevel_INFO), proto.Service_API, quotacontrol.Config{}, nil)
+
+	rl := middleware.RateLimit(client, middleware.RateLimitConfig{
 		Enabled:   true,
 		PublicRPM: 10,
 	}, nil, middleware.Options{ErrHandler: eh})

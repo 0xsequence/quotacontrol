@@ -1,5 +1,5 @@
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=quotacontrol.ridl -target=golang@v0.17.0 -pkg=proto -server -client -out=./quotacontrol.gen.go
-//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=quotacontrol.ridl -target=typescript@v0.16.1 -client -out=./quotacontrol.gen.ts
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=quotacontrol.ridl -target=golang@v0.19.0 -pkg=proto -server -client -out=./quotacontrol.gen.go
+//go:generate go run github.com/webrpc/webrpc/cmd/webrpc-gen -schema=quotacontrol.ridl -target=typescript@v0.17.0 -client -out=./quotacontrol.gen.ts
 package proto
 
 import (
@@ -119,6 +119,19 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 		return fmt.Errorf("invalid chain IDs: %v", invalid)
 	}
 	return nil
+}
+
+// GetRateLimit returns the rate limit for the given service. If the service is nil, it returns the default rate limit.
+func (l Limit) GetRateLimit(svc *Service) int64 {
+	if svc == nil {
+		return l.RateLimit
+	}
+
+	rl, ok := l.SvcRateLimit[*svc]
+	if !ok {
+		return l.RateLimit
+	}
+	return rl
 }
 
 func (l Limit) Validate() error {
