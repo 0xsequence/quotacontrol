@@ -96,5 +96,5 @@ require (
 tool (
 	github.com/goware/rerun
 	github.com/webrpc/webrpc
-	github.com/webrpc/webrpc/gen
+	github.com/webrpc/webrpc/cmd/webrpc-gen
 )
