@@ -12,7 +12,6 @@ import (
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/goware/logger"
 	redisclient "github.com/redis/go-redis/v9"
 )
 
@@ -33,7 +32,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	cfg.URL = "http://" + listener.Addr().String()
 
 	qc := Server{
-		logger:        logger.NewLogger(logger.LogLevel_INFO),
+		logger:        slog.Default(),
 		listener:      listener,
 		cache:         client,
 		Store:         store,
@@ -54,7 +53,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	}
 
 	logger := qc.logger.With(slog.String("server", "server"))
-	qc.QuotaControl = quotacontrol.NewHandler(logger, qcCache, qcStore, nil)
+	qc.QuotaControl = quotacontrol.NewHandler(cfg.Redis, logger, qcCache, qcStore)
 
 	go func() {
 		http.Serve(listener, proto.NewQuotaControlServer(&qc))
@@ -68,7 +67,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 
 // Server is a wrapper of quotacontrol that tracks the events that are notified and allows to inject errors
 type Server struct {
-	logger   logger.Logger
+	logger   *slog.Logger
 	listener net.Listener
 	cache    *redisclient.Client
 

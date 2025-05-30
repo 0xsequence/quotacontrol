@@ -122,16 +122,16 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 }
 
 // GetRateLimit returns the rate limit for the given service. If the service is nil, it returns the default rate limit.
-func (l Limit) GetRateLimit(svc *Service) int64 {
+func (l Limit) GetRateLimit(svc *Service) int {
 	if svc == nil {
-		return l.RateLimit
+		return int(l.RateLimit)
 	}
 
 	rl, ok := l.SvcRateLimit[*svc]
 	if !ok {
-		return l.RateLimit
+		return int(l.RateLimit)
 	}
-	return rl
+	return int(rl)
 }
 
 func (l Limit) Validate() error {
@@ -260,4 +260,26 @@ func (e WebRPCError) WithMessage(message string) WebRPCError {
 		err.Message = message
 	}
 	return err
+}
+
+func (x Service) GetName() string {
+	switch x {
+	case 0:
+		return "node-gateway"
+	case 1:
+		return "api"
+	case 2:
+		return "indexer"
+	case 3:
+		return "relayer"
+	case 4:
+		return "metadata"
+	case 5:
+		return "marketplace"
+	case 6:
+		return "builder"
+	case 7:
+		return "waas"
+	}
+	return ""
 }

@@ -293,3 +293,12 @@ func TestDecode(t *testing.T) {
 	accessKey := proto.GenerateAccessKey(ctx, 237)
 	t.Log("=> k", accessKey, "| prefix =>", proto.GetAccessKeyPrefix(accessKey))
 }
+
+func TestServiceName(t *testing.T) {
+	for i := range proto.Service_name {
+		svc := proto.Service(i)
+		name := svc.GetName()
+		assert.NotEqual(t, "", name, "Service %d should have a name", svc)
+		t.Logf("Service %d: %s", i, name)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -19,7 +20,7 @@ import (
 	"github.com/0xsequence/quotacontrol/tests/mock"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logger"
+	"github.com/goware/logadapter-slog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -60,8 +61,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 
 	counter := spendingCounter(0)
 
@@ -330,8 +331,8 @@ func TestDefaultKey(t *testing.T) {
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: ProjectID})
 	require.NoError(t, err)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 
 	aq, err := client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
@@ -380,8 +381,8 @@ func TestJWT(t *testing.T) {
 	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 
 	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
@@ -460,8 +461,8 @@ func TestJWTAccess(t *testing.T) {
 	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 
 	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
@@ -565,8 +566,8 @@ func TestSession(t *testing.T) {
 	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 
 	authOptions := authcontrol.Options{
 		JWTSecret:    Secret,
@@ -697,8 +698,8 @@ func TestSessionDisabled(t *testing.T) {
 	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 
 	authOptions := authcontrol.Options{
 		JWTSecret:    Secret,
@@ -813,8 +814,8 @@ func TestChainID(t *testing.T) {
 	server, cleanup := mock.NewServer(&cfg)
 	t.Cleanup(cleanup)
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
 	chains := chainFinder{"a": 1, "b": 2, "c": 3}
 
 	authOptions := authcontrol.Options{
@@ -883,7 +884,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	logger := logger.NewLogger(logger.LogLevel_INFO)
+	logger := slog.Default()
 
 	svc1 := proto.Service_Indexer
 	svc2 := proto.Service_Metadata
@@ -893,9 +894,9 @@ func TestPerServiceRateLimit(t *testing.T) {
 	rlCounter2 := quotacontrol.NewLimitCounter(svc2, cfg.Redis, logger)
 	rlCounter3 := quotacontrol.NewLimitCounter(svc3, cfg.Redis, logger)
 
-	client1 := quotacontrol.NewClient(logger, svc1, cfg, nil)
-	client2 := quotacontrol.NewClient(logger, svc2, cfg, nil)
-	client3 := quotacontrol.NewClient(logger, svc3, cfg, nil)
+	client1 := quotacontrol.NewClient(logadapter.LogAdapter(logger), svc1, cfg, nil)
+	client2 := quotacontrol.NewClient(logadapter.LogAdapter(logger), svc2, cfg, nil)
+	client3 := quotacontrol.NewClient(logadapter.LogAdapter(logger), svc3, cfg, nil)
 
 	var newRouter = func(client middleware.Client, rlCounter httprate.LimitCounter) *chi.Mux {
 		r := chi.NewRouter()
@@ -942,7 +943,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 		{Service: svc3, Handler: r3},
 	} {
 		t.Run(svc.Service.String(), func(t *testing.T) {
-			rl := int(limit.GetRateLimit(&svc.Service))
+			rl := limit.GetRateLimit(&svc.Service)
 			for i := 0; i < (rl * 2); i++ {
 				ok, headers, err := executeRequest(ctx, svc.Handler, "/rpc/Service/MethodAccessKey", key, "")
 				require.Equal(t, strconv.Itoa(rl), headers.Get(middleware.HeaderRateLimit))

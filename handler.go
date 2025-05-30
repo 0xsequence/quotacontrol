@@ -12,7 +12,6 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logger"
 	"github.com/goware/validation"
 )
 
@@ -57,29 +56,30 @@ type Store struct {
 }
 
 // NewHandler returns server implementation for proto.QuotaControl.
-func NewHandler(log logger.Logger, cache Cache, storage Store, counter httprate.LimitCounter) proto.QuotaControl {
+func NewHandler(redis RedisConfig, log *slog.Logger, cache Cache, storage Store) proto.QuotaControl {
 	if log == nil {
-		log = logger.NewLogger(logger.LogLevel_INFO)
+		log = slog.Default()
 	}
 	if storage.CycleStore == nil {
 		storage.CycleStore = store.Cycle{}
 	}
+
 	return &handler{
-		log:          log.With("service", "quotacontrol"),
-		cache:        cache,
-		store:        storage,
-		limitCounter: counter,
-		keyVersion:   proto.DefaultEncoding.Version(),
+		log:        log.With("service", "quotacontrol"),
+		cache:      cache,
+		store:      storage,
+		keyVersion: proto.DefaultEncoding.Version(),
+		redis:      redis,
 	}
 }
 
 // handler is the quotacontrol handler backend implementation.
 type handler struct {
-	log          logger.Logger
-	cache        Cache
-	store        Store
-	limitCounter httprate.LimitCounter
-	keyVersion   byte
+	log        *slog.Logger
+	cache      Cache
+	store      Store
+	keyVersion byte
+	redis      RedisConfig
 }
 
 var _ proto.QuotaControl = &handler{}
@@ -550,12 +550,21 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 	}
 	status.UsageCounter = usage
 
-	limiter := httprate.NewRateLimiter(int(limit.RateLimit), time.Minute, httprate.WithLimitCounter(h.limitCounter))
-	_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
-	if err != nil {
-		return nil, err
+	status.RateLimitCounter = make(map[string]int64)
+
+	for i := range proto.Service_name {
+		svc := proto.Service(i)
+		limitCounter := NewLimitCounter(svc, h.redis, h.log)
+
+		limiter := httprate.NewRateLimiter(limit.GetRateLimit(&svc), time.Minute, httprate.WithLimitCounter(limitCounter))
+		_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
+		if err != nil {
+			return nil, err
+		}
+
+		name := svc.GetName()
+		status.RateLimitCounter[name] = int64(rate)
 	}
-	status.RatelimitCounter = int64(rate)
 
 	return &status, nil
 }

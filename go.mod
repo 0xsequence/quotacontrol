@@ -12,6 +12,7 @@ require (
 	github.com/go-chi/httprate v0.14.1
 	github.com/go-chi/httprate-redis v0.5.4
 	github.com/goware/base64 v0.1.0
+	github.com/goware/logadapter-slog v0.4.0
 	github.com/goware/logger v0.3.0
 	github.com/goware/validation v0.1.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -36,6 +37,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-chi/jwtauth/v5 v5.3.2 // indirect
 	github.com/go-chi/traceid v0.2.0 // indirect
