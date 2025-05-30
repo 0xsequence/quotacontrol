@@ -20,7 +20,6 @@ import (
 	"github.com/0xsequence/quotacontrol/tests/mock"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logadapter-slog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,7 +61,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	counter := spendingCounter(0)
 
@@ -332,7 +331,7 @@ func TestDefaultKey(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	aq, err := client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
@@ -382,7 +381,7 @@ func TestJWT(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
@@ -462,7 +461,7 @@ func TestJWTAccess(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	limitCounter := quotacontrol.NewLimitCounter(Service, cfg.Redis, logger)
 
@@ -567,7 +566,7 @@ func TestSession(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	authOptions := authcontrol.Options{
 		JWTSecret:    Secret,
@@ -699,7 +698,7 @@ func TestSessionDisabled(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
 	authOptions := authcontrol.Options{
 		JWTSecret:    Secret,
@@ -815,7 +814,7 @@ func TestChainID(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
-	client := quotacontrol.NewClient(logadapter.LogAdapter(logger), Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 	chains := chainFinder{"a": 1, "b": 2, "c": 3}
 
 	authOptions := authcontrol.Options{
@@ -894,9 +893,9 @@ func TestPerServiceRateLimit(t *testing.T) {
 	rlCounter2 := quotacontrol.NewLimitCounter(svc2, cfg.Redis, logger)
 	rlCounter3 := quotacontrol.NewLimitCounter(svc3, cfg.Redis, logger)
 
-	client1 := quotacontrol.NewClient(logadapter.LogAdapter(logger), svc1, cfg, nil)
-	client2 := quotacontrol.NewClient(logadapter.LogAdapter(logger), svc2, cfg, nil)
-	client3 := quotacontrol.NewClient(logadapter.LogAdapter(logger), svc3, cfg, nil)
+	client1 := quotacontrol.NewClient(logger, svc1, cfg, nil)
+	client2 := quotacontrol.NewClient(logger, svc2, cfg, nil)
+	client3 := quotacontrol.NewClient(logger, svc3, cfg, nil)
 
 	var newRouter = func(client middleware.Client, rlCounter httprate.LimitCounter) *chi.Mux {
 		r := chi.NewRouter()

@@ -12,8 +12,6 @@ require (
 	github.com/go-chi/httprate v0.14.1
 	github.com/go-chi/httprate-redis v0.5.4
 	github.com/goware/base64 v0.1.0
-	github.com/goware/logadapter-slog v0.4.0
-	github.com/goware/logger v0.3.0
 	github.com/goware/validation v0.1.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jxskiss/base62 v1.1.0
