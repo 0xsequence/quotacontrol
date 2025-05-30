@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/goware/logger"
 )
 
 const (
@@ -46,8 +45,6 @@ func ChainFromPath[T any](finder ChainFinder[T]) func(r *http.Request) []uint64 
 
 // Options is the configuration for the quota middleware.
 type Options struct {
-	// Logger is the logger to use for logging.
-	Logger logger.Logger
 	// BaseRequestCost is the cost of a single request.
 	BaseRequestCost int
 	// ChainFunc is the function that returns the chain IDs for a given request.
