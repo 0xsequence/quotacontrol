@@ -12,7 +12,6 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
-	"github.com/goware/logadapter-slog"
 	"github.com/goware/validation"
 )
 
@@ -551,20 +550,20 @@ func (h handler) GetProjectStatus(ctx context.Context, projectID uint64) (*proto
 	}
 	status.UsageCounter = usage
 
-	wlog := logadapter.LogAdapter(h.log)
-	status.RateLimitCounter = make(map[proto.Service]int64)
+	status.RateLimitCounter = make(map[string]int64)
 
 	for i := range proto.Service_name {
-		service := proto.Service(i)
-		limitCounter := NewLimitCounter(service, h.redis, wlog)
+		svc := proto.Service(i)
+		limitCounter := NewLimitCounter(svc, h.redis, h.log)
 
-		limiter := httprate.NewRateLimiter(int(limit.RateLimit), time.Minute, httprate.WithLimitCounter(limitCounter))
+		limiter := httprate.NewRateLimiter(limit.GetRateLimit(&svc), time.Minute, httprate.WithLimitCounter(limitCounter))
 		_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
 		if err != nil {
 			return nil, err
 		}
-		status.RateLimitCounter[service] = int64(rate)
 
+		name := svc.GetName()
+		status.RateLimitCounter[name] = int64(rate)
 	}
 
 	return &status, nil

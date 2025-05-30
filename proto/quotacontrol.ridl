@@ -85,8 +85,7 @@ struct ProjectStatus
     + go.field.name = ProjectID
   - limit: Limit
   - usageCounter: int64
-  - rateLimitCounter?: map<Service,int64>
-    + go.field.type = map[Service]int64
+  - rateLimitCounter?: map<string,int64>
 
 struct Subscription
   - tier: string
