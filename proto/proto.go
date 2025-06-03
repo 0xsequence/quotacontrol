@@ -283,3 +283,7 @@ func (x Service) GetName() string {
 	}
 	return ""
 }
+
+func (x Service) GetService() Service {
+	return x
+}
