@@ -249,29 +249,36 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		return false, 0, nil
 	}
 
+	accessKey := quota.AccessKey.AccessKey
+	projectID := quota.AccessKey.ProjectID
+
 	logger := c.logger.With(
 		slog.String("op", "spend_quota"),
-		slog.Uint64("project_id", quota.AccessKey.ProjectID),
-		slog.String("access_key", quota.AccessKey.AccessKey),
+		slog.Uint64("project_id", projectID),
+		slog.String("access_key", accessKey),
 	)
 
-	accessKey := quota.AccessKey.AccessKey
 	cfg := quota.Limit
 
 	// spend compute units
-	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, now)
+	key := cacheKeyQuota(projectID, quota.Cycle, now)
 
 	for i := range 3 {
 		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
 		if err != nil {
 			// limit exceeded
 			if errors.Is(err, proto.ErrQuotaExceeded) {
-				c.usage.AddKeyUsage(accessKey, now, proto.AccessUsage{LimitedCompute: cost})
+				usage := proto.AccessUsage{LimitedCompute: cost}
+				if accessKey == "" {
+					c.usage.AddProjectUsage(projectID, now, usage)
+				} else {
+					c.usage.AddKeyUsage(accessKey, now, usage)
+				}
 				return false, total, proto.ErrQuotaExceeded
 			}
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
-				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
+				if _, err := c.quotaClient.PrepareUsage(ctx, projectID, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
 					if _, err := c.cache.UsageCache.ClearUsage(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
@@ -293,8 +300,8 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		}
 
 		usage, event := cfg.GetSpendResult(cost, total)
-		if quota.AccessKey.AccessKey == "" {
-			c.usage.AddProjectUsage(quota.AccessKey.ProjectID, now, usage)
+		if accessKey == "" {
+			c.usage.AddProjectUsage(projectID, now, usage)
 		} else {
 			c.usage.AddKeyUsage(accessKey, now, usage)
 		}
@@ -302,7 +309,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 			return false, total, proto.ErrQuotaExceeded
 		}
 		if event != nil {
-			if _, err := c.quotaClient.NotifyEvent(ctx, quota.AccessKey.ProjectID, *event); err != nil {
+			if _, err := c.quotaClient.NotifyEvent(ctx, projectID, *event); err != nil {
 				logger.Error("notify event failed", slog.Any("error", err))
 			}
 		}
