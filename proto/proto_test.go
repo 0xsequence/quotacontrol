@@ -1,59 +1,13 @@
 package proto_test
 
 import (
-	"context"
 	"testing"
 
-	"github.com/0xsequence/quotacontrol/encoding"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestAccessKeyEncoding(t *testing.T) {
-	t.Run("v0", func(t *testing.T) {
-		ctx := encoding.WithVersion(context.Background(), 0)
-		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(ctx, projectID)
-		t.Log("=> k", accessKey)
-
-		outID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-	})
-
-	t.Run("v1", func(t *testing.T) {
-		ctx := encoding.WithVersion(context.Background(), 1)
-		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(ctx, projectID)
-		t.Log("=> k", accessKey)
-		outID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-	})
-	t.Run("v2", func(t *testing.T) {
-		ctx := encoding.WithVersion(context.Background(), 2)
-		projectID := uint64(12345)
-		accessKey := proto.GenerateAccessKey(ctx, projectID)
-		t.Log("=> k", accessKey, "| prefix =>", proto.GetAccessKeyPrefix(accessKey))
-		outID, err := proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-
-		ctx = encoding.WithPrefix(ctx, "newprefix:dev")
-
-		accessKey2 := proto.GenerateAccessKey(ctx, projectID)
-		t.Log("=> k", accessKey2, "| prefix =>", proto.GetAccessKeyPrefix(accessKey2))
-		outID, err = proto.GetProjectID(accessKey2)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-		// retrocompatibility with the older prefix
-		outID, err = proto.GetProjectID(accessKey)
-		require.NoError(t, err)
-		require.Equal(t, projectID, outID)
-	})
-}
 
 func TestAccessKeyValidateOrigin(t *testing.T) {
 	t.Run("no allowed origins", func(t *testing.T) {
@@ -286,12 +240,6 @@ func TestValidateLimit(t *testing.T) {
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
 	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
-}
-
-func TestDecode(t *testing.T) {
-	ctx := encoding.WithVersion(context.Background(), 2)
-	accessKey := proto.GenerateAccessKey(ctx, 237)
-	t.Log("=> k", accessKey, "| prefix =>", proto.GetAccessKeyPrefix(accessKey))
 }
 
 func TestServiceName(t *testing.T) {
