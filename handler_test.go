@@ -13,8 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/0xsequence/authcontrol"
+	authproto "github.com/0xsequence/authcontrol/proto"
 	"github.com/0xsequence/quotacontrol"
-	"github.com/0xsequence/quotacontrol/encoding"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/tests/mock"
@@ -22,8 +23,6 @@ import (
 	"github.com/go-chi/httprate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/0xsequence/authcontrol"
 )
 
 var (
@@ -42,7 +41,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	now := time.Now()
-	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
+	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID)
 
 	const _credits = middleware.DefaultPublicRate / 10
 
@@ -306,8 +305,8 @@ func TestDefaultKey(t *testing.T) {
 
 	now := time.Now()
 	keys := []string{
-		proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID),
-		proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID),
+		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
+		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
 	limit := proto.Limit{
@@ -372,7 +371,7 @@ func TestDefaultKey(t *testing.T) {
 }
 
 func TestJWT(t *testing.T) {
-	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
+	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID)
 
 	counter := spendingCounter(0)
 
@@ -442,7 +441,7 @@ func TestJWT(t *testing.T) {
 	})
 
 	t.Run("AccessKeyMismatch", func(t *testing.T) {
-		ok, headers, err := executeRequest(ctx, r, "", proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID+1), token)
+		ok, headers, err := executeRequest(ctx, r, "", authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID+1), token)
 		require.ErrorIs(t, err, proto.ErrAccessKeyMismatch)
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
@@ -548,13 +547,13 @@ var Methods = []string{MethodPublic, MethodAccount, MethodAccessKey, MethodProje
 
 var ACL = authcontrol.Config[authcontrol.ACL]{
 	"Service": {
-		MethodPublic:    authcontrol.NewACL(proto.SessionType_Public.OrHigher()...),
-		MethodAccount:   authcontrol.NewACL(proto.SessionType_Wallet.OrHigher()...),
-		MethodAccessKey: authcontrol.NewACL(proto.SessionType_AccessKey.OrHigher()...),
-		MethodProject:   authcontrol.NewACL(proto.SessionType_Project.OrHigher()...),
-		MethodUser:      authcontrol.NewACL(proto.SessionType_User.OrHigher()...),
-		MethodAdmin:     authcontrol.NewACL(proto.SessionType_Admin.OrHigher()...),
-		MethodService:   authcontrol.NewACL(proto.SessionType_InternalService.OrHigher()...),
+		MethodPublic:    authcontrol.NewACL(authproto.SessionType_Public.OrHigher()...),
+		MethodAccount:   authcontrol.NewACL(authproto.SessionType_Wallet.OrHigher()...),
+		MethodAccessKey: authcontrol.NewACL(authproto.SessionType_AccessKey.OrHigher()...),
+		MethodProject:   authcontrol.NewACL(authproto.SessionType_Project.OrHigher()...),
+		MethodUser:      authcontrol.NewACL(authproto.SessionType_User.OrHigher()...),
+		MethodAdmin:     authcontrol.NewACL(authproto.SessionType_Admin.OrHigher()...),
+		MethodService:   authcontrol.NewACL(authproto.SessionType_S2S.OrHigher()...),
 	},
 }
 
@@ -596,19 +595,19 @@ func TestSession(t *testing.T) {
 
 	testCases := []struct {
 		AccessKey string
-		Session   proto.SessionType
+		Session   authproto.SessionType
 	}{
-		{Session: proto.SessionType_Public},
-		{Session: proto.SessionType_Wallet},
-		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
-		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey + "a"},
-		{Session: proto.SessionType_Project},
-		{Session: proto.SessionType_Project, AccessKey: AccessKey},
-		{Session: proto.SessionType_User},
-		{Session: proto.SessionType_Admin},
-		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
-		{Session: proto.SessionType_InternalService},
-		{Session: proto.SessionType_InternalService, AccessKey: AccessKey},
+		{Session: authproto.SessionType_Public},
+		{Session: authproto.SessionType_Wallet},
+		{Session: authproto.SessionType_AccessKey, AccessKey: AccessKey},
+		{Session: authproto.SessionType_AccessKey, AccessKey: AccessKey + "a"},
+		{Session: authproto.SessionType_Project},
+		{Session: authproto.SessionType_Project, AccessKey: AccessKey},
+		{Session: authproto.SessionType_User},
+		{Session: authproto.SessionType_Admin},
+		{Session: authproto.SessionType_Admin, AccessKey: AccessKey},
+		{Session: authproto.SessionType_S2S},
+		{Session: authproto.SessionType_S2S, AccessKey: AccessKey},
 	}
 
 	var (
@@ -630,15 +629,15 @@ func TestSession(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					var claims map[string]any
 					switch tc.Session {
-					case proto.SessionType_Wallet:
+					case authproto.SessionType_Wallet:
 						claims = map[string]any{"account": WalletAddress}
-					case proto.SessionType_Project:
+					case authproto.SessionType_Project:
 						claims = map[string]any{"account": WalletAddress, "project": ProjectID}
-					case proto.SessionType_User:
+					case authproto.SessionType_User:
 						claims = map[string]any{"account": UserAddress}
-					case proto.SessionType_Admin:
+					case authproto.SessionType_Admin:
 						claims = map[string]any{"account": WalletAddress, "admin": true}
-					case proto.SessionType_InternalService:
+					case authproto.SessionType_S2S:
 						claims = map[string]any{"service": ServiceName}
 					}
 
@@ -651,11 +650,11 @@ func TestSession(t *testing.T) {
 
 					rateLimit := h.Get(middleware.HeaderRateLimit)
 					switch tc.Session {
-					case proto.SessionType_Public:
+					case authproto.SessionType_Public:
 						assert.True(t, ok)
 						assert.NoError(t, err)
 						assert.Equal(t, publicRPM, rateLimit)
-					case proto.SessionType_AccessKey:
+					case authproto.SessionType_AccessKey:
 						if tc.AccessKey == AccessKey {
 							assert.True(t, ok)
 							assert.NoError(t, err)
@@ -665,12 +664,12 @@ func TestSession(t *testing.T) {
 							assert.False(t, ok)
 							assert.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
 						}
-					case proto.SessionType_Project:
+					case authproto.SessionType_Project:
 						assert.True(t, ok)
 						assert.NoError(t, err)
 						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
-					case proto.SessionType_Wallet, proto.SessionType_User:
+					case authproto.SessionType_Wallet, authproto.SessionType_User:
 						assert.True(t, ok)
 						assert.NoError(t, err)
 						limit := accountRPM
@@ -678,7 +677,7 @@ func TestSession(t *testing.T) {
 							limit = quotaRPM
 						}
 						assert.Equal(t, limit, rateLimit)
-					case proto.SessionType_InternalService:
+					case authproto.SessionType_S2S:
 						assert.True(t, ok)
 						assert.NoError(t, err)
 						assert.Equal(t, serviceRPM, rateLimit)
@@ -728,18 +727,18 @@ func TestSessionDisabled(t *testing.T) {
 
 	testCases := []struct {
 		AccessKey string
-		Session   proto.SessionType
+		Session   authproto.SessionType
 	}{
-		{Session: proto.SessionType_Public},
-		{Session: proto.SessionType_Wallet},
-		{Session: proto.SessionType_AccessKey, AccessKey: AccessKey},
-		{Session: proto.SessionType_Project},
-		{Session: proto.SessionType_Project, AccessKey: AccessKey},
-		{Session: proto.SessionType_User},
-		{Session: proto.SessionType_Admin},
-		{Session: proto.SessionType_Admin, AccessKey: AccessKey},
-		{Session: proto.SessionType_InternalService},
-		{Session: proto.SessionType_InternalService, AccessKey: AccessKey},
+		{Session: authproto.SessionType_Public},
+		{Session: authproto.SessionType_Wallet},
+		{Session: authproto.SessionType_AccessKey, AccessKey: AccessKey},
+		{Session: authproto.SessionType_Project},
+		{Session: authproto.SessionType_Project, AccessKey: AccessKey},
+		{Session: authproto.SessionType_User},
+		{Session: authproto.SessionType_Admin},
+		{Session: authproto.SessionType_Admin, AccessKey: AccessKey},
+		{Session: authproto.SessionType_S2S},
+		{Session: authproto.SessionType_S2S, AccessKey: AccessKey},
 	}
 
 	var (
@@ -761,15 +760,15 @@ func TestSessionDisabled(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					var claims map[string]any
 					switch tc.Session {
-					case proto.SessionType_Wallet:
+					case authproto.SessionType_Wallet:
 						claims = map[string]any{"account": WalletAddress}
-					case proto.SessionType_Project:
+					case authproto.SessionType_Project:
 						claims = map[string]any{"account": WalletAddress, "project": ProjectID}
-					case proto.SessionType_User:
+					case authproto.SessionType_User:
 						claims = map[string]any{"account": UserAddress}
-					case proto.SessionType_Admin:
+					case authproto.SessionType_Admin:
 						claims = map[string]any{"account": WalletAddress, "admin": true}
-					case proto.SessionType_InternalService:
+					case authproto.SessionType_S2S:
 						claims = map[string]any{"service": ServiceName}
 					}
 
@@ -784,20 +783,20 @@ func TestSessionDisabled(t *testing.T) {
 					assert.True(t, ok)
 					rateLimit := h.Get(middleware.HeaderRateLimit)
 					switch tc.Session {
-					case proto.SessionType_Public:
+					case authproto.SessionType_Public:
 						assert.Equal(t, publicRPM, rateLimit)
-					case proto.SessionType_AccessKey, proto.SessionType_Project:
+					case authproto.SessionType_AccessKey, authproto.SessionType_Project:
 						assert.Equal(t, quotaRPM, rateLimit)
 						assert.Equal(t, quotaLimit, h.Get(middleware.HeaderQuotaLimit))
-					case proto.SessionType_Wallet, proto.SessionType_User:
+					case authproto.SessionType_Wallet, authproto.SessionType_User:
 						assert.Equal(t, accountRPM, rateLimit)
-					case proto.SessionType_Admin:
+					case authproto.SessionType_Admin:
 						limit := accountRPM
 						if tc.AccessKey != "" {
 							limit = quotaRPM
 						}
 						assert.Equal(t, limit, rateLimit)
-					case proto.SessionType_InternalService:
+					case authproto.SessionType_S2S:
 						assert.Equal(t, serviceRPM, rateLimit)
 					}
 				})
@@ -925,7 +924,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 		},
 	}
 
-	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
+	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID)
 
 	ctx := context.Background()
 	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)

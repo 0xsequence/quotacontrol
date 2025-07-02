@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/0xsequence/authcontrol"
+	authproto "github.com/0xsequence/authcontrol/proto"
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
@@ -29,7 +30,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				chainIDs = o.ChainFunc(r)
 			}
 
-			if session == proto.SessionType_Project {
+			if session == authproto.SessionType_Project {
 				// fetch and verify project quota
 				id, ok := authcontrol.GetProjectID(ctx)
 				if !ok {
@@ -65,7 +66,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 
 			// fetch and verify access key quota
 			accessKey, ok := authcontrol.GetAccessKey(ctx)
-			if !ok && session == proto.SessionType_AccessKey {
+			if !ok && session == authproto.SessionType_AccessKey {
 				o.ErrHandler(r, w, proto.ErrUnauthorizedUser.WithCausef("verify quota: no access key found in context"))
 				return
 			}
@@ -73,7 +74,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			if ok {
 				// check that project ID matches
 				if projectID != 0 {
-					if v, _ := proto.GetProjectID(accessKey); v != projectID {
+					if v, _ := authcontrol.GetProjectIDFromAccessKey(accessKey); v != projectID {
 						o.ErrHandler(r, w, proto.ErrAccessKeyMismatch)
 						return
 					}

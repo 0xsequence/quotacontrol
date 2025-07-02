@@ -3,76 +3,14 @@
 package proto
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
-
-	"github.com/0xsequence/authcontrol/proto"
-	"github.com/0xsequence/quotacontrol/encoding"
 )
 
 func Ptr[T any](v T) *T {
 	return &v
 }
-
-// SupportedEncodings is a list of supported encodings. If more versions of the same version are added, the first one will be used.
-var SupportedEncodings = []encoding.Encoding{
-	encoding.V2{},
-	encoding.V1{},
-	encoding.V0{},
-}
-
-var DefaultEncoding encoding.Encoding = encoding.V1{}
-
-func GetProjectID(accessKey string) (projectID uint64, err error) {
-	var errs []error
-	for _, e := range SupportedEncodings {
-		projectID, err := e.Decode(accessKey)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("decode v%d: %w", e.Version(), err))
-			continue
-		}
-		return projectID, nil
-	}
-	return 0, errors.Join(errs...)
-}
-
-func GenerateAccessKey(ctx context.Context, projectID uint64) string {
-	version, ok := encoding.GetVersion(ctx)
-	if !ok {
-		return DefaultEncoding.Encode(ctx, projectID)
-	}
-
-	for _, e := range SupportedEncodings {
-		if e.Version() == version {
-			return e.Encode(ctx, projectID)
-		}
-	}
-	return ""
-}
-
-func GetAccessKeyPrefix(accessKey string) string {
-	parts := strings.Split(accessKey, encoding.Separator)
-	if len(parts) < 2 {
-		return ""
-	}
-	return strings.Join(parts[:len(parts)-1], encoding.Separator)
-}
-
-type SessionType = proto.SessionType
-
-const (
-	SessionType_Public          = proto.SessionType_Public
-	SessionType_Wallet          = proto.SessionType_Wallet
-	SessionType_AccessKey       = proto.SessionType_AccessKey
-	SessionType_Project         = proto.SessionType_Project
-	SessionType_User            = proto.SessionType_User
-	SessionType_Admin           = proto.SessionType_Admin
-	SessionType_InternalService = proto.SessionType_InternalService
-)
 
 func (u *AccessUsage) Add(usage AccessUsage) {
 	u.LimitedCompute += usage.LimitedCompute

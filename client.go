@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/0xsequence/authcontrol"
+	authproto "github.com/0xsequence/authcontrol/proto"
 )
 
 type Notifier interface {
@@ -205,7 +206,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
-	if sessionType, _ := authcontrol.GetSessionType(ctx); sessionType >= proto.SessionType_Admin {
+	if sessionType, _ := authcontrol.GetSessionType(ctx); sessionType >= authproto.SessionType_Admin {
 		return true, nil
 	}
 	perm, _, err := c.FetchPermission(ctx, projectID)

@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/0xsequence/quotacontrol/encoding"
+	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -68,7 +68,7 @@ func NewHandler(redis RedisConfig, log *slog.Logger, cache Cache, storage Store)
 		log:        log.With("service", "quotacontrol"),
 		cache:      cache,
 		store:      storage,
-		keyVersion: proto.DefaultEncoding.Version(),
+		keyVersion: authcontrol.DefaultEncoding.Version(),
 		redis:      redis,
 	}
 }
@@ -131,7 +131,7 @@ func (h handler) GetAsyncUsage(ctx context.Context, projectID uint64, service *p
 }
 
 func (h handler) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	projectID, err := proto.GetProjectID(accessKey)
+	projectID, err := authcontrol.GetProjectIDFromAccessKey(accessKey)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func (h handler) UpdateKeyUsage(ctx context.Context, service proto.Service, now 
 	var errs []error
 	m := make(map[string]bool, len(usage))
 	for key, u := range usage {
-		projectID, err := proto.GetProjectID(key)
+		projectID, err := authcontrol.GetProjectIDFromAccessKey(key)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue
@@ -333,14 +333,14 @@ func (h handler) CreateAccessKey(ctx context.Context, projectID uint64, displayN
 	}
 
 	// set key version if not set
-	if _, ok := encoding.GetVersion(ctx); !ok {
-		ctx = encoding.WithVersion(ctx, h.keyVersion)
+	if _, ok := authcontrol.GetVersion(ctx); !ok {
+		ctx = authcontrol.WithVersion(ctx, h.keyVersion)
 	}
 
 	k := proto.AccessKey{
 		ProjectID:       projectID,
 		DisplayName:     displayName,
-		AccessKey:       proto.GenerateAccessKey(ctx, projectID),
+		AccessKey:       authcontrol.GenerateAccessKey(ctx, projectID),
 		Active:          true,
 		Default:         len(list) == 0,
 		RequireOrigin:   requireOrigin,
