@@ -45,7 +45,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	const _credits = middleware.DefaultPublicRate / 10
 
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		RateLimit: _credits * 100,
 		FreeWarn:  _credits * 5,
 		FreeMax:   _credits * 5,
@@ -185,7 +185,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("ChangeLimits", func(t *testing.T) {
 		// Increase CreditsOverageLimit which should still allow requests to go through, etc.
-		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{
+		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.LegacyLimit{
 			RateLimit: _credits * 100,
 			OverWarn:  _credits * 5,
 			OverMax:   _credits * 110,
@@ -309,7 +309,7 @@ func TestDefaultKey(t *testing.T) {
 		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		RateLimit: 100,
 		FreeMax:   5,
 		OverWarn:  7,
@@ -399,7 +399,7 @@ func TestJWT(t *testing.T) {
 
 	ctx := context.Background()
 
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
@@ -479,7 +479,7 @@ func TestJWTAccess(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
@@ -586,7 +586,7 @@ func TestSession(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	limit := proto.LegacyLimit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -718,7 +718,7 @@ func TestSessionDisabled(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	limit := proto.LegacyLimit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -837,7 +837,7 @@ func TestChainID(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	limit := proto.LegacyLimit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -912,7 +912,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r2 := newRouter(client2, rlCounter2)
 	r3 := newRouter(client3, rlCounter3)
 
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		RateLimit: 10,
 		FreeWarn:  100,
 		FreeMax:   100,

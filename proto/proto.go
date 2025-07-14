@@ -60,7 +60,7 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 }
 
 // GetRateLimit returns the rate limit for the given service. If the service is nil, it returns the default rate limit.
-func (l Limit) GetRateLimit(svc *Service) int {
+func (l LegacyLimit) GetRateLimit(svc *Service) int {
 	if svc == nil {
 		return int(l.RateLimit)
 	}
@@ -72,7 +72,7 @@ func (l Limit) GetRateLimit(svc *Service) int {
 	return int(rl)
 }
 
-func (l Limit) Validate() error {
+func (l LegacyLimit) Validate() error {
 	if l.RateLimit < 1 {
 		return fmt.Errorf("rateLimit must be > 0")
 	}
@@ -102,7 +102,7 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 	return max(0, total-threshold), true
 }
 
-func (l *Limit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
+func (l *LegacyLimit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert
