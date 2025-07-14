@@ -72,7 +72,7 @@ type Client interface {
 	GetService() proto.Service
 	FetchProjectQuota(ctx context.Context, projectID uint64, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
-	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
+	FetchUsage(ctx context.Context, quota *proto.AccessQuota, service *proto.Service, now time.Time) (int64, error)
 	CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error)
 	SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (bool, int64, error)
 }

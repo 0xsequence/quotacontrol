@@ -107,7 +107,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax-i, 10), headers.Get(middleware.HeaderQuotaRemaining))
 			assert.Equal(t, "", headers.Get(middleware.HeaderQuotaOverage))
 			assert.Empty(t, server.GetEvents(ProjectID), i)
-			expectedUsage.Add(proto.AccessUsage{ValidCompute: _credits})
+			expectedUsage.Add(&proto.AccessUsage{ValidCompute: _credits})
 		}
 
 		// Go over free CU
@@ -118,7 +118,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaOverage))
 		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_FreeMax)
-		expectedUsage.Add(proto.AccessUsage{ValidCompute: _credits})
+		expectedUsage.Add(&proto.AccessUsage{ValidCompute: _credits})
 
 		// Get close to soft quota
 		for i := limit.FreeWarn + _credits; i < limit.OverWarn; i += _credits {
@@ -129,7 +129,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 			assert.Equal(t, strconv.FormatInt(i-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 			assert.Len(t, server.GetEvents(ProjectID), 1)
-			expectedUsage.Add(proto.AccessUsage{OverCompute: _credits})
+			expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 		}
 
 		// Go over soft quota
@@ -140,7 +140,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, strconv.FormatInt(limit.OverWarn-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_OverWarn)
-		expectedUsage.Add(proto.AccessUsage{OverCompute: _credits})
+		expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 
 		// Get close to hard quota
 		for i := limit.OverWarn + _credits; i < limit.OverMax; i += _credits {
@@ -151,7 +151,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 			assert.Equal(t, strconv.FormatInt(i-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 			assert.Len(t, server.GetEvents(ProjectID), 2)
-			expectedUsage.Add(proto.AccessUsage{OverCompute: _credits})
+			expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 		}
 
 		// Go over hard quota
@@ -162,7 +162,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, strconv.FormatInt(limit.OverMax-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_OverMax)
-		expectedUsage.Add(proto.AccessUsage{OverCompute: _credits})
+		expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 
 		// Denied
 		for i := 0; i < 10; i++ {
@@ -172,7 +172,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 			assert.Equal(t, strconv.FormatInt(limit.OverMax-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
-			expectedUsage.Add(proto.AccessUsage{LimitedCompute: _credits})
+			expectedUsage.Add(&proto.AccessUsage{LimitedCompute: _credits})
 		}
 
 		// check the usage
@@ -207,7 +207,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		client.Stop(context.Background())
 		usage, err := server.Store.GetAccountUsage(ctx, ProjectID, &Service, now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
-		expectedUsage.Add(proto.AccessUsage{ValidCompute: 0, OverCompute: _credits, LimitedCompute: 0})
+		expectedUsage.Add(&proto.AccessUsage{ValidCompute: 0, OverCompute: _credits, LimitedCompute: 0})
 		assert.Equal(t, int64(expectedUsage.GetTotalUsage()), _credits*counter.GetValue())
 		assert.Equal(t, &expectedUsage, &usage)
 	})

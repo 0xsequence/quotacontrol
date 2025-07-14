@@ -12,7 +12,10 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
-func (u *AccessUsage) Add(usage AccessUsage) {
+func (u *AccessUsage) Add(usage *AccessUsage) {
+	if usage == nil {
+		return
+	}
 	u.LimitedCompute += usage.LimitedCompute
 	u.ValidCompute += usage.ValidCompute
 	u.OverCompute += usage.OverCompute

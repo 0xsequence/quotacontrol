@@ -13,7 +13,6 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	"github.com/goware/validation"
-	"golang.org/x/mod/semver"
 )
 
 type LimitStore interface {
@@ -149,35 +148,46 @@ func (s server) GetAccessKeyUsage(ctx context.Context, accessKey string, service
 	return &usage, nil
 }
 
-func (s server) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
+func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (bool, error) {
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
 	usage, err := s.GetAccountUsage(ctx, projectID, nil, &min, &max)
 	if err != nil {
 		return false, err
 	}
 
-	key := cacheKeyQuota(projectID, cycle, now)
+	key := cacheKeyQuota(projectID, cycle, service, now)
 	if err := s.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (s server) ClearUsage(ctx context.Context, projectID uint64, now time.Time) (bool, error) {
+func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (bool, error) {
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
 		return false, err
 	}
 
-	key := cacheKeyQuota(projectID, cycle, now)
-	ok, err := s.cache.UsageCache.ClearUsage(ctx, key)
-	if err != nil {
-		return false, err
+	if service != nil {
+		key := cacheKeyQuota(projectID, cycle, service, now)
+		ok, err := s.cache.UsageCache.ClearUsage(ctx, key)
+		if err != nil {
+			return false, err
+		}
+		return ok, nil
 	}
-	return ok, nil
+
+	for i := range proto.Service_name {
+		svc := proto.Service(i)
+		key := cacheKeyQuota(projectID, cycle, &svc, now)
+		if _, err := s.cache.UsageCache.ClearUsage(ctx, key); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
 }
 
-func (s server) GetProjectQuota(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (*proto.AccessQuota, error) {
+func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
 		return nil, err
@@ -201,7 +211,7 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, service *
 	return &record, nil
 }
 
-func (s server) GetAccessQuota(ctx context.Context, accessKey string, service *proto.Service, now time.Time) (*proto.AccessQuota, error) {
+func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
 		return nil, err
@@ -536,25 +546,28 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	}
 	status.Limit = limit
 
-	cacheKey := cacheKeyQuota(projectID, cycle, now)
-	usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
-	if err != nil {
-		if !errors.Is(err, ErrCachePing) {
-			return nil, err
-		}
-		if _, err := s.PrepareUsage(ctx, projectID, cycle, now); err != nil {
-			return nil, err
-		}
-		if usage, err = s.cache.UsageCache.PeekUsage(ctx, cacheKey); err != nil {
-			return nil, err
-		}
-	}
-	status.UsageCounter = usage
-
 	status.RateLimitCounter = make(map[string]int64)
+	status.UsageCounter = make(map[string]int64)
 
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
+		name := svc.GetName()
+
+		cacheKey := cacheKeyQuota(projectID, cycle, &svc, now)
+		usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
+		if err != nil {
+			if !errors.Is(err, ErrCachePing) {
+				return nil, err
+			}
+			if _, err := s.PrepareUsage(ctx, projectID, &svc, cycle, now); err != nil {
+				return nil, err
+			}
+			if usage, err = s.cache.UsageCache.PeekUsage(ctx, cacheKey); err != nil {
+				return nil, err
+			}
+		}
+		status.UsageCounter[name] = usage
+
 		limitCounter := NewLimitCounter(svc, s.redis, s.log)
 
 		limiter := httprate.NewRateLimiter(limit.GetRateLimit(&svc), time.Minute, httprate.WithLimitCounter(limitCounter))
@@ -563,7 +576,6 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 			return nil, err
 		}
 
-		name := svc.GetName()
 		status.RateLimitCounter[name] = int64(rate)
 	}
 
