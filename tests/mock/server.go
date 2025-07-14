@@ -112,18 +112,18 @@ func (s *Server) GetAccessQuota(ctx context.Context, accessKey string, now time.
 
 // PrepareUsage prepares the usage for a project unless ErrPrepareUsage is set.
 // If PrepareUsageDelay is set, it will clear the usage after that delay
-func (s *Server) PrepareUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (bool, error) {
+func (s *Server) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (bool, error) {
 	if s.ErrPrepareUsage != nil {
 		return false, s.ErrPrepareUsage
 	}
 	if s.PrepareUsageDelay > 0 {
 		go func() {
 			time.Sleep(s.PrepareUsageDelay)
-			s.ClearUsage(ctx, projectID, now)
+			s.ClearUsage(ctx, projectID, service, now)
 		}()
 		return true, nil
 	}
-	return s.QuotaControl.PrepareUsage(ctx, projectID, cycle, now)
+	return s.QuotaControl.PrepareUsage(ctx, projectID, service, cycle, now)
 }
 
 // GetEvents returns the events that have been notified for a project

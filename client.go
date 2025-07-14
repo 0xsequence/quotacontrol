@@ -165,8 +165,8 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 }
 
 // FetchUsage fetches the current usage of the access key.
-func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
-	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, now)
+func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, service *proto.Service, now time.Time) (int64, error) {
+	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, service, now)
 
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
@@ -179,7 +179,7 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 		if err != nil {
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
-				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now); err != nil {
+				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, service, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
 					if _, err := c.cache.UsageCache.ClearUsage(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
@@ -262,7 +262,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 	cfg := quota.Limit
 
 	// spend compute units
-	key := cacheKeyQuota(projectID, quota.Cycle, now)
+	key := cacheKeyQuota(projectID, quota.Cycle, &c.service, now)
 
 	for i := range 3 {
 		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
@@ -279,7 +279,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 			}
 			// ping the server to prepare usage
 			if errors.Is(err, ErrCachePing) {
-				if _, err := c.quotaClient.PrepareUsage(ctx, projectID, quota.Cycle, now); err != nil {
+				if _, err := c.quotaClient.PrepareUsage(ctx, projectID, &c.service, quota.Cycle, now); err != nil {
 					logger.Error("unexpected client error", slog.Any("error", err))
 					if _, err := c.cache.UsageCache.ClearUsage(ctx, key); err != nil {
 						logger.Error("unexpected cache error", slog.Any("error", err))
@@ -405,7 +405,10 @@ func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, now time.Time) string {
+func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, service *proto.Service, now time.Time) string {
 	start, end := cycle.GetStart(now), cycle.GetEnd(now)
-	return fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	if service == nil {
+		return fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
+	return fmt.Sprintf("project:%v:%s:%s:%s", projectID, service.GetName(), start.Format("2006-01-02"), end.Format("2006-01-02"))
 }

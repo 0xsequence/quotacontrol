@@ -44,7 +44,7 @@ func EnsureUsage(client Client, o Options) func(next http.Handler) http.Handler 
 			}
 			w.Header().Set("X-RateLimit-Increment", strconv.FormatInt(cu, 10))
 
-			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
+			usage, err := client.FetchUsage(ctx, quota, proto.Ptr(client.GetService()), GetTime(ctx))
 			if err != nil {
 				o.ErrHandler(r, w, err)
 				return

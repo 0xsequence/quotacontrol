@@ -15,7 +15,6 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/mod v0.26.0
 )
 
 require (
