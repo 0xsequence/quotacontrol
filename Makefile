@@ -24,5 +24,17 @@ test-coverage-inspect: test-coverage
 generate:
 	go generate -x ./...
 
+proto: generate
+
 lint:
 	golangci-lint run ./... --fix -c .golangci.yml
+
+version:
+	@git_version=$$(git describe --tags --abbrev=0); \
+		ridl_version=$$(grep "version = " proto/quotacontrol.ridl | sed 's/.*version = \(.*\)/\1/'); \
+		if [ "$$git_version" != "$$ridl_version" ]; then \
+			echo "Error: Version mismatch - Git: $$git_version, RIDL: $$ridl_version"; \
+			exit 1; \
+		else \
+			echo "Versions match: $$git_version"; \
+		fi
