@@ -16,7 +16,7 @@ import (
 )
 
 type LimitStore interface {
-	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error)
+	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.LegacyLimit, error)
 }
 
 type AccessKeyStore interface {

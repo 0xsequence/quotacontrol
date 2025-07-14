@@ -73,7 +73,7 @@ func TestGetSpendResult(t *testing.T) {
 	const (
 		_CU = 5
 	)
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		FreeWarn: 10,
 		FreeMax:  20,
 		OverWarn: 30,
@@ -230,16 +230,16 @@ func TestGetSpendResult(t *testing.T) {
 }
 
 func TestValidateLimit(t *testing.T) {
-	assert.NoError(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 2}.Validate())
-	assert.NoError(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 4}.Validate())
-	assert.NoError(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 3, OverMax: 4}.Validate())
+	assert.NoError(t, proto.LegacyLimit{RateLimit: 1, FreeMax: 2, OverMax: 2}.Validate())
+	assert.NoError(t, proto.LegacyLimit{RateLimit: 1, FreeMax: 2, OverMax: 4}.Validate())
+	assert.NoError(t, proto.LegacyLimit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 3, OverMax: 4}.Validate())
 
-	assert.Error(t, proto.Limit{}.Validate())
-	assert.Error(t, proto.Limit{RateLimit: 1}.Validate())
-	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 1}.Validate())
-	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
-	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
-	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
+	assert.Error(t, proto.LegacyLimit{}.Validate())
+	assert.Error(t, proto.LegacyLimit{RateLimit: 1}.Validate())
+	assert.Error(t, proto.LegacyLimit{RateLimit: 1, FreeMax: 1}.Validate())
+	assert.Error(t, proto.LegacyLimit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
+	assert.Error(t, proto.LegacyLimit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
+	assert.Error(t, proto.LegacyLimit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
 }
 
 func TestServiceName(t *testing.T) {
