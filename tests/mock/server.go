@@ -53,7 +53,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	}
 
 	logger := qc.logger.With(slog.String("server", "server"))
-	qc.QuotaControl = quotacontrol.NewHandler(cfg.Redis, logger, qcCache, qcStore)
+	qc.QuotaControl = quotacontrol.NewServer(cfg.Redis, logger, qcCache, qcStore)
 
 	go func() {
 		http.Serve(listener, proto.NewQuotaControlServer(&qc))
