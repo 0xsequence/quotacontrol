@@ -13,6 +13,30 @@ enum Service: uint16
   - Builder
   - WaaS
 
+# LimitSettings is used to define the limits for a project.
+struct LimitSettings
+  # The maximum number of keys allowed for the project, zero means unlimited.
+  - maxKeys: int64
+  # The default limit settings for a project.
+  - base: Limit
+  + go.field.type = Limit
+  # The service-specific limits for the project.
+  - service: map<Service,Limit>
+    + go.field.type = map[Service]Limit
+
+# Limit defines the limits for a project.
+struct Limit
+  # Requests/minute limit for the project.
+  - rateLimit: int64
+  # Free usage warning threshold.
+  - freeWarn: int64
+  # Free usage maximum threshold.
+  - freeMax: int64
+  # Over usage warning threshold.
+  - overWarn: int64
+  # Over usage maximum threshold.
+  - overMax: int64
+
 struct LegacyLimit
   - maxKeys: int64
     + go.tag.json = maxKeys,omitempty
