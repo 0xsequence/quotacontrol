@@ -62,20 +62,39 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 	return nil
 }
 
-// GetRateLimit returns the rate limit for the given service. If the service is nil, it returns the default rate limit.
-func (l LegacyLimit) GetRateLimit(svc *Service) int {
-	if svc == nil {
-		return int(l.RateLimit)
-	}
-
-	rl, ok := l.SvcRateLimit[*svc]
-	if !ok {
-		return int(l.RateLimit)
-	}
-	return int(rl)
+// Deprecated: remove when removing legacy fields
+func (l *Limit) PopulateLegacyFields() {
+	l.RateLimit = l.Base.RateLimit
+	l.FreeWarn = l.Base.FreeWarn
+	l.FreeMax = l.Base.FreeMax
+	l.OverWarn = l.Base.OverWarn
+	l.OverMax = l.Base.OverMax
 }
 
-func (l LegacyLimit) Validate() error {
+// GetServiceLimit returns the service limit for the given service. If the service is nil, it returns the default service limit.
+func (l Limit) GetServiceLimit(svc *Service) ServiceLimit {
+	if svc != nil {
+		if cfg, ok := l.Service[*svc]; ok {
+			return cfg
+		}
+	}
+
+	return l.Base
+}
+
+func (l Limit) Validate() error {
+	if err := l.Base.Validate(); err != nil {
+		return fmt.Errorf("base limit: %w", err)
+	}
+	for svc, cfg := range l.Service {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("service %s: %w", svc.GetName(), err)
+		}
+	}
+	return nil
+}
+
+func (l ServiceLimit) Validate() error {
 	if l.RateLimit < 1 {
 		return fmt.Errorf("rateLimit must be > 0")
 	}
@@ -105,7 +124,7 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 	return max(0, total-threshold), true
 }
 
-func (l *LegacyLimit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
+func (l *ServiceLimit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert

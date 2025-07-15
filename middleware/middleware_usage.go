@@ -44,16 +44,21 @@ func EnsureUsage(client Client, o Options) func(next http.Handler) http.Handler 
 			}
 			w.Header().Set("X-RateLimit-Increment", strconv.FormatInt(cu, 10))
 
-			usage, err := client.FetchUsage(ctx, quota, proto.Ptr(client.GetService()), GetTime(ctx))
+			svc := client.GetService()
+
+			usage, err := client.FetchUsage(ctx, quota, &svc, GetTime(ctx))
 			if err != nil {
 				o.ErrHandler(r, w, err)
 				return
 			}
-			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-usage, 0), 10))
-			if overage := max(usage-quota.Limit.FreeMax, 0); overage > 0 {
+
+			limit := quota.Limit.GetServiceLimit(&svc)
+
+			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(limit.FreeMax-usage, 0), 10))
+			if overage := max(usage-limit.FreeMax, 0); overage > 0 {
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
-			if usage+cu > quota.Limit.OverMax {
+			if usage+cu > limit.OverMax {
 				o.ErrHandler(r, w, proto.ErrQuotaExceeded)
 				return
 			}
@@ -92,14 +97,18 @@ func SpendUsage(client Client, o Options) func(next http.Handler) http.Handler {
 			}
 			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
 
-			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
+			svc := client.GetService()
+
+			ok, total, err := client.SpendQuota(ctx, quota, &svc, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrQuotaExceeded) {
 				o.ErrHandler(r, w, err)
 				return
 			}
 
-			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(quota.Limit.FreeMax-total, 0), 10))
-			if overage := total - quota.Limit.FreeMax; overage > 0 {
+			limit := quota.Limit.GetServiceLimit(&svc)
+
+			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(limit.FreeMax-total, 0), 10))
+			if overage := total - limit.FreeMax; overage > 0 {
 				w.Header().Set(HeaderQuotaOverage, strconv.FormatInt(overage, 10))
 			}
 
