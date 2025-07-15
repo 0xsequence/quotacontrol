@@ -15,6 +15,7 @@ import (
 func NewMemoryStore() *MemoryStore {
 	ms := MemoryStore{
 		limits:      map[uint64]proto.Limit{},
+		cycles:      map[uint64]proto.Cycle{},
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       map[proto.Service]usage.Record{},
 		users:       map[string]bool{},
