@@ -74,7 +74,7 @@ type Client interface {
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchUsage(ctx context.Context, quota *proto.AccessQuota, service *proto.Service, now time.Time) (int64, error)
 	CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error)
-	SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (bool, int64, error)
+	SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *proto.Service, cost int64, now time.Time) (bool, int64, error)
 }
 
 func VerifyChains(ctx context.Context, chainIDs ...uint64) error {

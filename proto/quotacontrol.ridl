@@ -14,18 +14,28 @@ enum Service: uint16
   - WaaS
 
 # LimitSettings is used to define the limits for a project.
-struct LimitSettings
+struct Limit
   # The maximum number of keys allowed for the project, zero means unlimited.
   - maxKeys: int64
   # The default limit settings for a project.
-  - base: Limit
-  + go.field.type = Limit
+  - base: ServiceLimit
+  + go.field.type = ServiceLimit
   # The service-specific limits for the project.
-  - service: map<uint16,Limit>
-    + go.field.type = map[Service]Limit
+  - service: map<uint16,ServiceLimit>
+    + go.field.type = map[Service]ServiceLimit
+  # Deprecated: use base.rateLimit instead
+  - rateLimit: int64
+  # Deprecated: use base.freeWarn instead
+  - freeWarn: int64
+  # Deprecated: use base.freeMax instead
+  - freeMax: int64
+  # Deprecated: use base.overWarn instead
+  - overWarn: int64
+  # Deprecated: use base.overMax instead
+  - overMax: int64
 
-# Limit defines the limits for a project.
-struct Limit
+# ServiceLimit defines the limits for a service.
+struct ServiceLimit
   # Requests/minute limit for the project.
   - rateLimit: int64
   # Free usage warning threshold.
@@ -36,18 +46,6 @@ struct Limit
   - overWarn: int64
   # Over usage maximum threshold.
   - overMax: int64
-
-struct LegacyLimit
-  - maxKeys: int64
-    + go.tag.json = maxKeys,omitempty
-  - rateLimit: int64
-  - freeWarn: int64
-  - freeMax: int64
-  - overWarn: int64
-  - overMax: int64
-  - svcRateLimit?: map<int,int64>
-    + go.field.type = map[Service]int64
-    + go.tag.json = svcRateLimit,omitempty
 
 struct AccessKey
   - projectId: uint64
@@ -89,7 +87,7 @@ struct Cycle
 
 struct AccessQuota
   - cycle: Cycle
-  - limit: LegacyLimit
+  - limit: Limit
   - accessKey: AccessKey
 
 enum EventType: uint16
@@ -107,7 +105,7 @@ enum UserPermission: uint16
 struct ProjectStatus
   - projectId: uint64
     + go.field.name = ProjectID
-  - limit: LegacyLimit
+  - limit: Limit
   - usageCounter: map<string,int64>
   - rateLimitCounter: map<string,int64>
 

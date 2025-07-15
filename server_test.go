@@ -45,7 +45,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	const _credits = middleware.DefaultPublicRate / 10
 
-	limit := proto.LegacyLimit{
+	limit := proto.ServiceLimit{
 		RateLimit: _credits * 100,
 		FreeWarn:  _credits * 5,
 		FreeMax:   _credits * 5,
@@ -54,7 +54,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -185,10 +185,12 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("ChangeLimits", func(t *testing.T) {
 		// Increase CreditsOverageLimit which should still allow requests to go through, etc.
-		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.LegacyLimit{
-			RateLimit: _credits * 100,
-			OverWarn:  _credits * 5,
-			OverMax:   _credits * 110,
+		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{
+			Base: proto.ServiceLimit{
+				RateLimit: _credits * 100,
+				OverWarn:  _credits * 5,
+				OverMax:   _credits * 110,
+			},
 		})
 		assert.NoError(t, err)
 		err = client.ClearQuotaCacheByAccessKey(ctx, key)
@@ -309,11 +311,13 @@ func TestDefaultKey(t *testing.T) {
 		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
-	limit := proto.LegacyLimit{
-		RateLimit: 100,
-		FreeMax:   5,
-		OverWarn:  7,
-		OverMax:   10,
+	limit := proto.Limit{
+		Base: proto.ServiceLimit{
+			RateLimit: 100,
+			FreeMax:   5,
+			OverWarn:  7,
+			OverMax:   10,
+		},
 	}
 
 	access := &proto.AccessKey{
@@ -399,14 +403,14 @@ func TestJWT(t *testing.T) {
 
 	ctx := context.Background()
 
-	limit := proto.LegacyLimit{
+	limit := proto.ServiceLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"project": ProjectID, "account": WalletAddress})
 
@@ -479,14 +483,14 @@ func TestJWTAccess(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.LegacyLimit{
+	limit := proto.ServiceLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"account": account, "project": ProjectID})
 
@@ -586,10 +590,16 @@ func TestSession(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.LegacyLimit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	limit := proto.ServiceLimit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
+	}
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
 
@@ -718,10 +728,16 @@ func TestSessionDisabled(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.LegacyLimit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	limit := proto.ServiceLimit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
+	}
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
 
@@ -754,7 +770,7 @@ func TestSessionDisabled(t *testing.T) {
 			types := ACL[service][method]
 			for _, tc := range testCases {
 				name := fmt.Sprintf("%s/%s", method, tc.Session)
-				if tc.AccessKey != "" {
+				if tc.Session != authproto.SessionType_AccessKey && tc.AccessKey != "" {
 					name += "+Key"
 				}
 				t.Run(name, func(t *testing.T) {
@@ -837,7 +853,15 @@ func TestChainID(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.LegacyLimit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10}
+	limit := proto.Limit{
+		Base: proto.ServiceLimit{
+			RateLimit: 100,
+			FreeWarn:  5,
+			FreeMax:   5,
+			OverWarn:  7,
+			OverMax:   10,
+		},
+	}
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -912,15 +936,13 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r2 := newRouter(client2, rlCounter2)
 	r3 := newRouter(client3, rlCounter3)
 
-	limit := proto.LegacyLimit{
-		RateLimit: 10,
-		FreeWarn:  100,
-		FreeMax:   100,
-		OverWarn:  100,
-		OverMax:   100,
-		SvcRateLimit: map[proto.Service]int64{
-			svc1: 5,
-			svc2: 7,
+	limit := proto.Limit{
+		Base: proto.ServiceLimit{
+			RateLimit: 10,
+			FreeWarn:  100,
+			FreeMax:   100,
+			OverWarn:  100,
+			OverMax:   100,
 		},
 	}
 
@@ -941,7 +963,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 		{Service: svc3, Handler: r3},
 	} {
 		t.Run(svc.Service.String(), func(t *testing.T) {
-			rl := limit.GetRateLimit(&svc.Service)
+			rl := int(limit.GetServiceLimit(&svc.Service).RateLimit)
 			for i := 0; i < (rl * 2); i++ {
 				ok, headers, err := executeRequest(ctx, svc.Handler, "/rpc/Service/MethodAccessKey", key, "")
 				require.Equal(t, strconv.Itoa(rl), headers.Get(middleware.HeaderRateLimit))

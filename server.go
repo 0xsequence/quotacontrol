@@ -16,7 +16,7 @@ import (
 )
 
 type LimitStore interface {
-	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.LegacyLimit, error)
+	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error)
 }
 
 type AccessKeyStore interface {
@@ -197,6 +197,7 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 	if err != nil {
 		return nil, err
 	}
+	limit.PopulateLegacyFields()
 
 	record := proto.AccessQuota{
 		Limit:     limit,
@@ -224,6 +225,8 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 	if err != nil {
 		return nil, err
 	}
+	limit.PopulateLegacyFields()
+
 	record := proto.AccessQuota{
 		Limit:     limit,
 		Cycle:     cycle,
@@ -544,6 +547,8 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	if err != nil {
 		return nil, err
 	}
+	limit.PopulateLegacyFields()
+
 	status.Limit = limit
 
 	status.RateLimitCounter = make(map[string]int64)
@@ -570,7 +575,7 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 
 		limitCounter := NewLimitCounter(svc, s.redis, s.log)
 
-		limiter := httprate.NewRateLimiter(limit.GetRateLimit(&svc), time.Minute, httprate.WithLimitCounter(limitCounter))
+		limiter := httprate.NewRateLimiter(int(limit.GetServiceLimit(&svc).RateLimit), time.Minute, httprate.WithLimitCounter(limitCounter))
 		_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
 		if err != nil {
 			return nil, err

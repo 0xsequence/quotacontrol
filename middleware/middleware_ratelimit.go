@@ -46,7 +46,7 @@ func (r RateLimitConfig) GetRateLimit(ctx context.Context, svc *proto.Service, b
 		return r.ServiceRPM * baseRequestCost
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
-		return q.Limit.GetRateLimit(svc) * baseRequestCost
+		return int(q.Limit.GetServiceLimit(svc).RateLimit) * baseRequestCost
 	}
 	if _, ok := authcontrol.GetAccount(ctx); ok {
 		return r.AccountRPM * baseRequestCost

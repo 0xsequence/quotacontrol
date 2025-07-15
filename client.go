@@ -244,7 +244,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (spent bool, total int64, err error) {
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *proto.Service, cost int64, now time.Time) (spent bool, total int64, err error) {
 	// quota is nil only on unexpected errors from quota fetch
 	if quota == nil || cost == 0 {
 		return false, 0, nil
@@ -259,7 +259,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		slog.String("access_key", accessKey),
 	)
 
-	cfg := quota.Limit
+	cfg := quota.Limit.GetServiceLimit(svc)
 
 	// spend compute units
 	key := cacheKeyQuota(projectID, quota.Cycle, &c.service, now)

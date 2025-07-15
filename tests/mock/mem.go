@@ -14,7 +14,7 @@ import (
 // NewMemoryStore returns a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	ms := MemoryStore{
-		limits:      map[uint64]proto.LegacyLimit{},
+		limits:      map[uint64]proto.Limit{},
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       map[proto.Service]usage.Record{},
 		users:       map[string]bool{},
@@ -36,7 +36,7 @@ type userPermission struct {
 // MemoryStore is an in-memory store, used for testing and prototype.
 type MemoryStore struct {
 	sync.Mutex
-	limits      map[uint64]proto.LegacyLimit
+	limits      map[uint64]proto.Limit
 	cycles      map[uint64]proto.Cycle
 	accessKeys  map[string]proto.AccessKey
 	usage       map[proto.Service]usage.Record
@@ -45,14 +45,14 @@ type MemoryStore struct {
 	permissions map[uint64]map[string]userPermission
 }
 
-func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.LegacyLimit) error {
+func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error {
 	m.Lock()
 	m.limits[projectID] = *config
 	m.Unlock()
 	return nil
 }
 
-func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.LegacyLimit, error) {
+func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error) {
 	m.Lock()
 	limit, ok := m.limits[projectID]
 	m.Unlock()
