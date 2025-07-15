@@ -97,6 +97,7 @@ func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *ti
 		cycle, _ := store.Cycle{}.GetAccessCycle(ctx, projectID, now)
 		return cycle.GetStart(now), cycle.GetEnd(now), nil
 	}
+
 	duration := cycle.GetDuration(now)
 	if from == nil {
 		return to.Add(-duration), *to, nil
@@ -107,12 +108,12 @@ func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *ti
 func (s server) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get time range: %w", err)
 	}
 
 	usage, err := s.store.UsageStore.GetAccountUsage(ctx, projectID, service, min, max)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get account usage: %w", err)
 	}
 	return &usage, nil
 }
@@ -120,12 +121,12 @@ func (s server) GetAccountUsage(ctx context.Context, projectID uint64, service *
 func (s server) GetAsyncUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get time range: %w", err)
 	}
 
 	usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, min, max)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access key usage: %w", err)
 	}
 	return &usage, nil
 }
@@ -133,17 +134,17 @@ func (s server) GetAsyncUsage(ctx context.Context, projectID uint64, service *pr
 func (s server) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	projectID, err := authcontrol.GetProjectIDFromAccessKey(accessKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get project id: %w", err)
 	}
 
 	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get time range: %w", err)
 	}
 
 	usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, accessKey, service, min, max)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access key usage: %w", err)
 	}
 	return &usage, nil
 }
@@ -152,12 +153,12 @@ func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *pro
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
 	usage, err := s.GetAccountUsage(ctx, projectID, nil, &min, &max)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get account usage: %w", err)
 	}
 
 	key := cacheKeyQuota(projectID, cycle, service, now)
 	if err := s.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
-		return false, err
+		return false, fmt.Errorf("set usage cache: %w", err)
 	}
 	return true, nil
 }
@@ -165,14 +166,14 @@ func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *pro
 func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (bool, error) {
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get access cycle: %w", err)
 	}
 
 	if service != nil {
 		key := cacheKeyQuota(projectID, cycle, service, now)
 		ok, err := s.cache.UsageCache.ClearUsage(ctx, key)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("clear usage cache: %w", err)
 		}
 		return ok, nil
 	}
@@ -181,7 +182,7 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 		svc := proto.Service(i)
 		key := cacheKeyQuota(projectID, cycle, &svc, now)
 		if _, err := s.cache.UsageCache.ClearUsage(ctx, key); err != nil {
-			return false, err
+			return false, fmt.Errorf("clear usage cache for service %s: %w", svc.String(), err)
 		}
 	}
 	return true, nil
@@ -190,12 +191,12 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access cycle: %w", err)
 	}
 
 	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access limit: %w", err)
 	}
 	limit.PopulateLegacyFields()
 
@@ -215,15 +216,18 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, proto.ErrAccessKeyNotFound) {
+			return nil, proto.ErrAccessKeyNotFound
+		}
+		return nil, fmt.Errorf("find access key: %w", err)
 	}
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, access.ProjectID, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access cycle: %w", err)
 	}
 	limit, err := s.store.LimitStore.GetAccessLimit(ctx, access.ProjectID, cycle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access limit: %w", err)
 	}
 	limit.PopulateLegacyFields()
 
@@ -309,7 +313,7 @@ func (s server) GetAccessKey(ctx context.Context, accessKey string) (*proto.Acce
 func (s server) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*proto.AccessKey, error) {
 	list, err := s.store.AccessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list access keys: %w", err)
 	}
 
 	for _, accessKey := range list {
@@ -323,16 +327,16 @@ func (s server) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*pro
 func (s server) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, requireOrigin bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access cycle: %w", err)
 	}
 	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access limit: %w", err)
 	}
 
 	list, err := s.store.AccessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list access keys: %w", err)
 	}
 
 	if limit.MaxKeys > 0 {
@@ -343,7 +347,7 @@ func (s server) CreateAccessKey(ctx context.Context, projectID uint64, displayNa
 
 	origins, err := validation.NewOrigins(allowedOrigins...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("validate allowed origins: %w", err)
 	}
 
 	// set key version if not set
@@ -362,44 +366,46 @@ func (s server) CreateAccessKey(ctx context.Context, projectID uint64, displayNa
 		AllowedServices: allowedServices,
 	}
 	if err := s.store.AccessKeyStore.InsertAccessKey(ctx, &k); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("insert access key: %w", err)
 	}
 	return &k, nil
 }
 
 func (s server) RotateAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
-	k, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
+	existing, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find access key: %w", err)
 	}
 
-	isDefaultKey := k.Default
+	isDefaultKey := existing.Default
 
-	k.Active = false
-	k.Default = false
+	existing.Active = false
+	existing.Default = false
 
-	if _, err := s.updateAccessKey(ctx, k); err != nil {
-		return nil, err
+	if _, err := s.updateAccessKey(ctx, existing); err != nil {
+		return nil, fmt.Errorf("update access key: %w", err)
 	}
 
-	newAccess, err := s.CreateAccessKey(ctx, k.ProjectID, k.DisplayName, k.RequireOrigin, k.AllowedOrigins.ToStrings(), k.AllowedServices)
+	newKey, err := s.CreateAccessKey(ctx, existing.ProjectID, existing.DisplayName, existing.RequireOrigin, existing.AllowedOrigins.ToStrings(), existing.AllowedServices)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create access key: %w", err)
 	}
 
 	// set new key as default
 	if isDefaultKey {
-		newAccess.Default = true
-		return s.updateAccessKey(ctx, newAccess)
+		newKey.Default = true
+		if newKey, err = s.updateAccessKey(ctx, newKey); err != nil {
+			return nil, fmt.Errorf("update access key: %w", err)
+		}
 	}
 
-	return newAccess, nil
+	return newKey, nil
 }
 
 func (s server) UpdateAccessKey(ctx context.Context, accessKey string, displayName *string, requireOrigin *bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
 	k, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find access key: %w", err)
 	}
 
 	if displayName != nil {
@@ -411,7 +417,7 @@ func (s server) UpdateAccessKey(ctx context.Context, accessKey string, displayNa
 	if allowedOrigins != nil {
 		origins, err := validation.NewOrigins(allowedOrigins...)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("validate allowed origins: %w", err)
 		}
 		k.AllowedOrigins = origins
 	}
@@ -420,7 +426,7 @@ func (s server) UpdateAccessKey(ctx context.Context, accessKey string, displayNa
 	}
 
 	if k, err = s.updateAccessKey(ctx, k); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("update access key: %w", err)
 	}
 	return k, nil
 }
@@ -429,16 +435,16 @@ func (s server) UpdateDefaultAccessKey(ctx context.Context, projectID uint64, ac
 	// make sure accessKey exists
 	k, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("find access key: %w", err)
 	}
 
 	if k.ProjectID != projectID {
-		return false, fmt.Errorf("project doesn't own the given access key")
+		return false, proto.ErrPermissionDenied.WithCausef("project doesn't own the given access key")
 	}
 
 	defaultKey, err := s.GetDefaultAccessKey(ctx, projectID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get default access key: %w", err)
 	}
 
 	// make sure new default access key & old default access key are different
@@ -449,13 +455,13 @@ func (s server) UpdateDefaultAccessKey(ctx context.Context, projectID uint64, ac
 	// update old default access
 	defaultKey.Default = false
 	if _, err := s.updateAccessKey(ctx, defaultKey); err != nil {
-		return false, err
+		return false, fmt.Errorf("update old default access key: %w", err)
 	}
 
 	// set new access key to default
 	k.Default = true
 	if _, err = s.updateAccessKey(ctx, k); err != nil {
-		return false, err
+		return false, fmt.Errorf("update new default access key: %w", err)
 	}
 
 	return true, nil
@@ -468,12 +474,12 @@ func (s server) ListAccessKeys(ctx context.Context, projectID uint64, active *bo
 func (s server) DisableAccessKey(ctx context.Context, accessKey string) (bool, error) {
 	k, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("find access key: %w", err)
 	}
 
 	list, err := s.store.AccessKeyStore.ListAccessKeys(ctx, k.ProjectID, proto.Ptr(true), nil)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("list access keys: %w", err)
 	}
 
 	if len(list) == 1 {
@@ -483,21 +489,21 @@ func (s server) DisableAccessKey(ctx context.Context, accessKey string) (bool, e
 	k.Active = false
 	k.Default = false
 	if _, err := s.updateAccessKey(ctx, k); err != nil {
-		return false, err
+		return false, fmt.Errorf("update access key: %w", err)
 	}
 
 	// set another project accessKey to default
 	if _, err := s.GetDefaultAccessKey(ctx, k.ProjectID); err == proto.ErrNoDefaultKey {
 		listUpdated, err := s.store.AccessKeyStore.ListAccessKeys(ctx, k.ProjectID, proto.Ptr(true), nil)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("list access keys: %w", err)
 		}
 
 		newDefaultKey := listUpdated[0]
 		newDefaultKey.Default = true
 
 		if _, err = s.updateAccessKey(ctx, newDefaultKey); err != nil {
-			return false, err
+			return false, fmt.Errorf("update new default access key: %w", err)
 		}
 	}
 
@@ -540,12 +546,12 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	now := middleware.GetTime(ctx)
 	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access cycle: %w", err)
 	}
 
 	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get access limit: %w", err)
 	}
 	limit.PopulateLegacyFields()
 
@@ -562,13 +568,13 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
 		if err != nil {
 			if !errors.Is(err, ErrCachePing) {
-				return nil, err
+				return nil, fmt.Errorf("peek usage cache: %w", err)
 			}
 			if _, err := s.PrepareUsage(ctx, projectID, &svc, cycle, now); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("prepare usage: %w", err)
 			}
 			if usage, err = s.cache.UsageCache.PeekUsage(ctx, cacheKey); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("peek usage cache: %w", err)
 			}
 		}
 		status.UsageCounter[name] = usage
@@ -578,7 +584,7 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		limiter := httprate.NewRateLimiter(int(limit.GetServiceLimit(&svc).RateLimit), time.Minute, httprate.WithLimitCounter(limitCounter))
 		_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get rate limit status: %w", err)
 		}
 
 		status.RateLimitCounter[name] = int64(rate)
