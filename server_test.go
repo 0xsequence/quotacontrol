@@ -311,15 +311,12 @@ func TestDefaultKey(t *testing.T) {
 		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
-	limit := proto.Limit{
-		Base: proto.ServiceLimit{
-			RateLimit: 100,
-			FreeMax:   5,
-			OverWarn:  7,
-			OverMax:   10,
-		},
+	limit := proto.ServiceLimit{
+		RateLimit: 100,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
 	}
-
 	access := &proto.AccessKey{
 		Active:    true,
 		AccessKey: keys[0],
@@ -328,7 +325,7 @@ func TestDefaultKey(t *testing.T) {
 
 	// populate store
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -336,23 +333,23 @@ func TestDefaultKey(t *testing.T) {
 	logger := slog.Default()
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	aq, err := client.FetchKeyQuota(ctx, keys[0], "", nil, now)
+	quota, err := client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
-	assert.Equal(t, access, aq.AccessKey)
-	assert.Equal(t, &limit, aq.Limit)
+	assert.Equal(t, access, quota.AccessKey)
+	assert.Equal(t, limit, quota.Limit.Base)
 
-	aq, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
+	quota, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
-	assert.Equal(t, access, aq.AccessKey)
-	assert.Equal(t, &limit, aq.Limit)
+	assert.Equal(t, access, quota.AccessKey)
+	assert.Equal(t, limit, quota.Limit.Base)
 
 	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, nil, []proto.Service{Service})
 	require.NoError(t, err)
 
-	aq, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
+	quota, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
-	assert.Equal(t, access, aq.AccessKey)
-	assert.Equal(t, &limit, aq.Limit)
+	assert.Equal(t, access, quota.AccessKey)
+	assert.Equal(t, limit, quota.Limit.Base)
 
 	ok, err := server.DisableAccessKey(ctx, keys[0])
 	require.ErrorIs(t, err, proto.ErrAtLeastOneKey)
@@ -369,9 +366,9 @@ func TestDefaultKey(t *testing.T) {
 	require.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
 
 	newAccess.Default = true
-	aq, err = client.FetchKeyQuota(ctx, newAccess.AccessKey, "", nil, now)
+	quota, err = client.FetchKeyQuota(ctx, newAccess.AccessKey, "", nil, now)
 	require.NoError(t, err)
-	assert.Equal(t, &newAccess, aq.AccessKey)
+	assert.Equal(t, &newAccess, quota.AccessKey)
 }
 
 func TestJWT(t *testing.T) {

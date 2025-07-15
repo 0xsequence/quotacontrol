@@ -131,7 +131,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 		}
 	}
 	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
-		return quota, err
+		return quota, proto.ErrInvalidChain.WithCause(err)
 	}
 	return quota, nil
 }
