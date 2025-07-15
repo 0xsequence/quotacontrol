@@ -968,9 +968,13 @@ func TestPerServiceRateLimit(t *testing.T) {
 				if i < int(rl) {
 					require.NoError(t, err)
 					require.True(t, ok)
+					require.Equal(t, strconv.FormatInt(limit.GetServiceLimit(&svc.Service).FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+					require.Equal(t, strconv.FormatInt(limit.GetServiceLimit(&svc.Service).FreeMax-int64(i+1), 10), headers.Get(middleware.HeaderQuotaRemaining))
 				} else {
 					require.ErrorIs(t, err, proto.ErrQuotaRateLimit)
 					require.False(t, ok)
+					require.Equal(t, strconv.FormatInt(limit.GetServiceLimit(&svc.Service).FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+					require.Equal(t, "", headers.Get(middleware.HeaderQuotaRemaining))
 				}
 
 				ok, headers, err = executeRequest(ctx, svc.Handler, "/rpc/Service/MethodPublic", "", "")
