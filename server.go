@@ -151,7 +151,7 @@ func (s server) GetAccessKeyUsage(ctx context.Context, accessKey string, service
 
 func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (bool, error) {
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
-	usage, err := s.GetAccountUsage(ctx, projectID, nil, &min, &max)
+	usage, err := s.GetAccountUsage(ctx, projectID, service, &min, &max)
 	if err != nil {
 		return false, fmt.Errorf("get account usage: %w", err)
 	}
