@@ -37,9 +37,10 @@ type RedisConfig struct {
 }
 
 type ErrorConfig struct {
-	MessageQuota      string `toml:"quota_message"`
-	MessageRate       string `toml:"ratelimit_message"`
-	MessageRatePublic string `toml:"public_message"`
+	MessageQuota        string `toml:"quota_message"`
+	MessageRate         string `toml:"ratelimit_message"`
+	MessageRatePublic   string `toml:"public_message"`
+	MessageInvalidChain string `toml:"invalid_chain_message"`
 }
 
 // Apply applies the error configuration globally.
@@ -47,4 +48,5 @@ func (e ErrorConfig) Apply() {
 	proto.ErrQuotaExceeded.Message = cmp.Or(e.MessageQuota, proto.ErrQuotaExceeded.Message)
 	proto.ErrQuotaRateLimit.Message = cmp.Or(e.MessageRate, proto.ErrQuotaRateLimit.Message)
 	proto.ErrRateLimited.Message = cmp.Or(e.MessageRatePublic, proto.ErrRateLimited.Message)
+	proto.ErrInvalidChain.Message = cmp.Or(e.MessageInvalidChain, proto.ErrInvalidChain.Message)
 }
