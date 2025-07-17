@@ -13,7 +13,7 @@ require (
 	github.com/go-chi/httprate-redis v0.5.4
 	github.com/goware/validation v0.1.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/stretchr/testify v1.10.0
 )
 
