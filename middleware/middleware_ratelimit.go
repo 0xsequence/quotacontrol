@@ -41,23 +41,6 @@ type RateLimitConfig struct {
 	ServiceRPM int `toml:"service_requests_per_minute"`
 }
 
-func (r RateLimitConfig) GetRateLimit(ctx context.Context, svc *proto.Service, baseRequestCost int) (int, bool) {
-	if _, ok := authcontrol.GetService(ctx); ok {
-		return r.ServiceRPM * baseRequestCost, true
-	}
-	if q, ok := GetAccessQuota(ctx); ok {
-		cfg, ok := q.Limit.ServiceLimit[*svc]
-		if !ok {
-			return 0, false
-		}
-		return int(cfg.RateLimit) * baseRequestCost, true
-	}
-	if _, ok := authcontrol.GetAccount(ctx); ok {
-		return r.AccountRPM * baseRequestCost, true
-	}
-	return r.PublicRPM * baseRequestCost, true
-}
-
 // RateLimit is a middleware that limits the number of requests per minute.
 func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter, o Options) func(next http.Handler) http.Handler {
 	if !cfg.Enabled {
@@ -115,7 +98,7 @@ func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter
 			svc := client.GetService()
 
 			// if the rate limit is 0 or less, skip the rate limiter
-			limit, ok := cfg.GetRateLimit(ctx, &svc, o.BaseRequestCost)
+			limit, ok := getRateLimit(ctx, cfg, &svc, o.BaseRequestCost)
 			if !ok {
 				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("rate limit not found for service %s", svc.GetName()))
 				return
@@ -143,4 +126,21 @@ func ProjectRateKey(projectID uint64) string {
 
 func AccountRateKey(account string) string {
 	return fmt.Sprintf("rl:account:%s", account)
+}
+
+func getRateLimit(ctx context.Context, r RateLimitConfig, svc *proto.Service, baseRequestCost int) (int, bool) {
+	if _, ok := authcontrol.GetService(ctx); ok {
+		return r.ServiceRPM * baseRequestCost, true
+	}
+	if q, ok := GetAccessQuota(ctx); ok {
+		cfg, ok := q.Limit.ServiceLimit[*svc]
+		if !ok {
+			return 0, false
+		}
+		return int(cfg.RateLimit) * baseRequestCost, true
+	}
+	if _, ok := authcontrol.GetAccount(ctx); ok {
+		return r.AccountRPM * baseRequestCost, true
+	}
+	return r.PublicRPM * baseRequestCost, true
 }

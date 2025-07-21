@@ -100,14 +100,14 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 			}
 
 			if quota != nil {
-				ctx = withAccessQuota(ctx, quota)
-
 				svc := client.GetService()
 				cfg, ok := quota.Limit.ServiceLimit[svc]
 				if !ok {
 					o.ErrHandler(r, w, proto.ErrAborted.WithCausef("limit not found for %s", svc.GetName()))
 					return
 				}
+
+				ctx = withAccessQuota(ctx, quota)
 				w.Header().Set(HeaderQuotaLimit, strconv.FormatInt(cfg.FreeMax, 10))
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
