@@ -78,7 +78,7 @@ func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter
 			if account, ok := authcontrol.GetAccount(ctx); ok {
 				return AccountRateKey(account), nil
 			}
-			return httprate.KeyByRealIP(r)
+			return PublicRateKey(r)
 		}),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			err := proto.ErrRateLimited
@@ -118,6 +118,10 @@ func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter
 			limiter.Handler(next).ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func PublicRateKey(r *http.Request) (string, error) {
+	return httprate.KeyByRealIP(r)
 }
 
 func ProjectRateKey(projectID uint64) string {
