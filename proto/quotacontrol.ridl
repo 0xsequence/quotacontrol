@@ -18,10 +18,10 @@ struct Limit
   # The maximum number of keys allowed for the project, zero means unlimited.
   - maxKeys: int64
   # The default limit settings for a project.
-  - base: ServiceLimit
+  - defaultLimit: ServiceLimit
   + go.field.type = ServiceLimit
   # The service-specific limits for the project.
-  - service: map<uint16,ServiceLimit>
+  - serviceLimit: map<string,ServiceLimit>
     + go.field.type = map[Service]ServiceLimit
   # Deprecated: use base.rateLimit instead
   - rateLimit: int64

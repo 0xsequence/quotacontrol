@@ -64,29 +64,29 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 
 // Deprecated: remove when removing legacy fields
 func (l *Limit) PopulateLegacyFields() {
-	l.RateLimit = l.Base.RateLimit
-	l.FreeWarn = l.Base.FreeWarn
-	l.FreeMax = l.Base.FreeMax
-	l.OverWarn = l.Base.OverWarn
-	l.OverMax = l.Base.OverMax
+	l.RateLimit = l.DefaultLimit.RateLimit
+	l.FreeWarn = l.DefaultLimit.FreeWarn
+	l.FreeMax = l.DefaultLimit.FreeMax
+	l.OverWarn = l.DefaultLimit.OverWarn
+	l.OverMax = l.DefaultLimit.OverMax
 }
 
 // GetServiceLimit returns the service limit for the given service. If the service is nil, it returns the default service limit.
 func (l Limit) GetServiceLimit(svc *Service) ServiceLimit {
 	if svc != nil {
-		if cfg, ok := l.Service[*svc]; ok {
+		if cfg, ok := l.ServiceLimit[*svc]; ok {
 			return cfg
 		}
 	}
 
-	return l.Base
+	return l.DefaultLimit
 }
 
 func (l Limit) Validate() error {
-	if err := l.Base.Validate(); err != nil {
+	if err := l.DefaultLimit.Validate(); err != nil {
 		return fmt.Errorf("base limit: %w", err)
 	}
-	for svc, cfg := range l.Service {
+	for svc, cfg := range l.ServiceLimit {
 		if err := cfg.Validate(); err != nil {
 			return fmt.Errorf("service %s: %w", svc.GetName(), err)
 		}
