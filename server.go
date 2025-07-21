@@ -198,7 +198,6 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
-	limit.PopulateLegacyFields()
 
 	record := proto.AccessQuota{
 		Limit:     limit,
@@ -229,7 +228,6 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
-	limit.PopulateLegacyFields()
 
 	record := proto.AccessQuota{
 		Limit:     limit,
@@ -553,7 +551,6 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
-	limit.PopulateLegacyFields()
 
 	status.Limit = limit
 
@@ -579,9 +576,13 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		}
 		status.UsageCounter[name] = usage
 
-		limitCounter := NewLimitCounter(svc, s.redis, s.log)
+		cfg, ok := limit.ServiceLimit[svc]
+		if !ok {
+			return nil, proto.ErrAborted.WithCausef("service limit not found for %s", svc.GetName())
+		}
 
-		limiter := httprate.NewRateLimiter(int(limit.GetServiceLimit(&svc).RateLimit), time.Minute, httprate.WithLimitCounter(limitCounter))
+		limitCounter := NewLimitCounter(svc, s.redis, s.log)
+		limiter := httprate.NewRateLimiter(int(cfg.RateLimit), time.Minute, httprate.WithLimitCounter(limitCounter))
 		_, rate, err := limiter.Status(middleware.ProjectRateKey(projectID) + ":")
 		if err != nil {
 			return nil, fmt.Errorf("get rate limit status: %w", err)

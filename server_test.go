@@ -45,16 +45,21 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	const _credits = middleware.DefaultPublicRate / 10
 
-	limit := proto.ServiceLimit{
+	svcLimit := proto.ServiceLimit{
 		RateLimit: _credits * 100,
 		FreeWarn:  _credits * 5,
 		FreeMax:   _credits * 5,
 		OverWarn:  _credits * 7,
 		OverMax:   _credits * 10,
 	}
+	limit := proto.Limit{
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			Service: svcLimit,
+		},
+	}
 
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -99,12 +104,12 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		server.FlushNotifications()
 
 		// Spend Free CU
-		for i := int64(_credits); i < limit.FreeWarn; i += _credits {
+		for i := int64(_credits); i < svcLimit.FreeWarn; i += _credits {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-			assert.Equal(t, strconv.FormatInt(limit.FreeMax-i, 10), headers.Get(middleware.HeaderQuotaRemaining))
+			assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+			assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax-i, 10), headers.Get(middleware.HeaderQuotaRemaining))
 			assert.Equal(t, "", headers.Get(middleware.HeaderQuotaOverage))
 			assert.Empty(t, server.GetEvents(ProjectID), i)
 			expectedUsage.Add(&proto.AccessUsage{ValidCompute: _credits})
@@ -114,20 +119,20 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaOverage))
 		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_FreeMax)
 		expectedUsage.Add(&proto.AccessUsage{ValidCompute: _credits})
 
 		// Get close to soft quota
-		for i := limit.FreeWarn + _credits; i < limit.OverWarn; i += _credits {
+		for i := svcLimit.FreeWarn + _credits; i < svcLimit.OverWarn; i += _credits {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+			assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
-			assert.Equal(t, strconv.FormatInt(i-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
+			assert.Equal(t, strconv.FormatInt(i-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 			assert.Len(t, server.GetEvents(ProjectID), 1)
 			expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 		}
@@ -136,20 +141,20 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, headers, err = executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
-		assert.Equal(t, strconv.FormatInt(limit.OverWarn-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
+		assert.Equal(t, strconv.FormatInt(svcLimit.OverWarn-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_OverWarn)
 		expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 
 		// Get close to hard quota
-		for i := limit.OverWarn + _credits; i < limit.OverMax; i += _credits {
+		for i := svcLimit.OverWarn + _credits; i < svcLimit.OverMax; i += _credits {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.NoError(t, err)
 			assert.True(t, ok)
-			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+			assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
-			assert.Equal(t, strconv.FormatInt(i-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
+			assert.Equal(t, strconv.FormatInt(i-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 			assert.Len(t, server.GetEvents(ProjectID), 2)
 			expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 		}
@@ -158,9 +163,9 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, headers, err = executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
-		assert.Equal(t, strconv.FormatInt(limit.OverMax-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
+		assert.Equal(t, strconv.FormatInt(svcLimit.OverMax-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_OverMax)
 		expectedUsage.Add(&proto.AccessUsage{OverCompute: _credits})
 
@@ -169,9 +174,9 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.ErrorIs(t, err, proto.ErrQuotaExceeded)
 			assert.False(t, ok)
-			assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+			assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
-			assert.Equal(t, strconv.FormatInt(limit.OverMax-limit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
+			assert.Equal(t, strconv.FormatInt(svcLimit.OverMax-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
 			expectedUsage.Add(&proto.AccessUsage{LimitedCompute: _credits})
 		}
 
@@ -185,11 +190,13 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	t.Run("ChangeLimits", func(t *testing.T) {
 		// Increase CreditsOverageLimit which should still allow requests to go through, etc.
+		svcLimit := svcLimit
+		svcLimit.RateLimit = _credits * 100
+		svcLimit.OverWarn = _credits * 5
+		svcLimit.OverMax = _credits * 110
 		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{
-			Base: proto.ServiceLimit{
-				RateLimit: _credits * 100,
-				OverWarn:  _credits * 5,
-				OverMax:   _credits * 110,
+			ServiceLimit: map[proto.Service]proto.ServiceLimit{
+				Service: svcLimit,
 			},
 		})
 		assert.NoError(t, err)
@@ -204,7 +211,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", key, "")
 		assert.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 
 		client.Stop(context.Background())
 		usage, err := server.Store.GetAccountUsage(ctx, ProjectID, &Service, now.Add(-time.Hour), now.Add(time.Hour))
@@ -253,22 +260,26 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		ctx := middleware.WithTime(context.Background(), now)
 
 		for _, err := range errList {
-			server.ErrGetAccessQuota = err
-			ok, headers, err := executeRequest(ctx, r, "", key, "")
-			assert.True(t, ok)
-			assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
-			assert.NoError(t, err)
+			server.FlushCache(ctx)
+			t.Run(fmt.Sprintf("GetAccessQuotaError: %s", err), func(t *testing.T) {
+				server.ErrGetAccessQuota = err
+				ok, headers, err := executeRequest(ctx, r, "", key, "")
+				assert.True(t, ok)
+				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
+				assert.NoError(t, err)
+			})
 		}
 		server.ErrGetAccessQuota = nil
 
-		server.FlushCache(ctx)
-
 		for _, err := range errList {
-			server.ErrPrepareUsage = err
-			ok, headers, err := executeRequest(ctx, r, "", key, "")
-			assert.True(t, ok)
-			assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaLimit))
-			assert.NoError(t, err)
+			server.FlushCache(ctx)
+			t.Run(fmt.Sprintf("PrepareUsageError/%s", err), func(t *testing.T) {
+				server.ErrPrepareUsage = err
+				ok, headers, err := executeRequest(ctx, r, "", key, "")
+				assert.True(t, ok)
+				assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+				assert.NoError(t, err)
+			})
 		}
 		server.ErrPrepareUsage = nil
 
@@ -289,7 +300,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		server.PrepareUsageDelay = time.Second * 3
 		ok, headers, err := executeRequest(ctx, r, "", key, "")
 		assert.True(t, ok)
-		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.NoError(t, err)
 
 		client.Stop(context.Background())
@@ -311,7 +322,7 @@ func TestDefaultKey(t *testing.T) {
 		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
-	limit := proto.ServiceLimit{
+	limit := proto.Limit{
 		RateLimit: 100,
 		FreeMax:   5,
 		OverWarn:  7,
@@ -325,7 +336,7 @@ func TestDefaultKey(t *testing.T) {
 
 	// populate store
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -336,12 +347,12 @@ func TestDefaultKey(t *testing.T) {
 	quota, err := client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, access, quota.AccessKey)
-	assert.Equal(t, limit, quota.Limit.Base)
+	assert.Equal(t, &limit, quota.Limit)
 
 	quota, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, access, quota.AccessKey)
-	assert.Equal(t, limit, quota.Limit.Base)
+	assert.Equal(t, &limit, quota.Limit)
 
 	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, nil, []proto.Service{Service})
 	require.NoError(t, err)
@@ -349,7 +360,7 @@ func TestDefaultKey(t *testing.T) {
 	quota, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, access, quota.AccessKey)
-	assert.Equal(t, limit, quota.Limit.Base)
+	assert.Equal(t, &limit, quota.Limit)
 
 	ok, err := server.DisableAccessKey(ctx, keys[0])
 	require.ErrorIs(t, err, proto.ErrAtLeastOneKey)
@@ -400,14 +411,19 @@ func TestJWT(t *testing.T) {
 
 	ctx := context.Background()
 
-	limit := proto.ServiceLimit{
+	svcLimit := proto.ServiceLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
+	limit := proto.Limit{
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			Service: svcLimit,
+		},
+	}
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"project": ProjectID, "account": WalletAddress})
 
@@ -424,7 +440,7 @@ func TestJWT(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		expectedHits++
 	})
 	t.Run("AccessKeyNotFound", func(t *testing.T) {
@@ -480,14 +496,19 @@ func TestJWTAccess(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.ServiceLimit{
+	svcLimit := proto.ServiceLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
+	limit := proto.Limit{
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			Service: svcLimit,
+		},
+	}
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"account": account, "project": ProjectID})
 
@@ -505,8 +526,8 @@ func TestJWTAccess(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
 		assert.False(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 	})
 
 	server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: ProjectID})
@@ -515,8 +536,8 @@ func TestJWTAccess(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 		expectedHits++
 	})
 
@@ -526,8 +547,8 @@ func TestJWTAccess(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
 		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(limit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.Equal(t, strconv.FormatInt(limit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+		assert.Equal(t, strconv.FormatInt(svcLimit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 		expectedHits++
 	})
 
@@ -587,16 +608,22 @@ func TestSession(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.ServiceLimit{
+	svcLimit := proto.ServiceLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
+	limit := proto.Limit{
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			Service: svcLimit,
+		},
+	}
+
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
 
@@ -621,8 +648,8 @@ func TestSession(t *testing.T) {
 		publicRPM  = fmt.Sprint(middleware.DefaultPublicRate)
 		accountRPM = fmt.Sprint(middleware.DefaultAccountRate)
 		serviceRPM = ""
-		quotaRPM   = fmt.Sprint(limit.RateLimit)
-		quotaLimit = strconv.FormatInt(limit.FreeMax, 10)
+		quotaRPM   = fmt.Sprint(svcLimit.RateLimit)
+		quotaLimit = strconv.FormatInt(svcLimit.FreeMax, 10)
 	)
 
 	for service := range ACL {
@@ -725,16 +752,22 @@ func TestSessionDisabled(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.ServiceLimit{
+	svcLimit := proto.ServiceLimit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
+	limit := proto.Limit{
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			Service: svcLimit,
+		},
+	}
+
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{Base: limit})
+	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
 
@@ -758,8 +791,8 @@ func TestSessionDisabled(t *testing.T) {
 		publicRPM  = fmt.Sprint(middleware.DefaultPublicRate)
 		accountRPM = fmt.Sprint(middleware.DefaultAccountRate)
 		serviceRPM = ""
-		quotaRPM   = fmt.Sprint(limit.RateLimit)
-		quotaLimit = strconv.FormatInt(limit.FreeMax, 10)
+		quotaRPM   = fmt.Sprint(svcLimit.RateLimit)
+		quotaLimit = strconv.FormatInt(svcLimit.FreeMax, 10)
 	)
 
 	for service := range ACL {
@@ -851,12 +884,14 @@ func TestChainID(t *testing.T) {
 
 	ctx := context.Background()
 	limit := proto.Limit{
-		Base: proto.ServiceLimit{
-			RateLimit: 100,
-			FreeWarn:  5,
-			FreeMax:   5,
-			OverWarn:  7,
-			OverMax:   10,
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			Service: {
+				RateLimit: 100,
+				FreeWarn:  5,
+				FreeMax:   5,
+				OverWarn:  7,
+				OverMax:   10,
+			},
 		},
 	}
 	server.Store.AddUser(ctx, UserAddress, false)
@@ -934,12 +969,28 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r3 := newRouter(client3, rlCounter3)
 
 	limit := proto.Limit{
-		Base: proto.ServiceLimit{
-			RateLimit: 10,
-			FreeWarn:  100,
-			FreeMax:   100,
-			OverWarn:  100,
-			OverMax:   100,
+		ServiceLimit: map[proto.Service]proto.ServiceLimit{
+			svc1: {
+				RateLimit: 10,
+				FreeWarn:  100,
+				FreeMax:   100,
+				OverWarn:  100,
+				OverMax:   100,
+			},
+			svc2: {
+				RateLimit: 20,
+				FreeWarn:  200,
+				FreeMax:   200,
+				OverWarn:  200,
+				OverMax:   200,
+			},
+			svc3: {
+				RateLimit: 30,
+				FreeWarn:  300,
+				FreeMax:   300,
+				OverWarn:  300,
+				OverMax:   300,
+			},
 		},
 	}
 
@@ -960,7 +1011,10 @@ func TestPerServiceRateLimit(t *testing.T) {
 		{Service: svc3, Handler: r3},
 	} {
 		t.Run(svc.Service.String(), func(t *testing.T) {
-			rl := int(limit.GetServiceLimit(&svc.Service).RateLimit)
+
+			cfg, ok := limit.ServiceLimit[svc.Service]
+			require.True(t, ok, "service limit not found for %s", svc.Service)
+			rl := int(cfg.RateLimit)
 			for i := 0; i < (rl * 2); i++ {
 				ok, headers, err := executeRequest(ctx, svc.Handler, "/rpc/Service/MethodAccessKey", key, "")
 				require.Equal(t, strconv.Itoa(rl), headers.Get(middleware.HeaderRateLimit))
@@ -968,12 +1022,12 @@ func TestPerServiceRateLimit(t *testing.T) {
 				if i < int(rl) {
 					require.NoError(t, err)
 					require.True(t, ok)
-					require.Equal(t, strconv.FormatInt(limit.GetServiceLimit(&svc.Service).FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-					require.Equal(t, strconv.FormatInt(limit.GetServiceLimit(&svc.Service).FreeMax-int64(i+1), 10), headers.Get(middleware.HeaderQuotaRemaining))
+					require.Equal(t, strconv.FormatInt(cfg.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+					require.Equal(t, strconv.FormatInt(cfg.FreeMax-int64(i+1), 10), headers.Get(middleware.HeaderQuotaRemaining))
 				} else {
 					require.ErrorIs(t, err, proto.ErrQuotaRateLimit)
 					require.False(t, ok)
-					require.Equal(t, strconv.FormatInt(limit.GetServiceLimit(&svc.Service).FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
+					require.Equal(t, strconv.FormatInt(cfg.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 					require.Equal(t, "", headers.Get(middleware.HeaderQuotaRemaining))
 				}
 

@@ -52,7 +52,11 @@ func EnsureUsage(client Client, o Options) func(next http.Handler) http.Handler 
 				return
 			}
 
-			limit := quota.Limit.GetServiceLimit(&svc)
+			limit, ok := quota.Limit.ServiceLimit[svc]
+			if !ok {
+				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found for %s", client.GetService().GetName()))
+				return
+			}
 
 			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(limit.FreeMax-usage, 0), 10))
 			if overage := max(usage-limit.FreeMax, 0); overage > 0 {
@@ -99,13 +103,17 @@ func SpendUsage(client Client, o Options) func(next http.Handler) http.Handler {
 
 			svc := client.GetService()
 
+			limit, ok := quota.Limit.ServiceLimit[svc]
+			if !ok {
+				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found for %s", client.GetService().GetName()))
+				return
+			}
+
 			ok, total, err := client.SpendQuota(ctx, quota, &svc, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrQuotaExceeded) {
 				o.ErrHandler(r, w, err)
 				return
 			}
-
-			limit := quota.Limit.GetServiceLimit(&svc)
 
 			w.Header().Set(HeaderQuotaRemaining, strconv.FormatInt(max(limit.FreeMax-total, 0), 10))
 			if overage := total - limit.FreeMax; overage > 0 {

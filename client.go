@@ -146,12 +146,12 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 	quota, err := c.cache.QuotaCache.GetAccessQuota(ctx, accessKey)
 	if err != nil {
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) {
-			logger.Warn("unexpected cache error", slog.Any("error", err))
+			logger.Error("unexpected cache error", slog.Any("error", err))
 			return nil, nil
 		}
 		if quota, err = c.quotaClient.GetAccessQuota(ctx, accessKey, now); err != nil {
 			if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
-				logger.Warn("unexpected client error", slog.Any("error", err))
+				logger.Error("unexpected client error", slog.Any("error", err))
 				return nil, nil
 			}
 			return nil, err
@@ -259,7 +259,11 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *
 		slog.String("access_key", accessKey),
 	)
 
-	cfg := quota.Limit.GetServiceLimit(svc)
+	cfg, ok := quota.Limit.ServiceLimit[*svc]
+	if !ok {
+		logger.Warn("service limit not found", slog.String("service", svc.GetName()))
+		return false, 0, nil
+	}
 
 	// spend compute units
 	key := cacheKeyQuota(projectID, quota.Cycle, &c.service, now)
