@@ -261,7 +261,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *
 
 	cfg, ok := quota.Limit.ServiceLimit[*svc]
 	if !ok {
-		logger.Warn("service limit not found", slog.String("service", svc.GetName()))
+		logger.Error("service limit not found", slog.String("service", svc.GetName()))
 		return false, 0, nil
 	}
 
