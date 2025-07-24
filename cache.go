@@ -311,20 +311,21 @@ func (s *LRU) DeleteProjectQuota(ctx context.Context, projectID uint64) error {
 }
 
 func (s *LRU) getQuota(ctx context.Context, key string) (*proto.AccessQuota, error) {
-	if aq, ok := s.mem.Get(key); ok {
-		return aq, nil
+	if quota, ok := s.mem.Get(key); ok {
+		return quota, nil
 	}
-	aq, err := s.backend.GetAccessQuota(ctx, key)
+
+	quota, err := s.backend.GetAccessQuota(ctx, key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get quota: %w", err)
 	}
-	s.mem.Add(key, aq)
-	return aq, nil
+	s.mem.Add(key, quota)
+	return quota, nil
 }
 
-func (s *LRU) setQuota(ctx context.Context, key string, aq *proto.AccessQuota) error {
-	s.mem.Add(key, aq)
-	return s.backend.SetAccessQuota(ctx, aq)
+func (s *LRU) setQuota(ctx context.Context, key string, quota *proto.AccessQuota) error {
+	s.mem.Add(key, quota)
+	return s.backend.SetAccessQuota(ctx, quota)
 }
 
 func (s *LRU) deleteQuota(ctx context.Context, key string) error {

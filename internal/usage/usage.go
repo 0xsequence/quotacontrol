@@ -52,7 +52,7 @@ func (u *Tracker) AddKeyUsage(accessKey string, now time.Time, usage proto.Acces
 	if _, ok := u.usage[now].ByAccessKey[accessKey]; !ok {
 		u.usage[now].ByAccessKey[accessKey] = &proto.AccessUsage{}
 	}
-	u.usage[now].ByAccessKey[accessKey].Add(usage)
+	u.usage[now].ByAccessKey[accessKey].Add(&usage)
 	u.dataMutex.Unlock()
 }
 
@@ -65,7 +65,7 @@ func (u *Tracker) AddProjectUsage(projectID uint64, now time.Time, usage proto.A
 	if _, ok := u.usage[now].ByProjectID[projectID]; !ok {
 		u.usage[now].ByProjectID[projectID] = &proto.AccessUsage{}
 	}
-	u.usage[now].ByProjectID[projectID].Add(usage)
+	u.usage[now].ByProjectID[projectID].Add(&usage)
 	u.dataMutex.Unlock()
 }
 

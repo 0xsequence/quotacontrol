@@ -12,7 +12,10 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
-func (u *AccessUsage) Add(usage AccessUsage) {
+func (u *AccessUsage) Add(usage *AccessUsage) {
+	if usage == nil {
+		return
+	}
 	u.LimitedCompute += usage.LimitedCompute
 	u.ValidCompute += usage.ValidCompute
 	u.OverCompute += usage.OverCompute
@@ -59,20 +62,16 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 	return nil
 }
 
-// GetRateLimit returns the rate limit for the given service. If the service is nil, it returns the default rate limit.
-func (l Limit) GetRateLimit(svc *Service) int {
-	if svc == nil {
-		return int(l.RateLimit)
+func (l Limit) Validate() error {
+	for svc, cfg := range l.ServiceLimit {
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("service %s: %w", svc.GetName(), err)
+		}
 	}
-
-	rl, ok := l.SvcRateLimit[*svc]
-	if !ok {
-		return int(l.RateLimit)
-	}
-	return int(rl)
+	return nil
 }
 
-func (l Limit) Validate() error {
+func (l ServiceLimit) Validate() error {
 	if l.RateLimit < 1 {
 		return fmt.Errorf("rateLimit must be > 0")
 	}
@@ -102,7 +101,7 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 	return max(0, total-threshold), true
 }
 
-func (l *Limit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
+func (l *ServiceLimit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert
