@@ -27,9 +27,9 @@ type AccessKeyStore interface {
 }
 
 type UsageStore interface {
-	GetAccessKeyUsage(ctx context.Context, projectID uint64, accessKey string, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
-	GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (proto.AccessUsage, error)
-	UpdateAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage proto.AccessUsage) error
+	GetAccessKeyUsage(ctx context.Context, projectID uint64, accessKey string, service *proto.Service, min, max time.Time) (int64, error)
+	GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, min, max time.Time) (int64, error)
+	InsertAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage int64) error
 }
 
 type CycleStore interface {
@@ -105,59 +105,79 @@ func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *ti
 	return *from, from.Add(duration), nil
 }
 
+// Deprecated: use GetUsage instead.
 func (s server) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
-	if err != nil {
-		return nil, fmt.Errorf("get time range: %w", err)
-	}
-
-	usage, err := s.store.UsageStore.GetAccountUsage(ctx, projectID, service, min, max)
+	usage, err := s.GetUsage(ctx, projectID, nil, service, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("get account usage: %w", err)
 	}
-	return &usage, nil
+	return &proto.AccessUsage{ValidCompute: usage}, nil
 }
 
+// Deprecated: use GetUsage instead.
 func (s server) GetAsyncUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
-	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
+	usage, err := s.GetUsage(ctx, projectID, proto.Ptr(""), service, from, to)
 	if err != nil {
-		return nil, fmt.Errorf("get time range: %w", err)
+		return nil, fmt.Errorf("get usage: %w", err)
 	}
-
-	usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, min, max)
-	if err != nil {
-		return nil, fmt.Errorf("get access key usage: %w", err)
-	}
-	return &usage, nil
+	return &proto.AccessUsage{ValidCompute: usage}, nil
 }
 
+// Deprecated: use GetUsage instead.
 func (s server) GetAccessKeyUsage(ctx context.Context, accessKey string, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	projectID, err := authcontrol.GetProjectIDFromAccessKey(accessKey)
 	if err != nil {
 		return nil, fmt.Errorf("get project id: %w", err)
 	}
 
+	usage, err := s.GetUsage(ctx, projectID, &accessKey, service, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("get usage: %w", err)
+	}
+	return &proto.AccessUsage{ValidCompute: usage}, nil
+}
+
+func (s server) GetUsage(ctx context.Context, projectID uint64, accessKey *string, service *proto.Service, from *time.Time, to *time.Time) (int64, error) {
 	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
 	if err != nil {
-		return nil, fmt.Errorf("get time range: %w", err)
+		return 0, fmt.Errorf("get time range: %w", err)
 	}
 
-	usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, accessKey, service, min, max)
-	if err != nil {
-		return nil, fmt.Errorf("get access key usage: %w", err)
+	if accessKey == nil {
+		// Total usage
+		usage, err := s.store.UsageStore.GetAccountUsage(ctx, projectID, service, min, max)
+		if err != nil {
+			return 0, fmt.Errorf("get account usage: %w", err)
+		}
+		return usage, nil
 	}
-	return &usage, nil
+
+	if *accessKey == "" {
+		// Async usage
+		usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, min, max)
+		if err != nil {
+			return 0, fmt.Errorf("get async usage: %w", err)
+		}
+		return usage, nil
+	}
+
+	// Access key usage
+	usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, *accessKey, service, min, max)
+	if err != nil {
+		return 0, fmt.Errorf("get access key usage: %w", err)
+	}
+	return usage, nil
 }
 
 func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (bool, error) {
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
-	usage, err := s.GetAccountUsage(ctx, projectID, service, &min, &max)
+	usage, err := s.GetUsage(ctx, projectID, nil, service, &min, &max)
 	if err != nil {
 		return false, fmt.Errorf("get account usage: %w", err)
 	}
 
 	key := cacheKeyQuota(projectID, cycle, service, now)
-	if err := s.cache.UsageCache.SetUsage(ctx, key, usage.GetTotalUsage()); err != nil {
+	if err := s.cache.UsageCache.SetUsage(ctx, key, usage); err != nil {
 		return false, fmt.Errorf("set usage cache: %w", err)
 	}
 	return true, nil
@@ -247,11 +267,11 @@ func (s server) NotifyEvent(ctx context.Context, projectID uint64, eventType pro
 	return true, nil
 }
 
-func (s server) UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error) {
+func (s server) SyncProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]int64) (map[uint64]bool, error) {
 	var errs []error
 	m := make(map[uint64]bool, len(usage))
-	for projectID, accessUsage := range usage {
-		err := s.store.UsageStore.UpdateAccessUsage(ctx, projectID, "", service, now, *accessUsage)
+	for projectID, usage := range usage {
+		err := s.store.UsageStore.InsertAccessUsage(ctx, projectID, "", service, now, usage)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%d: %w", projectID, err))
 		}
@@ -263,16 +283,26 @@ func (s server) UpdateProjectUsage(ctx context.Context, service proto.Service, n
 	return m, nil
 }
 
-func (s server) UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+// Deprecated: use SyncProjectUsage instead.
+func (s server) UpdateProjectUsage(ctx context.Context, service proto.Service, now time.Time, usage map[uint64]*proto.AccessUsage) (map[uint64]bool, error) {
+	m := make(map[uint64]int64, len(usage))
+	for projectID, u := range usage {
+		m[projectID] = u.ValidCompute
+	}
+
+	return s.SyncProjectUsage(ctx, service, now, m)
+}
+
+func (s server) SyncAccessKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]int64) (map[string]bool, error) {
 	var errs []error
 	m := make(map[string]bool, len(usage))
-	for key, u := range usage {
+	for key, usage := range usage {
 		projectID, err := authcontrol.GetProjectIDFromAccessKey(key)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 			continue
 		}
-		if err = s.store.UsageStore.UpdateAccessUsage(ctx, projectID, key, service, now, *u); err != nil {
+		if err = s.store.UsageStore.InsertAccessUsage(ctx, projectID, key, service, now, usage); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", key, err))
 		}
 		m[key] = err == nil
@@ -283,8 +313,13 @@ func (s server) UpdateKeyUsage(ctx context.Context, service proto.Service, now t
 	return m, nil
 }
 
-func (s server) UpdateUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
-	return s.UpdateKeyUsage(ctx, service, now, usage)
+// Deprecated: use SyncAccessKeyUsage instead.
+func (s server) UpdateKeyUsage(ctx context.Context, service proto.Service, now time.Time, usage map[string]*proto.AccessUsage) (map[string]bool, error) {
+	m := make(map[string]int64, len(usage))
+	for accessKey, u := range usage {
+		m[accessKey] = u.ValidCompute
+	}
+	return s.SyncAccessKeyUsage(ctx, service, now, m)
 }
 
 func (s server) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bool, error) {
@@ -323,24 +358,9 @@ func (s server) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*pro
 }
 
 func (s server) CreateAccessKey(ctx context.Context, projectID uint64, displayName string, requireOrigin bool, allowedOrigins []string, allowedServices []proto.Service) (*proto.AccessKey, error) {
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
-	if err != nil {
-		return nil, fmt.Errorf("get access cycle: %w", err)
-	}
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
-	if err != nil {
-		return nil, fmt.Errorf("get access limit: %w", err)
-	}
-
 	list, err := s.store.AccessKeyStore.ListAccessKeys(ctx, projectID, proto.Ptr(true), nil)
 	if err != nil {
 		return nil, fmt.Errorf("list access keys: %w", err)
-	}
-
-	if limit.MaxKeys > 0 {
-		if l := len(list); int64(l) >= limit.MaxKeys {
-			return nil, proto.ErrMaxAccessKeys
-		}
 	}
 
 	origins, err := validation.NewOrigins(allowedOrigins...)
@@ -429,7 +449,7 @@ func (s server) UpdateAccessKey(ctx context.Context, accessKey string, displayNa
 	return k, nil
 }
 
-func (s server) UpdateDefaultAccessKey(ctx context.Context, projectID uint64, accessKey string) (bool, error) {
+func (s server) SetDefaultAccessKey(ctx context.Context, projectID uint64, accessKey string) (bool, error) {
 	// make sure accessKey exists
 	k, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
