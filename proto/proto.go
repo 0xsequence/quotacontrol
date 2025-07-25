@@ -12,19 +12,6 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
-func (u *AccessUsage) Add(usage *AccessUsage) {
-	if usage == nil {
-		return
-	}
-	u.LimitedCompute += usage.LimitedCompute
-	u.ValidCompute += usage.ValidCompute
-	u.OverCompute += usage.OverCompute
-}
-
-func (u *AccessUsage) GetTotalUsage() int64 {
-	return u.ValidCompute + u.OverCompute
-}
-
 func (t *AccessKey) ValidateOrigin(rawOrigin string) bool {
 	if rawOrigin == "" {
 		return !t.RequireOrigin
@@ -101,36 +88,36 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 	return max(0, total-threshold), true
 }
 
-func (l *ServiceLimit) GetSpendResult(v, total int64) (AccessUsage, *EventType) {
+func (l *ServiceLimit) GetSpendResult(v, total int64) (int64, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert
 		if _, ok := getOverThreshold(v, total, l.FreeWarn); ok {
-			return AccessUsage{ValidCompute: v}, Ptr(EventType_FreeWarn)
+			return v, Ptr(EventType_FreeWarn)
 		}
 		// normal valid usage
-		return AccessUsage{ValidCompute: v}, nil
+		return v, nil
 	}
 
 	// overage usage
 	if total < l.OverMax {
 		// threshold of included limit
-		if over, ok := getOverThreshold(v, total, l.FreeMax); ok {
-			return AccessUsage{ValidCompute: v - over, OverCompute: over}, Ptr(EventType_FreeMax)
+		if _, ok := getOverThreshold(v, total, l.FreeMax); ok {
+			return v, Ptr(EventType_FreeMax)
 		}
 		// threshold of overage alert
 		if _, ok := getOverThreshold(v, total, l.OverWarn); ok {
-			return AccessUsage{OverCompute: v}, Ptr(EventType_OverWarn)
+			return v, Ptr(EventType_OverWarn)
 		}
 		// normal overage usage
-		return AccessUsage{OverCompute: v}, nil
+		return v, nil
 	}
 
 	// limited usage
 	if over, ok := getOverThreshold(v, total, l.OverMax); ok {
-		return AccessUsage{LimitedCompute: over, OverCompute: v - over}, Ptr(EventType_OverMax)
+		return v - over, Ptr(EventType_OverMax)
 	}
-	return AccessUsage{LimitedCompute: v}, nil
+	return 0, nil
 }
 
 func (q *AccessQuota) IsActive() bool {

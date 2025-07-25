@@ -273,12 +273,6 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *
 		if err != nil {
 			// limit exceeded
 			if errors.Is(err, proto.ErrQuotaExceeded) {
-				usage := proto.AccessUsage{LimitedCompute: cost}
-				if accessKey == "" {
-					c.usage.AddProjectUsage(projectID, now, usage)
-				} else {
-					c.usage.AddKeyUsage(accessKey, now, usage)
-				}
 				return false, total, proto.ErrQuotaExceeded
 			}
 			// ping the server to prepare usage
@@ -310,7 +304,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *
 		} else {
 			c.usage.AddKeyUsage(accessKey, now, usage)
 		}
-		if usage.LimitedCompute != 0 {
+		if usage < cost {
 			return false, total, proto.ErrQuotaExceeded
 		}
 		if event != nil {
