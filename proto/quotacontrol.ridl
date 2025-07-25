@@ -156,9 +156,9 @@ service QuotaControl
   - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
   # Deprecated: use GetUsage
   - GetAsyncUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
-  # Deprecated: use SendUsage
+  # Deprecated: use SyncProjectUsage
   - UpdateProjectUsage(service: Service, now: timestamp, usage: map<uint64,AccessUsage>) => (ok: map<uint64,bool>)
-  # Deprecated: use SendUsage
+  # Deprecated: use SyncAccessKeyUsage
   - UpdateKeyUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
 
   # User permissions for a projectId
