@@ -122,7 +122,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaOverage))
-		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_FreeMax)
+		assert.Contains(t, server.GetEvents(ProjectID), mock.Event{Type: proto.EventType_FreeMax, Service: Service})
 		expectedUsage += _credits
 
 		// Get close to soft quota
@@ -144,7 +144,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, strconv.FormatInt(svcLimit.OverWarn-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
-		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_OverWarn)
+		assert.Contains(t, server.GetEvents(ProjectID), mock.Event{Type: proto.EventType_OverWarn, Service: Service})
 		expectedUsage += _credits
 
 		// Get close to hard quota
@@ -166,7 +166,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
 		assert.Equal(t, "0", headers.Get(middleware.HeaderQuotaRemaining))
 		assert.Equal(t, strconv.FormatInt(svcLimit.OverMax-svcLimit.FreeWarn, 10), headers.Get(middleware.HeaderQuotaOverage))
-		assert.Contains(t, server.GetEvents(ProjectID), proto.EventType_OverMax)
+		assert.Contains(t, server.GetEvents(ProjectID), mock.Event{Type: proto.EventType_OverMax, Service: Service})
 		expectedUsage += _credits
 
 		// Denied

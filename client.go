@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xsequence/go-libs/xlog"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -116,7 +117,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 	if err != nil {
 		logger := c.logger.With(
 			slog.String("op", "fetch_project_quota"),
-			slog.Uint64("project_id", projectID),
+			xlog.ProjectID(projectID),
 		)
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
 			logger.Warn("unexpected cache error", slog.Any("error", err))
@@ -174,7 +175,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
-		slog.Uint64("project_id", quota.AccessKey.ProjectID),
+		xlog.ProjectID(quota.AccessKey.ProjectID),
 		slog.String("access_key", quota.AccessKey.AccessKey),
 	)
 
@@ -235,7 +236,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	userID, _ := authcontrol.GetAccount(ctx)
 	logger := c.logger.With(
 		slog.String("op", "fetch_permission"),
-		slog.Uint64("project_id", projectID),
+		xlog.ProjectID(projectID),
 		slog.String("user_id", userID),
 	)
 	// Check short-lived cache if requested. Note using the cache TTL from config (default 1m).
@@ -268,7 +269,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 
 	logger := c.logger.With(
 		slog.String("op", "spend_quota"),
-		slog.Uint64("project_id", projectID),
+		xlog.ProjectID(projectID),
 		slog.String("access_key", accessKey),
 	)
 
@@ -305,7 +306,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		return false, total, proto.ErrQuotaExceeded
 	}
 	if event != nil {
-		if _, err := c.quotaClient.NotifyEvent(ctx, projectID, *event); err != nil {
+		if _, err := c.quotaClient.NotifyEvent(ctx, projectID, c.service, *event); err != nil {
 			logger.Error("notify event failed", slog.Any("error", err))
 		}
 	}
