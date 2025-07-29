@@ -169,6 +169,7 @@ func (s server) GetUsage(ctx context.Context, projectID uint64, accessKey *strin
 	return usage, nil
 }
 
+// Deprecated: new version of client sets the usage cache directly. This is going to be removed in the future.
 func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (bool, error) {
 	min, max := cycle.GetStart(now), cycle.GetEnd(now)
 	usage, err := s.GetUsage(ctx, projectID, nil, service, &min, &max)

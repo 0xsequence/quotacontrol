@@ -80,7 +80,6 @@ type Server struct {
 
 	ErrGetProjectQuota error
 	ErrGetAccessQuota  error
-	ErrPrepareUsage    error
 	PrepareUsageDelay  time.Duration
 }
 
@@ -108,22 +107,6 @@ func (s *Server) GetAccessQuota(ctx context.Context, accessKey string, now time.
 		return nil, s.ErrGetAccessQuota
 	}
 	return s.QuotaControl.GetAccessQuota(ctx, accessKey, now)
-}
-
-// PrepareUsage prepares the usage for a project unless ErrPrepareUsage is set.
-// If PrepareUsageDelay is set, it will clear the usage after that delay
-func (s *Server) PrepareUsage(ctx context.Context, projectID uint64, service *proto.Service, cycle *proto.Cycle, now time.Time) (bool, error) {
-	if s.ErrPrepareUsage != nil {
-		return false, s.ErrPrepareUsage
-	}
-	if s.PrepareUsageDelay > 0 {
-		go func() {
-			time.Sleep(s.PrepareUsageDelay)
-			s.ClearUsage(ctx, projectID, service, now)
-		}()
-		return true, nil
-	}
-	return s.QuotaControl.PrepareUsage(ctx, projectID, service, cycle, now)
 }
 
 // GetEvents returns the events that have been notified for a project
