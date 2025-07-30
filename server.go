@@ -585,7 +585,7 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		cacheKey := cacheKeyQuota(projectID, cycle, &svc, now)
 		usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
 		if err != nil {
-			if !errors.Is(err, ErrCachePing) {
+			if !errors.Is(err, errCacheReady) {
 				return nil, fmt.Errorf("peek usage cache: %w", err)
 			}
 			if _, err := s.PrepareUsage(ctx, projectID, &svc, cycle, now); err != nil {

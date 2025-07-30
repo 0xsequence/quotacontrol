@@ -191,13 +191,13 @@ func (c *Client) EnsureUsage(ctx context.Context, projectID uint64, cycle *proto
 	for i := range 3 {
 		usage, err := c.cache.UsageCache.PeekUsage(ctx, key)
 		if err != nil {
-			// wait for cache to be ready
-			if errors.Is(err, ErrCacheWait) {
+			// Some other client is updating the cache, wait and retry.
+			if errors.Is(err, errCacheWait) {
 				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
 				continue
 			}
-			// ping the server to prepare usage
-			if errors.Is(err, ErrCachePing) {
+			// PeekUsage found nil and set the cache to -1, expecting the client to set the usage.
+			if errors.Is(err, errCacheReady) {
 				min, max := cycle.GetStart(now), cycle.GetEnd(now)
 				usage, err := c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
 				if err != nil {
