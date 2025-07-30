@@ -40,8 +40,8 @@ type PermissionCache interface {
 type CacheResponse uint8
 
 var (
-	ErrCachePing = errors.New("quotacontrol: cache ping")
-	ErrCacheWait = errors.New("quotacontrol: cache wait")
+	errCacheReady = errors.New("quotacontrol: cache ready for initialization")
+	errCacheWait  = errors.New("quotacontrol: cache wait")
 )
 
 const (
@@ -192,7 +192,7 @@ func (s *RedisCache) PeekUsage(ctx context.Context, redisKey string) (int64, err
 	v, err := s.client.Get(ctx, cacheKey).Int64()
 	if err == nil {
 		if v == SpecialValue {
-			return 0, ErrCacheWait
+			return 0, errCacheWait
 		}
 		return v, nil
 	}
@@ -204,9 +204,9 @@ func (s *RedisCache) PeekUsage(ctx context.Context, redisKey string) (int64, err
 		return 0, fmt.Errorf("peek usage - setnx: %w", err)
 	}
 	if !ok {
-		return 0, ErrCacheWait
+		return 0, errCacheWait
 	}
-	return 0, ErrCachePing
+	return 0, errCacheReady
 }
 
 func (s *RedisCache) SpendUsage(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {

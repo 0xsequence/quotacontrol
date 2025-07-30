@@ -129,6 +129,9 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 			}
 			return nil, err
 		}
+		if err := c.cache.QuotaCache.SetProjectQuota(ctx, quota); err != nil {
+			logger.Warn("failed to cache project quota", slog.Any("error", err))
+		}
 	}
 	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
 		return quota, proto.ErrInvalidChain.WithCause(err)
@@ -156,6 +159,9 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 			}
 			return nil, err
 		}
+		if err := c.cache.QuotaCache.SetAccessQuota(ctx, quota); err != nil {
+			logger.Error("failed to cache access quota", slog.Any("error", err))
+		}
 	}
 	// validate access key
 	if err := c.validateAccessKey(quota.AccessKey, origin, chainIDs); err != nil {
@@ -165,44 +171,51 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 }
 
 // FetchUsage fetches the current usage of the access key.
-func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, service *proto.Service, now time.Time) (int64, error) {
-	key := cacheKeyQuota(quota.AccessKey.ProjectID, quota.Cycle, service, now)
-
+func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
 		slog.Uint64("project_id", quota.AccessKey.ProjectID),
 		slog.String("access_key", quota.AccessKey.AccessKey),
 	)
 
+	usage, err := c.EnsureUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
+	if err != nil {
+		logger.Error("unexpected error", slog.Any("error", err))
+		return 0, err
+	}
+	return usage, nil
+}
+
+func (c *Client) EnsureUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error) {
+	key := cacheKeyQuota(projectID, cycle, &c.service, now)
 	for i := range 3 {
 		usage, err := c.cache.UsageCache.PeekUsage(ctx, key)
 		if err != nil {
-			// ping the server to prepare usage
-			if errors.Is(err, ErrCachePing) {
-				if _, err := c.quotaClient.PrepareUsage(ctx, quota.AccessKey.ProjectID, service, quota.Cycle, now); err != nil {
-					logger.Error("unexpected client error", slog.Any("error", err))
-					if _, err := c.cache.UsageCache.ClearUsage(ctx, key); err != nil {
-						logger.Error("unexpected cache error", slog.Any("error", err))
-					}
-					return 0, nil
-				}
-				continue
-			}
-
-			// wait for cache to be ready
-			if errors.Is(err, ErrCacheWait) {
+			// Some other client is updating the cache, wait and retry.
+			if errors.Is(err, errCacheWait) {
 				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
 				continue
 			}
+			// PeekUsage found nil and set the cache to -1, expecting the client to set the usage.
+			if errors.Is(err, errCacheReady) {
+				min, max := cycle.GetStart(now), cycle.GetEnd(now)
+				usage, err := c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
+				if err != nil {
+					return 0, fmt.Errorf("get account usage: %w", err)
+				}
 
-			logger.Error("unexpected cache error", slog.Any("error", err))
-			return 0, err
+				if err := c.cache.SetUsage(ctx, key, usage); err != nil {
+					return 0, fmt.Errorf("set usage cache: %w", err)
+				}
+				return usage, nil
+			}
+
+			return 0, fmt.Errorf("peek usage cache: %w", err)
 		}
-
 		return usage, nil
 	}
-	logger.Error("operation timed out")
-	return 0, nil
+
+	return 0, proto.ErrTimeout
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
@@ -244,7 +257,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *proto.Service, cost int64, now time.Time) (spent bool, total int64, err error) {
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (spent bool, total int64, err error) {
 	// quota is nil only on unexpected errors from quota fetch
 	if quota == nil || cost == 0 {
 		return false, 0, nil
@@ -259,63 +272,44 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *
 		slog.String("access_key", accessKey),
 	)
 
-	cfg, ok := quota.Limit.ServiceLimit[*svc]
+	cfg, ok := quota.Limit.ServiceLimit[c.service]
 	if !ok {
-		logger.Error("service limit not found", slog.String("service", svc.GetName()))
+		logger.Error("service limit not found", slog.String("service", c.service.GetName()))
 		return false, 0, nil
 	}
 
-	// spend compute units
+	total, err = c.EnsureUsage(ctx, projectID, quota.Cycle, now)
+	if err != nil {
+		logger.Error("ensure usage", slog.Any("error", err))
+		return false, 0, err
+	}
+	if total >= cfg.OverMax {
+		return false, total, proto.ErrQuotaExceeded
+	}
+
 	key := cacheKeyQuota(projectID, quota.Cycle, &c.service, now)
 
-	for i := range 3 {
-		total, err := c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax)
-		if err != nil {
-			// limit exceeded
-			if errors.Is(err, proto.ErrQuotaExceeded) {
-				return false, total, proto.ErrQuotaExceeded
-			}
-			// ping the server to prepare usage
-			if errors.Is(err, ErrCachePing) {
-				if _, err := c.quotaClient.PrepareUsage(ctx, projectID, &c.service, quota.Cycle, now); err != nil {
-					logger.Error("unexpected client error", slog.Any("error", err))
-					if _, err := c.cache.UsageCache.ClearUsage(ctx, key); err != nil {
-						logger.Error("unexpected cache error", slog.Any("error", err))
-					}
-					return false, 0, nil
-				}
-				continue
-			}
-
-			// wait for cache to be ready
-			if errors.Is(err, ErrCacheWait) {
-				time.Sleep(time.Millisecond * 100 * time.Duration(i+1))
-				continue
-			}
-
-			logger.Error("unexpected cache error", slog.Any("error", err))
-			return false, 0, err
-
-		}
-
-		usage, event := cfg.GetSpendResult(cost, total)
-		if accessKey == "" {
-			c.usage.AddProjectUsage(projectID, now, usage)
-		} else {
-			c.usage.AddKeyUsage(accessKey, now, usage)
-		}
-		if usage < cost {
-			return false, total, proto.ErrQuotaExceeded
-		}
-		if event != nil {
-			if _, err := c.quotaClient.NotifyEvent(ctx, projectID, *event); err != nil {
-				logger.Error("notify event failed", slog.Any("error", err))
-			}
-		}
-		return true, total, nil
+	// spend compute units
+	if total, err = c.cache.UsageCache.SpendUsage(ctx, key, cost, cfg.OverMax); err != nil {
+		logger.Error("unexpected cache error", slog.Any("error", err))
+		return false, 0, err
 	}
-	logger.Error("operation timed out")
-	return false, 0, nil
+
+	usage, event := cfg.GetSpendResult(cost, total)
+	if accessKey == "" {
+		c.usage.AddProjectUsage(projectID, now, usage)
+	} else {
+		c.usage.AddKeyUsage(accessKey, now, usage)
+	}
+	if usage < cost {
+		return false, total, proto.ErrQuotaExceeded
+	}
+	if event != nil {
+		if _, err := c.quotaClient.NotifyEvent(ctx, projectID, *event); err != nil {
+			logger.Error("notify event failed", slog.Any("error", err))
+		}
+	}
+	return true, total, nil
 }
 
 func (c *Client) ClearQuotaCacheByProjectID(ctx context.Context, projectID uint64) error {

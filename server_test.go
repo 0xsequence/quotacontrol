@@ -270,38 +270,6 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		}
 		server.ErrGetAccessQuota = nil
 
-		for _, err := range errList {
-			server.FlushCache(ctx)
-			t.Run(fmt.Sprintf("PrepareUsageError/%s", err), func(t *testing.T) {
-				server.ErrPrepareUsage = err
-				ok, headers, err := executeRequest(ctx, r, "", key, "")
-				assert.True(t, ok)
-				assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-				assert.NoError(t, err)
-			})
-		}
-		server.ErrPrepareUsage = nil
-
-		client.Stop(context.Background())
-		usage, err := server.Store.GetAccountUsage(ctx, ProjectID, &Service, now.Add(-time.Hour), now.Add(time.Hour))
-		assert.NoError(t, err)
-		assert.Equal(t, expectedUsage, _credits*counter.GetValue())
-		assert.Equal(t, expectedUsage, usage)
-	})
-
-	t.Run("ServerTimeout", func(t *testing.T) {
-		server.FlushCache(ctx)
-
-		go client.Run(context.Background())
-
-		ctx := middleware.WithTime(context.Background(), now)
-
-		server.PrepareUsageDelay = time.Second * 3
-		ok, headers, err := executeRequest(ctx, r, "", key, "")
-		assert.True(t, ok)
-		assert.Equal(t, strconv.FormatInt(svcLimit.FreeMax, 10), headers.Get(middleware.HeaderQuotaLimit))
-		assert.NoError(t, err)
-
 		client.Stop(context.Background())
 		usage, err := server.Store.GetAccountUsage(ctx, ProjectID, &Service, now.Add(-time.Hour), now.Add(time.Hour))
 		assert.NoError(t, err)
