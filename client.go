@@ -128,6 +128,9 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 			}
 			return nil, err
 		}
+		if err := c.cache.SetProjectQuota(ctx, quota); err != nil {
+			logger.Warn("cannot set cache", slog.Any("error", err))
+		}
 	}
 	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
 		return quota, err
@@ -154,6 +157,9 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 				return nil, nil
 			}
 			return nil, err
+		}
+		if err := c.cache.SetAccessQuota(ctx, quota); err != nil {
+			logger.Warn("cannot set cache", slog.Any("error", err))
 		}
 	}
 	// validate access key
