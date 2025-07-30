@@ -170,7 +170,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		expectedUsage += _credits
 
 		// Denied
-		for range 10 {
+		for i := 0; i < 10; i++ {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.ErrorIs(t, err, proto.ErrQuotaExceeded)
 			assert.False(t, ok)

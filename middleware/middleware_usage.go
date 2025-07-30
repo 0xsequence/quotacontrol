@@ -44,15 +44,13 @@ func EnsureUsage(client Client, o Options) func(next http.Handler) http.Handler 
 			}
 			w.Header().Set("X-RateLimit-Increment", strconv.FormatInt(cu, 10))
 
-			svc := client.GetService()
-
-			usage, err := client.FetchUsage(ctx, quota, &svc, GetTime(ctx))
+			usage, err := client.FetchUsage(ctx, quota, GetTime(ctx))
 			if err != nil {
 				o.ErrHandler(r, w, err)
 				return
 			}
 
-			limit, ok := quota.Limit.ServiceLimit[svc]
+			limit, ok := quota.Limit.ServiceLimit[client.GetService()]
 			if !ok {
 				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found for %s", client.GetService().GetName()))
 				return
@@ -101,15 +99,13 @@ func SpendUsage(client Client, o Options) func(next http.Handler) http.Handler {
 			}
 			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
 
-			svc := client.GetService()
-
-			limit, ok := quota.Limit.ServiceLimit[svc]
+			limit, ok := quota.Limit.ServiceLimit[client.GetService()]
 			if !ok {
 				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found for %s", client.GetService().GetName()))
 				return
 			}
 
-			ok, total, err := client.SpendQuota(ctx, quota, &svc, cu, GetTime(ctx))
+			ok, total, err := client.SpendQuota(ctx, quota, cu, GetTime(ctx))
 			if err != nil && !errors.Is(err, proto.ErrQuotaExceeded) {
 				o.ErrHandler(r, w, err)
 				return

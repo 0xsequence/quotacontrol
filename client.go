@@ -171,7 +171,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 }
 
 // FetchUsage fetches the current usage of the access key.
-func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, service *proto.Service, now time.Time) (int64, error) {
+func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
 		slog.Uint64("project_id", quota.AccessKey.ProjectID),
@@ -257,7 +257,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *proto.Service, cost int64, now time.Time) (spent bool, total int64, err error) {
+func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (spent bool, total int64, err error) {
 	// quota is nil only on unexpected errors from quota fetch
 	if quota == nil || cost == 0 {
 		return false, 0, nil
@@ -272,9 +272,9 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, svc *
 		slog.String("access_key", accessKey),
 	)
 
-	cfg, ok := quota.Limit.ServiceLimit[*svc]
+	cfg, ok := quota.Limit.ServiceLimit[c.service]
 	if !ok {
-		logger.Error("service limit not found", slog.String("service", svc.GetName()))
+		logger.Error("service limit not found", slog.String("service", c.service.GetName()))
 		return false, 0, nil
 	}
 
