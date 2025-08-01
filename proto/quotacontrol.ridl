@@ -146,7 +146,7 @@ service QuotaControl
   - ClearUsage(projectID: uint64, service?: Service,now: timestamp) => (ok: bool)
   - SyncProjectUsage(service: Service, now: timestamp, usage: map<uint64,int64>) => (ok: map<uint64,bool>)
   - SyncAccessKeyUsage(service: Service, now: timestamp, usage: map<string,int64>) => (ok: map<string,bool>)
-  - NotifyEvent(projectID: uint64, eventType: EventType) => (ok: bool)
+  - NotifyEvent(projectID: uint64, service: Service, eventType: EventType) => (ok: bool)
 
   # User permissions for a projectId
   - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: ResourceAccess)

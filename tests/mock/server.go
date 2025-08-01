@@ -15,6 +15,11 @@ import (
 	redisclient "github.com/redis/go-redis/v9"
 )
 
+type Event struct {
+	Service proto.Service
+	Type    proto.EventType
+}
+
 func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	s := miniredis.NewMiniRedis()
 	s.Start()
@@ -36,7 +41,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 		listener:      listener,
 		cache:         client,
 		Store:         store,
-		notifications: make(map[uint64][]proto.EventType),
+		notifications: make(map[uint64][]Event),
 	}
 
 	qcCache := quotacontrol.Cache{
@@ -76,7 +81,7 @@ type Server struct {
 	proto.QuotaControl
 
 	mu            sync.Mutex
-	notifications map[uint64][]proto.EventType
+	notifications map[uint64][]Event
 
 	ErrGetProjectQuota error
 	ErrGetAccessQuota  error
@@ -85,7 +90,7 @@ type Server struct {
 
 func (s *Server) FlushNotifications() {
 	s.mu.Lock()
-	s.notifications = make(map[uint64][]proto.EventType)
+	s.notifications = make(map[uint64][]Event)
 	s.mu.Unlock()
 }
 
@@ -110,7 +115,7 @@ func (s *Server) GetAccessQuota(ctx context.Context, accessKey string, now time.
 }
 
 // GetEvents returns the events that have been notified for a project
-func (s *Server) GetEvents(projectID uint64) []proto.EventType {
+func (s *Server) GetEvents(projectID uint64) []Event {
 	s.mu.Lock()
 	v := s.notifications[projectID]
 	s.mu.Unlock()
@@ -118,9 +123,12 @@ func (s *Server) GetEvents(projectID uint64) []proto.EventType {
 }
 
 // NotifyEvent ovverides the default NotifyEvent method to track the events that are notified
-func (s *Server) NotifyEvent(ctx context.Context, projectID uint64, eventType proto.EventType) (bool, error) {
+func (s *Server) NotifyEvent(ctx context.Context, projectID uint64, service proto.Service, eventType proto.EventType) (bool, error) {
 	s.mu.Lock()
-	s.notifications[projectID] = append(s.notifications[projectID], eventType)
+	s.notifications[projectID] = append(s.notifications[projectID], Event{
+		Service: service,
+		Type:    eventType,
+	})
 	s.mu.Unlock()
-	return s.QuotaControl.NotifyEvent(ctx, projectID, eventType)
+	return s.QuotaControl.NotifyEvent(ctx, projectID, service, eventType)
 }
