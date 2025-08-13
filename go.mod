@@ -7,6 +7,7 @@ go 1.23.9
 require (
 	github.com/0xsequence/authcontrol v0.4.0
 	github.com/0xsequence/go-libs v0.0.8
+	github.com/0xsequence/go-sequence v0.44.2
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httprate v0.14.1
@@ -19,7 +20,6 @@ require (
 
 require (
 	github.com/0xsequence/ethkit v1.38.0 // indirect
-	github.com/0xsequence/go-sequence v0.44.2 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
