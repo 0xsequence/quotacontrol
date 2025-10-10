@@ -237,8 +237,8 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.Time) (*proto.AccessQuota, error) {
 	access, err := s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 	if err != nil {
-		if errors.Is(err, proto.ErrAccessKeyNotFound) {
-			return nil, proto.ErrAccessKeyNotFound
+		if errors.Is(err, proto.ErrAccessKeyNotFound) || errors.Is(err, proto.ErrProjectNotFound) {
+			return nil, err
 		}
 		return nil, fmt.Errorf("find access key: %w", err)
 	}
