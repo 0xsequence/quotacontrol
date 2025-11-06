@@ -204,6 +204,8 @@ func (x Service) GetName() string {
 		return "builder"
 	case 7:
 		return "waas"
+	case 8:
+		return "trails"
 	}
 	return ""
 }

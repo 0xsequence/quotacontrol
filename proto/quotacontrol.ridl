@@ -12,6 +12,7 @@ enum Service: uint16
   - Marketplace
   - Builder
   - WaaS
+  - Trails
 
 # LimitSettings is used to define the limits for a project.
 struct Limit
