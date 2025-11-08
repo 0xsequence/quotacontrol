@@ -22,6 +22,7 @@ test-coverage-inspect: test-coverage
 	go tool cover -html=coverage.out
 
 generate:
+	WEBRPC_SCHEMA_VERSION=$(shell git log -1 --date=format:'v0-%y.%-m.%-d' --format='%ad+%h' ./proto/*.ridl) \
 	go generate -x ./...
 
 proto: generate
