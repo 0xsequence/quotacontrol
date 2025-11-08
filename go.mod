@@ -1,6 +1,6 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.23.12
+go 1.24.1
 
 // replace github.com/0xsequence/authcontrol => ../authcontrol
 
