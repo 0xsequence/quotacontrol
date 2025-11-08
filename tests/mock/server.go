@@ -58,7 +58,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	}
 
 	logger := qc.logger.With(slog.String("server", "server"))
-	qc.QuotaControl = quotacontrol.NewServer(cfg.Redis, logger, qcCache, qcStore)
+	qc.QuotaControlServer = quotacontrol.NewServer(cfg.Redis, logger, qcCache, qcStore)
 
 	go func() {
 		http.Serve(listener, proto.NewQuotaControlServer(&qc))
@@ -78,7 +78,7 @@ type Server struct {
 
 	Store *MemoryStore
 
-	proto.QuotaControl
+	proto.QuotaControlServer
 
 	mu            sync.Mutex
 	notifications map[uint64][]Event
@@ -103,7 +103,7 @@ func (s *Server) GetProjectQuota(ctx context.Context, projectID uint64, now time
 	if s.ErrGetProjectQuota != nil {
 		return nil, s.ErrGetProjectQuota
 	}
-	return s.QuotaControl.GetProjectQuota(ctx, projectID, now)
+	return s.QuotaControlServer.GetProjectQuota(ctx, projectID, now)
 }
 
 // GetAccessQuota returns the quota for an access key unless ErrGetAccessQuota is set
@@ -111,7 +111,7 @@ func (s *Server) GetAccessQuota(ctx context.Context, accessKey string, now time.
 	if s.ErrGetAccessQuota != nil {
 		return nil, s.ErrGetAccessQuota
 	}
-	return s.QuotaControl.GetAccessQuota(ctx, accessKey, now)
+	return s.QuotaControlServer.GetAccessQuota(ctx, accessKey, now)
 }
 
 // GetEvents returns the events that have been notified for a project
@@ -130,5 +130,5 @@ func (s *Server) NotifyEvent(ctx context.Context, projectID uint64, service prot
 		Type:    eventType,
 	})
 	s.mu.Unlock()
-	return s.QuotaControl.NotifyEvent(ctx, projectID, service, eventType)
+	return s.QuotaControlServer.NotifyEvent(ctx, projectID, service, eventType)
 }
