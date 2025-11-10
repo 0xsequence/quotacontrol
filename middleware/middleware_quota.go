@@ -103,7 +103,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				svc := client.GetService()
 				cfg, ok := quota.Limit.ServiceLimit[svc]
 				if !ok {
-					o.ErrHandler(r, w, proto.ErrAborted.WithCausef("limit not found for %s", svc.GetName()))
+					o.ErrHandler(r, w, proto.ErrInvalidService)
 					return
 				}
 
