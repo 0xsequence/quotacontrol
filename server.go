@@ -581,7 +581,11 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
-		name := svc.GetName()
+
+		cfg, ok := limit.ServiceLimit[svc]
+		if !ok {
+			continue
+		}
 
 		cacheKey := cacheKeyQuota(projectID, cycle, &svc, now)
 		usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
@@ -596,12 +600,6 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 				return nil, fmt.Errorf("peek usage cache: %w", err)
 			}
 		}
-		status.UsageCounter[name] = usage
-
-		cfg, ok := limit.ServiceLimit[svc]
-		if !ok {
-			return nil, proto.ErrAborted.WithCausef("service limit not found for %s", svc.GetName())
-		}
 
 		limitCounter := NewLimitCounter(svc, s.redis, s.log)
 		limiter := httprate.NewRateLimiter(int(cfg.RateLimit), time.Minute, httprate.WithLimitCounter(limitCounter))
@@ -609,7 +607,8 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		if err != nil {
 			return nil, fmt.Errorf("get rate limit status: %w", err)
 		}
-
+		name := svc.GetName()
+		status.UsageCounter[name] = usage
 		status.RateLimitCounter[name] = int64(rate)
 	}
 
