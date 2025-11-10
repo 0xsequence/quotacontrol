@@ -44,6 +44,7 @@ require (
 	github.com/ethereum/c-kzg-4844/v2 v2.1.1 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
+	github.com/getsentry/sentry-go v0.36.2 // indirect
 	github.com/go-chi/httplog/v3 v3.2.2 // indirect
 	github.com/go-chi/jwtauth/v5 v5.3.3 // indirect
 	github.com/go-chi/metrics v0.1.0 // indirect
