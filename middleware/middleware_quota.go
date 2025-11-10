@@ -7,6 +7,7 @@ import (
 	"github.com/0xsequence/authcontrol"
 	authproto "github.com/0xsequence/authcontrol/proto"
 	"github.com/0xsequence/quotacontrol/proto"
+	"github.com/getsentry/sentry-go"
 )
 
 // VerifyQuota middleware fetches and verify the quota from access key or project ID.
@@ -103,7 +104,11 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				svc := client.GetService()
 				cfg, ok := quota.Limit.ServiceLimit[svc]
 				if !ok {
-					o.ErrHandler(r, w, proto.ErrInvalidService)
+					sentry.WithScope(func(scope *sentry.Scope) {
+						scope.SetExtras(map[string]any{"service": svc.String(), "quota_limits": quota.Limit.ServiceLimit})
+						sentry.CaptureMessage("missing service limit in quota")
+					})
+					o.ErrHandler(r, w, proto.ErrInvalidService.WithCausef("service %s is not enabled", svc.GetName()))
 					return
 				}
 
