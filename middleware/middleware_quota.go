@@ -105,7 +105,11 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				cfg, ok := quota.Limit.ServiceLimit[svc]
 				if !ok {
 					sentry.WithScope(func(scope *sentry.Scope) {
-						scope.SetExtras(map[string]any{"service": svc.String(), "quota_limits": quota.Limit.ServiceLimit})
+						scope.SetExtras(map[string]any{
+							"access_key":   quota.AccessKey,
+							"service":      svc.String(),
+							"quota_limits": quota.Limit.ServiceLimit,
+						})
 						sentry.CaptureMessage("missing service limit in quota")
 					})
 					o.ErrHandler(r, w, proto.ErrInvalidService.WithCausef("service %s is not enabled", svc.GetName()))
