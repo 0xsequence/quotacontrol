@@ -9,6 +9,7 @@ require (
 	github.com/0xsequence/go-libs v0.0.8
 	github.com/0xsequence/go-sequence v0.44.2
 	github.com/alicebob/miniredis/v2 v2.33.0
+	github.com/getsentry/sentry-go v0.36.2
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-chi/httprate v0.14.1
 	github.com/go-chi/httprate-redis v0.5.4
@@ -44,7 +45,6 @@ require (
 	github.com/ethereum/c-kzg-4844/v2 v2.1.1 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/getsentry/sentry-go v0.36.2 // indirect
 	github.com/go-chi/httplog/v3 v3.2.2 // indirect
 	github.com/go-chi/jwtauth/v5 v5.3.3 // indirect
 	github.com/go-chi/metrics v0.1.0 // indirect
