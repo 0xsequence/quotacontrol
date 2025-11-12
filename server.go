@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/0xsequence/authcontrol"
-	"github.com/0xsequence/go-libs/xlog"
 	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -265,7 +264,7 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 }
 
 func (s server) NotifyEvent(ctx context.Context, projectID uint64, service proto.Service, eventType proto.EventType) (bool, error) {
-	s.log.Info("notify event", xlog.ProjectID(projectID), slog.String("service", service.GetName()), slog.String("eventType", eventType.String()))
+	s.log.Info("notify event", slog.Uint64("projectId", projectID), slog.String("service", service.GetName()), slog.String("eventType", eventType.String()))
 	return true, nil
 }
 
