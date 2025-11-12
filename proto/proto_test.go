@@ -256,69 +256,6 @@ func TestUnknownService(t *testing.T) {
 	input := `
 {
     "serviceLimit": {
-        "API": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "Builder": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "Indexer": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "Marketplace": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "Metadata": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "NodeGateway": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "Relayer": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
-        "Trails": {
-            "rateLimit": 100000,
-            "freeWarn": 100000000000,
-            "freeMax": 100000000000,
-            "overWarn": 100000000000,
-            "overMax": 100000000000
-        },
-        "WaaS": {
-            "rateLimit": 18000,
-            "freeWarn": 300000000,
-            "freeMax": 300000000,
-            "overWarn": 300000000,
-            "overMax": 9007199254740991
-        },
 		"Banana": {
             "rateLimit": 18000,
             "freeWarn": 300000000,
