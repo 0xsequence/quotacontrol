@@ -1,6 +1,7 @@
 package proto_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/0xsequence/quotacontrol/proto"
@@ -249,4 +250,94 @@ func TestServiceName(t *testing.T) {
 		assert.NotEqual(t, "", name, "Service %d should have a name", svc)
 		t.Logf("Service %d: %s", i, name)
 	}
+}
+
+func TestUnknownService(t *testing.T) {
+	input := `
+{
+    "serviceLimit": {
+        "API": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "Builder": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "Indexer": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "Marketplace": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "Metadata": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "NodeGateway": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "Relayer": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+        "Trails": {
+            "rateLimit": 100000,
+            "freeWarn": 100000000000,
+            "freeMax": 100000000000,
+            "overWarn": 100000000000,
+            "overMax": 100000000000
+        },
+        "WaaS": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        },
+		"Banana": {
+            "rateLimit": 18000,
+            "freeWarn": 300000000,
+            "freeMax": 300000000,
+            "overWarn": 300000000,
+            "overMax": 9007199254740991
+        }
+    },
+    "rateLimit": 244000,
+    "freeWarn": 102400000000,
+    "freeMax": 102400000000,
+    "overWarn": 102400000000,
+    "overMax": 72057694037927940
+}
+	`
+	var l proto.Limit
+	if err := json.Unmarshal([]byte(input), &l); err != nil {
+		t.Fatal(err)
+	}
+	// Verify unknown service is included
+	assert.Equal(t, int64(18000), l.ServiceLimit["Banana"].RateLimit)
 }
