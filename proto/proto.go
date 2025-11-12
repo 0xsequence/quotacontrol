@@ -63,8 +63,15 @@ func (l Limit) Validate() error {
 }
 
 func (l Limit) GetSettings(svc Service) (ServiceLimit, bool) {
-	settings, ok := l.GetSettings(svc)
+	settings, ok := l.ServiceLimit[svc.String()]
 	return settings, ok
+}
+
+func (l *Limit) SetSetting(svc Service, limits ServiceLimit) {
+	if l.ServiceLimit == nil {
+		l.ServiceLimit = make(map[string]ServiceLimit)
+	}
+	l.ServiceLimit[svc.String()] = limits
 }
 
 func (l ServiceLimit) Validate() error {

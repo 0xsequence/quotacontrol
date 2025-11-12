@@ -52,11 +52,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		OverWarn:  _credits * 7,
 		OverMax:   _credits * 10,
 	}
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			Service.String(): svcLimit,
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, svcLimit)
 
 	ctx := context.Background()
 	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -193,11 +190,9 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		svcLimit.RateLimit = _credits * 100
 		svcLimit.OverWarn = _credits * 5
 		svcLimit.OverMax = _credits * 110
-		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{
-			ServiceLimit: map[string]proto.ServiceLimit{
-				Service.String(): svcLimit,
-			},
-		})
+		limit := proto.Limit{}
+		limit.SetSetting(Service, svcLimit)
+		err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 		assert.NoError(t, err)
 		err = client.ClearQuotaCacheByAccessKey(ctx, key)
 		assert.NoError(t, err)
@@ -385,11 +380,8 @@ func TestJWT(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			Service.String(): svcLimit,
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, svcLimit)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"project": ProjectID, "account": WalletAddress})
@@ -470,11 +462,8 @@ func TestJWTAccess(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			Service.String(): svcLimit,
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, svcLimit)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"account": account, "project": ProjectID})
@@ -582,11 +571,8 @@ func TestSession(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			Service.String(): svcLimit,
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, svcLimit)
 
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
@@ -726,11 +712,8 @@ func TestSessionDisabled(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			Service.String(): svcLimit,
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, svcLimit)
 
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
@@ -850,17 +833,15 @@ func TestChainID(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			Service.String(): {
-				RateLimit: 100,
-				FreeWarn:  5,
-				FreeMax:   5,
-				OverWarn:  7,
-				OverMax:   10,
-			},
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, proto.ServiceLimit{
+		RateLimit: 100,
+		FreeWarn:  5,
+		FreeMax:   5,
+		OverWarn:  7,
+		OverMax:   10,
+	})
+
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -935,31 +916,28 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r2 := newRouter(client2, rlCounter2)
 	r3 := newRouter(client3, rlCounter3)
 
-	limit := proto.Limit{
-		ServiceLimit: map[string]proto.ServiceLimit{
-			svc1.String(): {
-				RateLimit: 10,
-				FreeWarn:  100,
-				FreeMax:   100,
-				OverWarn:  100,
-				OverMax:   100,
-			},
-			svc2.String(): {
-				RateLimit: 20,
-				FreeWarn:  200,
-				FreeMax:   200,
-				OverWarn:  200,
-				OverMax:   200,
-			},
-			svc3.String(): {
-				RateLimit: 30,
-				FreeWarn:  300,
-				FreeMax:   300,
-				OverWarn:  300,
-				OverMax:   300,
-			},
-		},
-	}
+	limit := proto.Limit{}
+	limit.SetSetting(svc1, proto.ServiceLimit{
+		RateLimit: 10,
+		FreeWarn:  100,
+		FreeMax:   100,
+		OverWarn:  100,
+		OverMax:   100,
+	})
+	limit.SetSetting(svc2, proto.ServiceLimit{
+		RateLimit: 20,
+		FreeWarn:  200,
+		FreeMax:   200,
+		OverWarn:  200,
+		OverMax:   200,
+	})
+	limit.SetSetting(svc3, proto.ServiceLimit{
+		RateLimit: 30,
+		FreeWarn:  300,
+		FreeMax:   300,
+		OverWarn:  300,
+		OverMax:   300,
+	})
 
 	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID)
 
