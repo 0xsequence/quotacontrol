@@ -53,8 +53,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		OverMax:   _credits * 10,
 	}
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			Service: svcLimit,
+		ServiceLimit: map[string]proto.ServiceLimit{
+			Service.String(): svcLimit,
 		},
 	}
 
@@ -194,8 +194,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		svcLimit.OverWarn = _credits * 5
 		svcLimit.OverMax = _credits * 110
 		err = server.Store.SetAccessLimit(ctx, ProjectID, &proto.Limit{
-			ServiceLimit: map[proto.Service]proto.ServiceLimit{
-				Service: svcLimit,
+			ServiceLimit: map[string]proto.ServiceLimit{
+				Service.String(): svcLimit,
 			},
 		})
 		assert.NoError(t, err)
@@ -386,8 +386,8 @@ func TestJWT(t *testing.T) {
 		OverMax:   10,
 	}
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			Service: svcLimit,
+		ServiceLimit: map[string]proto.ServiceLimit{
+			Service.String(): svcLimit,
 		},
 	}
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -471,8 +471,8 @@ func TestJWTAccess(t *testing.T) {
 		OverMax:   10,
 	}
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			Service: svcLimit,
+		ServiceLimit: map[string]proto.ServiceLimit{
+			Service.String(): svcLimit,
 		},
 	}
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
@@ -583,8 +583,8 @@ func TestSession(t *testing.T) {
 		OverMax:   10,
 	}
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			Service: svcLimit,
+		ServiceLimit: map[string]proto.ServiceLimit{
+			Service.String(): svcLimit,
 		},
 	}
 
@@ -727,8 +727,8 @@ func TestSessionDisabled(t *testing.T) {
 		OverMax:   10,
 	}
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			Service: svcLimit,
+		ServiceLimit: map[string]proto.ServiceLimit{
+			Service.String(): svcLimit,
 		},
 	}
 
@@ -851,8 +851,8 @@ func TestChainID(t *testing.T) {
 
 	ctx := context.Background()
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			Service: {
+		ServiceLimit: map[string]proto.ServiceLimit{
+			Service.String(): {
 				RateLimit: 100,
 				FreeWarn:  5,
 				FreeMax:   5,
@@ -936,22 +936,22 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r3 := newRouter(client3, rlCounter3)
 
 	limit := proto.Limit{
-		ServiceLimit: map[proto.Service]proto.ServiceLimit{
-			svc1: {
+		ServiceLimit: map[string]proto.ServiceLimit{
+			svc1.String(): {
 				RateLimit: 10,
 				FreeWarn:  100,
 				FreeMax:   100,
 				OverWarn:  100,
 				OverMax:   100,
 			},
-			svc2: {
+			svc2.String(): {
 				RateLimit: 20,
 				FreeWarn:  200,
 				FreeMax:   200,
 				OverWarn:  200,
 				OverMax:   200,
 			},
-			svc3: {
+			svc3.String(): {
 				RateLimit: 30,
 				FreeWarn:  300,
 				FreeMax:   300,
@@ -978,8 +978,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 		{Service: svc3, Handler: r3},
 	} {
 		t.Run(svc.Service.String(), func(t *testing.T) {
-
-			cfg, ok := limit.ServiceLimit[svc.Service]
+			cfg, ok := limit.GetSettings(svc.Service)
 			require.True(t, ok, "service limit not found for %s", svc.Service)
 			rl := int(cfg.RateLimit)
 			for i := 0; i < (rl * 2); i++ {

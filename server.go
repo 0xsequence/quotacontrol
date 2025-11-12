@@ -582,7 +582,7 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
 
-		cfg, ok := limit.ServiceLimit[svc]
+		cfg, ok := limit.GetSettings(svc)
 		if !ok {
 			continue
 		}

@@ -102,7 +102,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 
 			if quota != nil {
 				svc := client.GetService()
-				cfg, ok := quota.Limit.ServiceLimit[svc]
+				cfg, ok := quota.Limit.ServiceLimit[svc.String()]
 				if !ok {
 					sentry.WithScope(func(scope *sentry.Scope) {
 						scope.SetExtras(map[string]any{
