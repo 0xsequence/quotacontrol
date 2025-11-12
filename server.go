@@ -57,7 +57,7 @@ type Store struct {
 }
 
 // NewServer returns server implementation for proto.QuotaControl.
-func NewServer(redis RedisConfig, log *slog.Logger, cache Cache, storage Store) proto.QuotaControlServer {
+func NewServer(redis RedisConfig, log *slog.Logger, cache Cache, storage Store) proto.QuotaControl {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -83,7 +83,7 @@ type server struct {
 	redis      RedisConfig
 }
 
-var _ proto.QuotaControlServer = &server{}
+var _ proto.QuotaControl = &server{}
 
 func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *time.Time) (time.Time, time.Time, error) {
 	if from != nil && to != nil {
