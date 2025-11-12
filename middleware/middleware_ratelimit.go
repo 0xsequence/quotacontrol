@@ -98,7 +98,7 @@ func RateLimit(client Client, cfg RateLimitConfig, counter httprate.LimitCounter
 			svc := client.GetService()
 
 			// if the rate limit is 0 or less, skip the rate limiter
-			limit, ok := getRateLimit(ctx, cfg, &svc, o.BaseRequestCost)
+			limit, ok := getRateLimit(ctx, cfg, svc, o.BaseRequestCost)
 			if !ok {
 				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("rate limit not found for service %s", svc.GetName()))
 				return
@@ -132,12 +132,12 @@ func AccountRateKey(account string) string {
 	return fmt.Sprintf("rl:account:%s", account)
 }
 
-func getRateLimit(ctx context.Context, r RateLimitConfig, svc *proto.Service, baseRequestCost int) (int, bool) {
+func getRateLimit(ctx context.Context, r RateLimitConfig, svc proto.Service, baseRequestCost int) (int, bool) {
 	if _, ok := authcontrol.GetService(ctx); ok {
 		return r.ServiceRPM * baseRequestCost, true
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
-		cfg, ok := q.Limit.ServiceLimit[*svc]
+		cfg, ok := q.Limit.GetSettings(svc)
 		if !ok {
 			return 0, false
 		}

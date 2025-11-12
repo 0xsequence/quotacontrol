@@ -50,12 +50,28 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 }
 
 func (l Limit) Validate() error {
-	for svc, cfg := range l.ServiceLimit {
+	for name, cfg := range l.ServiceLimit {
+		svc, ok := ParseService(name)
+		if !ok {
+			return fmt.Errorf("unknown service %s", name)
+		}
 		if err := cfg.Validate(); err != nil {
 			return fmt.Errorf("service %s: %w", svc.GetName(), err)
 		}
 	}
 	return nil
+}
+
+func (l Limit) GetSettings(svc Service) (ServiceLimit, bool) {
+	settings, ok := l.ServiceLimit[svc.String()]
+	return settings, ok
+}
+
+func (l *Limit) SetSetting(svc Service, limits ServiceLimit) {
+	if l.ServiceLimit == nil {
+		l.ServiceLimit = make(map[string]ServiceLimit)
+	}
+	l.ServiceLimit[svc.String()] = limits
 }
 
 func (l ServiceLimit) Validate() error {
@@ -184,6 +200,14 @@ func (e WebRPCError) WithMessage(message string) WebRPCError {
 		err.Message = message
 	}
 	return err
+}
+
+func ParseService(v string) (Service, bool) {
+	raw, ok := Service_value[v]
+	if !ok {
+		return 0, false
+	}
+	return Service(raw), true
 }
 
 func (x Service) GetName() string {
