@@ -137,7 +137,7 @@ func getRateLimit(ctx context.Context, r RateLimitConfig, svc proto.Service, bas
 		return r.ServiceRPM * baseRequestCost, true
 	}
 	if q, ok := GetAccessQuota(ctx); ok {
-		cfg, ok := q.Limit.ServiceLimit[svc.String()]
+		cfg, ok := q.Limit.GetSettings(svc)
 		if !ok {
 			return 0, false
 		}

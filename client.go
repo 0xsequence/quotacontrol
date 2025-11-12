@@ -273,7 +273,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		slog.String("access_key", accessKey),
 	)
 
-	cfg, ok := quota.Limit.ServiceLimit[c.service.String()]
+	cfg, ok := quota.Limit.GetSettings(c.service)
 	if !ok {
 		logger.Error("service limit not found", slog.String("service", c.service.GetName()))
 		return false, 0, nil
