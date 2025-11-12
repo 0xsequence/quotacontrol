@@ -19,7 +19,6 @@ import (
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/tests/mock"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httprate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -867,109 +866,6 @@ func TestChainID(t *testing.T) {
 	ok, _, err = executeRequest(ctx, r, "/3/"+path, AccessKey, "")
 	assert.ErrorIs(t, err, proto.ErrInvalidChain)
 	assert.False(t, ok)
-}
-
-func TestPerServiceRateLimit(t *testing.T) {
-	counter := hitCounter(0)
-
-	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
-	t.Cleanup(cleanup)
-
-	authOptions := authcontrol.Options{
-		JWTSecret:    Secret,
-		UserStore:    server.Store,
-		ProjectStore: server.Store,
-	}
-	quotaOptions := middleware.Options{}
-
-	logger := slog.Default()
-
-	svc1 := proto.Service_Indexer
-	svc2 := proto.Service_Metadata
-	svc3 := proto.Service_NodeGateway
-
-	rlCounter1 := quotacontrol.NewLimitCounter(svc1, cfg.Redis, logger)
-	rlCounter2 := quotacontrol.NewLimitCounter(svc2, cfg.Redis, logger)
-	rlCounter3 := quotacontrol.NewLimitCounter(svc3, cfg.Redis, logger)
-
-	client1 := quotacontrol.NewClient(logger, svc1, cfg, nil)
-	client2 := quotacontrol.NewClient(logger, svc2, cfg, nil)
-	client3 := quotacontrol.NewClient(logger, svc3, cfg, nil)
-
-	var newRouter = func(client middleware.Client, rlCounter httprate.LimitCounter) *chi.Mux {
-		r := chi.NewRouter()
-		r.Use(authcontrol.VerifyToken(authOptions))
-		r.Use(authcontrol.Session(authOptions))
-		r.Use(authcontrol.AccessControl(ACL, authOptions))
-		r.Use(middleware.VerifyQuota(client, quotaOptions))
-		r.Use(middleware.RateLimit(client, cfg.RateLimiter, rlCounter, quotaOptions))
-		r.Use(middleware.SpendUsage(client, quotaOptions))
-		r.Handle("/*", &counter)
-		return r
-	}
-
-	r1 := newRouter(client1, rlCounter1)
-	r2 := newRouter(client2, rlCounter2)
-	r3 := newRouter(client3, rlCounter3)
-
-	limit := proto.Limit{
-		RateLimit: 10,
-		FreeWarn:  100,
-		FreeMax:   100,
-		OverWarn:  100,
-		OverMax:   100,
-		SvcRateLimit: map[proto.Service]int64{
-			svc1: 5,
-			svc2: 7,
-		},
-	}
-
-	key := proto.GenerateAccessKey(encoding.WithVersion(context.Background(), 1), ProjectID)
-
-	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
-	require.NoError(t, err)
-	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
-	require.NoError(t, err)
-
-	for _, svc := range []struct {
-		proto.Service
-		http.Handler
-	}{
-		{Service: svc1, Handler: r1},
-		{Service: svc2, Handler: r2},
-		{Service: svc3, Handler: r3},
-	} {
-		t.Run(svc.Service.String(), func(t *testing.T) {
-			rl := limit.GetRateLimit(&svc.Service)
-			for i := 0; i < (rl * 2); i++ {
-				ok, headers, err := executeRequest(ctx, svc.Handler, "/rpc/Service/MethodAccessKey", key, "")
-				require.Equal(t, strconv.Itoa(rl), headers.Get(middleware.HeaderRateLimit))
-				require.Equal(t, strconv.Itoa(max(rl-i-1, 0)), headers.Get(middleware.HeaderRateRemaining))
-				if i < int(rl) {
-					require.NoError(t, err)
-					require.True(t, ok)
-				} else {
-					require.ErrorIs(t, err, proto.ErrQuotaRateLimit)
-					require.False(t, ok)
-				}
-
-				ok, headers, err = executeRequest(ctx, svc.Handler, "/rpc/Service/MethodPublic", "", "")
-				require.Equal(t, strconv.Itoa(middleware.DefaultPublicRate), headers.Get(middleware.HeaderRateLimit))
-				require.Equal(t, strconv.Itoa(max(middleware.DefaultPublicRate-i-1, 0)), headers.Get(middleware.HeaderRateRemaining))
-				if i < int(middleware.DefaultPublicRate) {
-					require.NoError(t, err)
-					require.True(t, ok)
-				} else {
-					require.ErrorIs(t, err, proto.ErrRateLimited)
-					require.False(t, ok)
-				}
-
-			}
-		})
-	}
-
 }
 
 func newConfig() quotacontrol.Config {

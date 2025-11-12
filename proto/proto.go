@@ -127,11 +127,11 @@ func (l Limit) GetRateLimit(svc *Service) int {
 		return int(l.RateLimit)
 	}
 
-	rl, ok := l.SvcRateLimit[*svc]
+	settings, ok := l.ServiceLimit[svc.String()]
 	if !ok {
 		return int(l.RateLimit)
 	}
-	return int(rl)
+	return int(settings.RateLimit)
 }
 
 func (l Limit) Validate() error {

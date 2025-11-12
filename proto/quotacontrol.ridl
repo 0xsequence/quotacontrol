@@ -21,9 +21,23 @@ struct Limit
   - freeMax: int64
   - overWarn: int64
   - overMax: int64
-  - svcRateLimit?: map<int,int64>
-    + go.field.type = map[Service]int64
-    + go.tag.json = svcRateLimit,omitempty
+  # The service-specific limits for the project.
+  - serviceLimit: map<string,ServiceLimit>
+    + go.field.type = map[string]ServiceLimit
+  
+
+# ServiceLimit defines the limits for a service.
+struct ServiceLimit
+  # Requests/minute limit for the project.
+  - rateLimit: int64
+  # Free usage warning threshold.
+  - freeWarn: int64
+  # Free usage maximum threshold.
+  - freeMax: int64
+  # Over usage warning threshold.
+  - overWarn: int64
+  # Over usage maximum threshold.
+  - overMax: int64
 
 struct AccessKey
   - projectId: uint64
