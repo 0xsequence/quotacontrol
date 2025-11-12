@@ -19,7 +19,7 @@ require (
 )
 
 require (
-	github.com/0xsequence/ethkit v1.38.0 // indirect
+	github.com/0xsequence/ethkit v1.30.3 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
