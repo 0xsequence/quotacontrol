@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0xsequence/go-libs/xlog"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -117,7 +116,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 	if err != nil {
 		logger := c.logger.With(
 			slog.String("op", "fetch_project_quota"),
-			xlog.ProjectID(projectID),
+			slog.Uint64("projectId", projectID),
 		)
 		if !errors.Is(err, proto.ErrAccessKeyNotFound) && !errors.Is(err, proto.ErrProjectNotFound) {
 			logger.Warn("unexpected cache error", slog.Any("error", err))
@@ -175,7 +174,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
 	logger := c.logger.With(
 		slog.String("op", "fetch_usage"),
-		xlog.ProjectID(quota.AccessKey.ProjectID),
+		slog.Uint64("projectId", quota.AccessKey.ProjectID),
 		slog.String("access_key", quota.AccessKey.AccessKey),
 	)
 
@@ -236,7 +235,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	userID, _ := authcontrol.GetAccount(ctx)
 	logger := c.logger.With(
 		slog.String("op", "fetch_permission"),
-		xlog.ProjectID(projectID),
+		slog.Uint64("projectId", projectID),
 		slog.String("user_id", userID),
 	)
 	// Check short-lived cache if requested. Note using the cache TTL from config (default 1m).
@@ -269,7 +268,7 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 
 	logger := c.logger.With(
 		slog.String("op", "spend_quota"),
-		xlog.ProjectID(projectID),
+		slog.Uint64("projectId", projectID),
 		slog.String("access_key", accessKey),
 	)
 
