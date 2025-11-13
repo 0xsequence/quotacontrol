@@ -133,6 +133,7 @@ func AccountRateKey(account string) string {
 }
 
 func getRateLimit(ctx context.Context, r RateLimitConfig, svc proto.Service, baseRequestCost int) (int, bool) {
+	// service has highest priority; service session + access key = access key quota + service rate limit
 	if _, ok := authcontrol.GetService(ctx); ok {
 		return r.ServiceRPM * baseRequestCost, true
 	}
