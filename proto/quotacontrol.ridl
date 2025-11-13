@@ -111,7 +111,6 @@ struct Subscription
 
 struct Minter
   - contracts: []string
-    + go.field.type = []prototyp.Hash
 
 struct ResourceAccess
   - projectId: uint64

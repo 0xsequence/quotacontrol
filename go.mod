@@ -6,7 +6,6 @@ go 1.23.9
 
 require (
 	github.com/0xsequence/authcontrol v0.4.8
-	github.com/0xsequence/go-sequence v0.44.2
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/getsentry/sentry-go v0.36.2
 	github.com/go-chi/chi/v5 v5.2.2
@@ -19,7 +18,6 @@ require (
 )
 
 require (
-	github.com/0xsequence/ethkit v1.30.3 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -34,7 +32,6 @@ require (
 	github.com/goccy/go-json v0.10.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goware/base64 v0.1.0 // indirect
-	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/jxskiss/base62 v1.1.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
