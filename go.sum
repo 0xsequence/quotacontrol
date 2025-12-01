@@ -1,5 +1,5 @@
-github.com/0xsequence/authcontrol v0.4.8 h1:SsJYwWLPLDXRSxsJvUY6bTO73FvgiOA2S1olx9D0Lpk=
-github.com/0xsequence/authcontrol v0.4.8/go.mod h1:Yec+rjPmbmXtGJoZCk6I9Liq50blsbnlFEJgbagrEt0=
+github.com/0xsequence/authcontrol v0.4.9 h1:eielxyUOCUttPKayrh9d3nGSO7inaARleWMUnMPKrUs=
+github.com/0xsequence/authcontrol v0.4.9/go.mod h1:Yec+rjPmbmXtGJoZCk6I9Liq50blsbnlFEJgbagrEt0=
 github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 h1:uvdUDbHQHO85qeSydJtItA4T55Pw6BtAejd0APRJOCE=
 github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302/go.mod h1:SGnFV6hVsYE877CKEZ6tDNTjaSXYUk6QqoIK6PrAtcc=
 github.com/alicebob/miniredis/v2 v2.33.0 h1:uvTF0EDeu9RLnUEG27Db5I68ESoIxTiXbNUiji6lZrA=
