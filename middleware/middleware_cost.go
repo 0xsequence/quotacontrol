@@ -15,7 +15,7 @@ func SetCost(cfg authcontrol.Config[int64], o Options) func(next http.Handler) h
 			ctx := r.Context()
 
 			cost := int64(o.BaseRequestCost)
-			if v, err := cfg.Get(ctx, r.URL.Path); err == nil {
+			if v, ok := cfg.Get(ctx, r.URL.Path); ok {
 				cost = v
 			}
 
