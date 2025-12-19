@@ -1,11 +1,11 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.23.9
+go 1.23.12
 
 // replace github.com/0xsequence/authcontrol => ../authcontrol
 
 require (
-	github.com/0xsequence/authcontrol v0.4.9
+	github.com/0xsequence/authcontrol v0.4.12-0.20251219123630-63dea3a551ec
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/getsentry/sentry-go v0.36.2
 	github.com/go-chi/chi/v5 v5.2.2
