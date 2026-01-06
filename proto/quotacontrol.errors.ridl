@@ -1,18 +1,18 @@
 webrpc = v1
 
 # 1100-1199: AccessKey/Project errors
-error 1101 AccessKeyNotFound   "Access key not found"               HTTP 401
-error 1102 AccessKeyMismatch   "Access key mismatch"                HTTP 403
-error 1103 InvalidOrigin       "Invalid origin for Access Key"      HTTP 403
-error 1104 InvalidService      "Service not enabled for Access key" HTTP 403
-error 1105 UnauthorizedUser    "Unauthorized user"                  HTTP 403
-error 1106 InvalidChain        "Network not enabled for Access key" HTTP 403
+error 1101 AccessKeyNotFound   "Access key not found"                                                                                                                HTTP 401
+error 1102 AccessKeyMismatch   "Access key mismatch"                                                                                                                 HTTP 403
+error 1103 InvalidOrigin       "Invalid origin for Access Key. Check your settings at https://dashboard.trails.build or https://sequence.build"                      HTTP 403
+error 1104 InvalidService      "Service not enabled for Access key. Check your settings at https://dashboard.trails.build or https://sequence.build"                 HTTP 403
+error 1105 UnauthorizedUser    "Unauthorized user"                                                                                                                   HTTP 403
+error 1106 InvalidChain        "Network not enabled for Access key. Check your settings at https://dashboard.trails.build or https://sequence.build"                 HTTP 403
 # 1200-1299: Limit errors
-error 1200 QuotaExceeded       "Quota request exceeded"             HTTP 429
-error 1201 QuotaRateLimit      "Quota rate limit exceeded"          HTTP 429
+error 1200 QuotaExceeded       "Project quota exceeded. Upgrade your project to increase your limits: https://dashboard.trails.build or https://sequence.build"      HTTP 423
+error 1201 QuotaRateLimit      "Project rate limit exceeded. Upgrade your project to increase your limits: https://dashboard.trails.build or https://sequence.build" HTTP 429
 # 1300-1399: Access Key management errors
-error 1300 NoDefaultKey        "No default access key found"        HTTP 403
-error 1301 MaxAccessKeys       "Access keys limit reached"          HTTP 403
-error 1302 AtLeastOneKey       "You need at least one Access Key"   HTTP 403
+error 1300 NoDefaultKey        "No default access key found"                                                                                                         HTTP 403
+error 1301 MaxAccessKeys       "Access keys limit reached"                                                                                                           HTTP 403
+error 1302 AtLeastOneKey       "You need at least one Access Key"                                                                                                    HTTP 403
 # 1900-1999: Other errors
-error 1900 Timeout             "Request timed out"                  HTTP 408
+error 1900 Timeout             "Request timed out"                                                                                                                   HTTP 408
