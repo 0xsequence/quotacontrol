@@ -13,3 +13,4 @@ error 1006 Geoblocked              "Geoblocked region"                          
 error 1007 RateLimited             "Rate limit exceeded. Configure an Access Key to increase your limits: https://dashboard.trails.build or https://sequence.build"     HTTP 429
 error 1008 ProjectNotFound         "Project not found"                                                                                                                  HTTP 401
 error 1009 SecretKeyCorsDisallowed "CORS disallowed. Admin API Secret Key can't be used from a web app."                                                                HTTP 403
+error 1010 InvalidScope            "Scope not allowed"                                                                                                                  HTTP 403
