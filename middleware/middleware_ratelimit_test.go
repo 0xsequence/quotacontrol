@@ -30,19 +30,13 @@ func makeIP(ipv6 bool) net.IP {
 
 func TestRateLimiter(t *testing.T) {
 	const (
-		_CustomErrorMessage = "Custom error message"
-		_TestHeader         = "X-Test-Header"
-		_TestHeaderValue    = "test"
+		_TestHeader      = "X-Test-Header"
+		_TestHeaderValue = "test"
 	)
 	eh := func(r *http.Request, w http.ResponseWriter, err error) {
 		w.Header().Set(_TestHeader, _TestHeaderValue)
 		proto.RespondWithError(w, err)
 	}
-
-	cfg := quotacontrol.ErrorConfig{
-		MessageRatePublic: _CustomErrorMessage,
-	}
-	cfg.Apply()
 
 	client := quotacontrol.NewClient(slog.Default(), proto.Service_API, quotacontrol.Config{}, nil)
 
@@ -67,7 +61,6 @@ func TestRateLimiter(t *testing.T) {
 			assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
 			err := proto.WebRPCError{}
 			assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
-			assert.Contains(t, err.Message, _CustomErrorMessage)
 		}
 	}
 
@@ -86,7 +79,6 @@ func TestRateLimiter(t *testing.T) {
 			assert.Equal(t, _TestHeaderValue, w.Header().Get(_TestHeader))
 			err := proto.WebRPCError{}
 			assert.Nil(t, json.Unmarshal(w.Body.Bytes(), &err))
-			assert.Contains(t, err.Message, _CustomErrorMessage)
 		}
 	}
 

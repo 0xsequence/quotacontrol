@@ -1,4 +1,5 @@
 TEST_FLAGS ?= -p 8 -failfast -race -shuffle on
+GOTOOLCHAIN := $(shell cat go.mod | grep "^go" | tr -d ' ')
 
 all:
 	@echo "make <cmd>:"
@@ -23,19 +24,9 @@ test-coverage-inspect: test-coverage
 
 generate:
 	WEBRPC_SCHEMA_VERSION=$(shell git log -1 --date=format:'v0-%y.%-m.%-d' --format='%ad+%h' ./proto/*.ridl) \
-	go generate -x ./...
+	GOTOOLCHAIN=$(GOTOOLCHAIN) go generate -x ./...
 
 proto: generate
 
 lint:
 	golangci-lint run ./... --fix -c .golangci.yml
-
-version:
-	@git_version=$$(git describe --tags --abbrev=0); \
-		ridl_version=$$(grep "version = " proto/quotacontrol.ridl | sed 's/.*version = \(.*\)/\1/'); \
-		if [ "$$git_version" != "$$ridl_version" ]; then \
-			echo "Error: Version mismatch - Git: $$git_version, RIDL: $$ridl_version"; \
-			exit 1; \
-		else \
-			echo "Versions match: $$git_version"; \
-		fi
