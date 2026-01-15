@@ -14,11 +14,22 @@ enum Service: uint16
   - WaaS
   - Trails
 
-# LimitSettings is used to define the limits for a project.
-struct Limit
+# ProjectInfo provides detailed information about a project.
+struct ProjectInfo
+  - projectId: uint64
+    + go.field.name = ProjectID
+  - ecosystemId: uint64
+    + go.field.name = EcosystemID
+  - chainIds: []uint64
+    + go.field.name = ChainIDs
+  - cycle: Cycle
+  - services: []Service
+
+# LegacyLimit is used to define the limits for a project.
+struct LegacyLimit
   # The service-specific limits for the project.
-  - serviceLimit: map<string,ServiceLimit>
-    + go.field.type = map[string]ServiceLimit
+  - serviceLimit: map<string,Limit>
+    + go.field.type = map[string]Limit
   # Deprecated: use base.rateLimit instead
   - rateLimit: int64
   # Deprecated: use base.freeWarn instead
@@ -30,8 +41,8 @@ struct Limit
   # Deprecated: use base.overMax instead
   - overMax: int64
 
-# ServiceLimit defines the limits for a service.
-struct ServiceLimit
+# Limit defines the limits for a service.
+struct Limit
   # Requests/minute limit for the project.
   - rateLimit: int64
   # Free usage warning threshold.
@@ -84,7 +95,7 @@ struct Cycle
 
 struct AccessQuota
   - cycle: Cycle
-  - limit: Limit
+  - limit: LegacyLimit
   - accessKey: AccessKey
 
 enum EventType: uint16
@@ -102,7 +113,7 @@ enum UserPermission: uint16
 struct ProjectStatus
   - projectId: uint64
     + go.field.name = ProjectID
-  - limit: Limit
+  - limit: LegacyLimit
   - usageCounter: map<string,int64>
   - rateLimitCounter: map<string,int64>
 
@@ -126,12 +137,12 @@ service QuotaControl
   - GetProjectStatus(projectId: uint64) => (projectStatus: ProjectStatus)
 
   # Access Key
-  - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
   - CreateAccessKey(projectId: uint64, displayName: string, requireOrigin: bool, allowedOrigins: []string, allowedServices: []Service) => (accessKey: AccessKey)
   - UpdateAccessKey(accessKey: string, displayName?: string, requireOrigin?: bool, allowedOrigins?: []string, allowedServices?: []Service) => (accessKey: AccessKey)
   - ListAccessKeys(projectId: uint64, active?: bool, service?: Service) => (accessKeys: []AccessKey)
   - RotateAccessKey(accessKey: string) => (accessKey: AccessKey)
   - DisableAccessKey(accessKey: string) => (ok: bool)
+
   # Default Access Keys
   - GetDefaultAccessKey(projectID: uint64) => (accessKey: AccessKey)
   - SetDefaultAccessKey(projectID: uint64, accessKey: string) => (ok: bool)
@@ -140,6 +151,14 @@ service QuotaControl
   - GetProjectQuota(projectId: uint64, now: timestamp) => (accessQuota: AccessQuota)
   - GetAccessQuota(accessKey: string, now: timestamp) => (accessQuota: AccessQuota)
   - ClearAccessQuotaCache(projectID: uint64) => (ok: bool)
+  
+  # Quota V2
+  - GetProjectInfo(projectId: uint64) => (info: ProjectInfo)
+  - ClearProjectInfoCache(projectID: uint64) => (ok: bool)
+  - GetServiceLimit(projectId: uint64, service: Service, now: timestamp) => (limit: Limit)
+  - ClearServiceLimitCache(projectID: uint64, service: Service) => (ok: bool)
+  - GetAccessKey(accessKey: string) => (accessKey: AccessKey)
+  - ClearAccessKeyCache(accessKey: string) => (ok: bool)
 
   # Usage
   - GetUsage(projectID: uint64, accessKey?: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: int64)
