@@ -2,11 +2,14 @@ package mock
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/0xsequence/authcontrol"
+	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/internal/usage"
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
@@ -63,9 +66,14 @@ func (m *MemoryStore) GetProjectInfo(ctx context.Context, projectID uint64) (*pr
 }
 
 func (m *MemoryStore) SetLimit(ctx context.Context, projectID uint64, service proto.Service, limit proto.Limit) error {
+	cycle, err := store.Cycle{}.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
+	if err != nil {
+		return fmt.Errorf("get time: %w", err)
+	}
+
 	m.Lock()
 	if _, ok := m.infos[projectID]; !ok {
-		m.infos[projectID] = proto.ProjectInfo{ProjectID: projectID}
+		m.infos[projectID] = proto.ProjectInfo{ProjectID: projectID, Cycle: cycle}
 	}
 	if m.limits[projectID] == nil {
 		m.limits[projectID] = make(map[string]proto.Limit)
