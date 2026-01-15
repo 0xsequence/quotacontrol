@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/0xsequence/authcontrol"
-	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/proto"
 )
@@ -16,7 +15,6 @@ func NewMemoryStore() *MemoryStore {
 	ms := MemoryStore{
 		infos:       map[uint64]proto.ProjectInfo{},
 		limits:      map[uint64]map[string]proto.Limit{},
-		cycles:      map[uint64]proto.Cycle{},
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       map[proto.Service]usage.Record{},
 		users:       map[string]bool{},
@@ -40,7 +38,6 @@ type MemoryStore struct {
 	sync.Mutex
 	infos       map[uint64]proto.ProjectInfo
 	limits      map[uint64]map[string]proto.Limit
-	cycles      map[uint64]proto.Cycle
 	accessKeys  map[string]proto.AccessKey
 	usage       map[proto.Service]usage.Record
 	users       map[string]bool
@@ -90,26 +87,6 @@ func (m *MemoryStore) GetLimit(ctx context.Context, projectID uint64, svc proto.
 		return nil, proto.ErrInvalidService
 	}
 	return &limit, nil
-}
-
-func (m *MemoryStore) SetAccessCycle(ctx context.Context, projectID uint64, cycle proto.Cycle) error {
-	m.Lock()
-	m.cycles[projectID] = cycle
-	if cycle.Start.IsZero() && cycle.End.IsZero() {
-		delete(m.cycles, projectID)
-	}
-	m.Unlock()
-	return nil
-}
-
-func (m *MemoryStore) GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error) {
-	m.Lock()
-	cycle := m.cycles[projectID]
-	m.Unlock()
-	if cycle.Start.IsZero() && cycle.End.IsZero() {
-		return store.Cycle{}.GetAccessCycle(ctx, projectID, now)
-	}
-	return &cycle, nil
 }
 
 func (m *MemoryStore) InsertAccessKey(ctx context.Context, access *proto.AccessKey) error {
