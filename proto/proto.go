@@ -49,7 +49,7 @@ func (t *AccessKey) ValidateChains(chainIDs []uint64) error {
 	return nil
 }
 
-func (l Limit) Validate() error {
+func (l LegacyLimit) Validate() error {
 	for name, cfg := range l.ServiceLimit {
 		svc, ok := ParseService(name)
 		if !ok {
@@ -62,19 +62,19 @@ func (l Limit) Validate() error {
 	return nil
 }
 
-func (l Limit) GetSettings(svc Service) (ServiceLimit, bool) {
+func (l LegacyLimit) GetSettings(svc Service) (Limit, bool) {
 	settings, ok := l.ServiceLimit[svc.String()]
 	return settings, ok
 }
 
-func (l *Limit) SetSetting(svc Service, limits ServiceLimit) {
+func (l *LegacyLimit) SetSetting(svc Service, limits Limit) {
 	if l.ServiceLimit == nil {
-		l.ServiceLimit = make(map[string]ServiceLimit)
+		l.ServiceLimit = make(map[string]Limit)
 	}
 	l.ServiceLimit[svc.String()] = limits
 }
 
-func (l ServiceLimit) Validate() error {
+func (l Limit) Validate() error {
 	if l.RateLimit < 1 {
 		return fmt.Errorf("rateLimit must be > 0")
 	}
@@ -104,7 +104,7 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 	return max(0, total-threshold), true
 }
 
-func (l *ServiceLimit) GetSpendResult(v, total int64) (int64, *EventType) {
+func (l *Limit) GetSpendResult(v, total int64) (int64, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert

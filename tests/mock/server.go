@@ -50,11 +50,11 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 		PermissionCache: quotacontrol.NewRedisCache(client, time.Minute),
 	}
 	qcStore := quotacontrol.Store{
-		LimitStore:      store,
-		AccessKeyStore:  store,
-		UsageStore:      store,
-		CycleStore:      store,
-		PermissionStore: store,
+		ProjectInfoStore: store,
+		LimitStore:       store,
+		AccessKeyStore:   store,
+		UsageStore:       store,
+		PermissionStore:  store,
 	}
 
 	logger := qc.logger.With(slog.String("server", "server"))
