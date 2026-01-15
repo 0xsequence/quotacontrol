@@ -255,6 +255,10 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 		AccessKey: &proto.AccessKey{ProjectID: projectID},
 	}
 
+	if err := s.cache.QuotaCache.SetProjectQuota(ctx, &record); err != nil {
+		s.log.Error("set access quota in cache", slog.Any("error", err))
+	}
+
 	return &record, nil
 }
 
@@ -276,6 +280,10 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 		Limit:     limit,
 		Cycle:     info.Cycle,
 		AccessKey: access,
+	}
+
+	if err := s.cache.QuotaCache.SetAccessQuota(ctx, &record); err != nil {
+		s.log.Error("set access quota in cache", slog.Any("error", err))
 	}
 
 	return &record, nil
