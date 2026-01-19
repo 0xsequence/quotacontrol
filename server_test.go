@@ -79,7 +79,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	limitCounter := quotacontrol.NewLimitCounter(client, cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(client.GetService(), cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -438,7 +438,7 @@ func TestJWTAccess(t *testing.T) {
 	logger := slog.Default()
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
-	limitCounter := quotacontrol.NewLimitCounter(client, cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(client.GetService(), cfg.Redis, logger)
 
 	authOptions := authcontrol.Options{
 		JWTSecret: Secret,
@@ -552,7 +552,7 @@ func TestSession(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	limitCounter := quotacontrol.NewLimitCounter(client, cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(client.GetService(), cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -693,7 +693,7 @@ func TestSessionDisabled(t *testing.T) {
 	}
 	quotaOptions := middleware.Options{}
 
-	limitCounter := quotacontrol.NewLimitCounter(client, cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(client.GetService(), cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -821,7 +821,7 @@ func TestChainID(t *testing.T) {
 		ChainFunc: middleware.ChainFromPath(chains),
 	}
 
-	limitCounter := quotacontrol.NewLimitCounter(client, cfg.Redis, logger)
+	limitCounter := quotacontrol.NewLimitCounter(client.GetService(), cfg.Redis, logger)
 
 	r := chi.NewRouter()
 	r.Use(authcontrol.VerifyToken(authOptions))
@@ -844,9 +844,10 @@ func TestChainID(t *testing.T) {
 
 	server.Store.AddUser(ctx, UserAddress, false)
 	server.Store.AddProject(ctx, ProjectID, nil)
+	server.Store.SetProjectInfo(ctx, ProjectID, &proto.ProjectInfo{ChainIDs: []uint64{1, 2}})
 	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID, ChainIDs: []uint64{1, 2}})
+	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
 
 	path := "rpc/Service/MethodAccessKey"
 
@@ -896,9 +897,9 @@ func TestPerServiceRateLimit(t *testing.T) {
 	client2 := quotacontrol.NewClient(logger, svc2, cfg, nil)
 	client3 := quotacontrol.NewClient(logger, svc3, cfg, nil)
 
-	rlCounter1 := quotacontrol.NewLimitCounter(client1, cfg.Redis, logger)
-	rlCounter2 := quotacontrol.NewLimitCounter(client2, cfg.Redis, logger)
-	rlCounter3 := quotacontrol.NewLimitCounter(client3, cfg.Redis, logger)
+	rlCounter1 := quotacontrol.NewLimitCounter(client1.GetService(), cfg.Redis, logger)
+	rlCounter2 := quotacontrol.NewLimitCounter(client2.GetService(), cfg.Redis, logger)
+	rlCounter3 := quotacontrol.NewLimitCounter(client3.GetService(), cfg.Redis, logger)
 
 	var newRouter = func(client middleware.Client, rlCounter httprate.LimitCounter) *chi.Mux {
 		r := chi.NewRouter()

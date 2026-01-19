@@ -133,7 +133,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 			logger.Warn("failed to cache project quota", slog.Any("error", err))
 		}
 	}
-	if err := quota.AccessKey.ValidateChains(chainIDs); err != nil {
+	if err := quota.Info.ValidateChains(chainIDs); err != nil {
 		return quota, proto.ErrInvalidChain.WithCause(err)
 	}
 	return quota, nil
@@ -163,8 +163,11 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 			logger.Warn("failed to cache access quota", slog.Any("error", err))
 		}
 	}
+	if err := quota.Info.ValidateChains(chainIDs); err != nil {
+		return quota, proto.ErrInvalidChain.WithCause(err)
+	}
 	// validate access key
-	if err := c.validateAccessKey(quota.AccessKey, origin, chainIDs); err != nil {
+	if err := c.validateAccessKey(quota.AccessKey, origin); err != nil {
 		return quota, err
 	}
 	return quota, nil
@@ -325,7 +328,7 @@ func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey strin
 	return c.cache.QuotaCache.DeleteAccessQuota(ctx, accessKey)
 }
 
-func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chainIDs []uint64) (err error) {
+func (c *Client) validateAccessKey(access *proto.AccessKey, origin string) (err error) {
 	if !access.Active {
 		return proto.ErrAccessKeyNotFound
 	}
@@ -334,9 +337,6 @@ func (c *Client) validateAccessKey(access *proto.AccessKey, origin string, chain
 	}
 	if !access.ValidateService(c.service) {
 		return proto.ErrInvalidService
-	}
-	if err := access.ValidateChains(chainIDs); err != nil {
-		return proto.ErrInvalidChain.WithCause(err)
 	}
 	return nil
 }
