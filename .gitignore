@@ -1,5 +1,6 @@
 .vscode
 coverage.out
 
+tests/bin
 tests/server.pid
 tests/logs
