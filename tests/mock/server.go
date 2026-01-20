@@ -1,18 +1,22 @@
 package mock
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
-	redisclient "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 type Event struct {
@@ -20,28 +24,37 @@ type Event struct {
 	Type    proto.EventType
 }
 
-func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
-	s := miniredis.NewMiniRedis()
-	s.Start()
-	cfg.Redis.Host = s.Host()
-	cfg.Redis.Port = uint16(s.Server().Addr().Port)
-	client := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
+type Options struct {
+	RedisClient *redis.Client
+	Logger      *slog.Logger
+}
+
+func NewServer(cfg *quotacontrol.Config, options *Options) (server *Server, cleanup func()) {
+	var client *redis.Client
+	if options != nil {
+		client = options.RedisClient
+	}
+	if client == nil {
+		s := miniredis.NewMiniRedis()
+		s.Start()
+		cleanup = s.Close
+		cfg.Redis.Host = s.Host()
+		cfg.Redis.Port = uint16(s.Server().Addr().Port)
+		client = redis.NewClient(&redis.Options{Addr: s.Addr()})
+	}
 
 	store := NewMemoryStore()
 
-	listener, err := net.Listen("tcp", "localhost:0")
+	listener, err := net.Listen("tcp", cmp.Or(strings.TrimPrefix(cfg.URL, "http://"), "localhost:0"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	cfg.URL = "http://" + listener.Addr().String()
 
-	qc := Server{
-		logger:        slog.Default(),
-		listener:      listener,
-		cache:         client,
-		Store:         store,
-		notifications: make(map[uint64][]Event),
+	logger := slog.Default()
+	if options.Logger != nil {
+		logger = options.Logger
 	}
 
 	qcCache := quotacontrol.Cache{
@@ -57,15 +70,27 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 		PermissionStore: store,
 	}
 
-	logger := qc.logger.With(slog.String("server", "server"))
-	qc.QuotaControlServer = quotacontrol.NewServer(cfg.Redis, logger, qcCache, qcStore)
+	server = &Server{
+		logger:             logger,
+		QuotaControlServer: quotacontrol.NewServer(cfg.Redis, logger, qcCache, qcStore),
+		listener:           listener,
+		cache:              client,
+		Store:              store,
+		notifications:      make(map[uint64][]Event),
+	}
 
 	go func() {
-		http.Serve(listener, proto.NewQuotaControlServer(&qc))
+		mux := http.NewServeMux()
+		mux.HandleFunc("/project/{project_id}/limit", server.HandleSetLimit)
+		mux.Handle("/", proto.NewQuotaControlServer(server))
+		http.Serve(listener, mux)
 	}()
 
-	return &qc, func() {
-		s.Close()
+	fn := cleanup
+	return server, func() {
+		if fn != nil {
+			fn()
+		}
 		listener.Close()
 	}
 }
@@ -74,7 +99,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 type Server struct {
 	logger   *slog.Logger
 	listener net.Listener
-	cache    *redisclient.Client
+	cache    *redis.Client
 
 	Store *MemoryStore
 
@@ -131,4 +156,28 @@ func (s *Server) NotifyEvent(ctx context.Context, projectID uint64, service prot
 	})
 	s.mu.Unlock()
 	return s.QuotaControlServer.NotifyEvent(ctx, projectID, service, eventType)
+}
+
+func (s *Server) HandleSetLimit(w http.ResponseWriter, r *http.Request) {
+	projectID, err := strconv.ParseUint(r.PathValue("project_id"), 10, 64)
+	if err != nil {
+		proto.RespondWithError(w, proto.ErrWebrpcBadRequest.WithCausef("invalid project ID: %v", err))
+		return
+	}
+
+	var limit proto.Limit
+	if err := json.NewDecoder(r.Body).Decode(&limit); err != nil {
+		proto.RespondWithError(w, proto.ErrWebrpcBadRequest.WithCausef("invalid request body: %v", err))
+		return
+	}
+
+	if err := s.Store.SetAccessLimit(r.Context(), projectID, &limit); err != nil {
+		proto.RespondWithError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	respBody, _ := json.Marshal(map[string]interface{}{"ok": true})
+	w.Write(respBody)
 }
