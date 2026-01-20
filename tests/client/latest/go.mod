@@ -5,12 +5,12 @@ go 1.24
 replace github.com/0xsequence/quotacontrol => ../../..
 
 require (
+	github.com/0xsequence/authcontrol v0.4.12
 	github.com/0xsequence/quotacontrol v0.22.17
 	github.com/go-chi/chi/v5 v5.2.2
 )
 
 require (
-	github.com/0xsequence/authcontrol v0.4.12 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
