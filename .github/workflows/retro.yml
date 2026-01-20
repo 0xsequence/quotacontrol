@@ -22,11 +22,11 @@ jobs:
         go-version: '1.23'
 
     - name: Run server
-      run: cd tests make server-start
+      run: cd tests && make server-start
     
     - name: Run latest client tests
-      run: cd tests make client-run
+      run: cd tests && make client-run
 
     - name: Stop server
-      run: cd tests make server-stop
+      run: cd tests && make server-stop
       if: always()
