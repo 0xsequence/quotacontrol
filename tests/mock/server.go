@@ -53,7 +53,7 @@ func NewServer(cfg *quotacontrol.Config, options *Options) (server *Server, clea
 	cfg.URL = "http://" + listener.Addr().String()
 
 	logger := slog.Default()
-	if options.Logger != nil {
+	if options != nil && options.Logger != nil {
 		logger = options.Logger
 	}
 
