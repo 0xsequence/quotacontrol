@@ -20,6 +20,9 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.23'
+    
+    - name: Start Redis
+      uses: supercharge/redis-github-action@1.8.1
 
     - name: Run server
       run: cd tests && make server-start
