@@ -2,20 +2,22 @@ package mock
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/internal/usage"
+	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 )
 
 // NewMemoryStore returns a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	ms := MemoryStore{
-		limits:      map[uint64]proto.Limit{},
-		cycles:      map[uint64]proto.Cycle{},
+		infos:       map[uint64]proto.ProjectInfo{},
+		limits:      map[uint64]map[string]proto.Limit{},
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       map[proto.Service]usage.Record{},
 		users:       map[string]bool{},
@@ -37,8 +39,8 @@ type userPermission struct {
 // MemoryStore is an in-memory store, used for testing and prototype.
 type MemoryStore struct {
 	sync.Mutex
-	limits      map[uint64]proto.Limit
-	cycles      map[uint64]proto.Cycle
+	infos       map[uint64]proto.ProjectInfo
+	limits      map[uint64]map[string]proto.Limit
 	accessKeys  map[string]proto.AccessKey
 	usage       map[proto.Service]usage.Record
 	users       map[string]bool
@@ -46,42 +48,53 @@ type MemoryStore struct {
 	permissions map[uint64]map[string]userPermission
 }
 
-func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.Limit) error {
+func (m *MemoryStore) SetProjectInfo(ctx context.Context, info proto.ProjectInfo) error {
 	m.Lock()
-	m.limits[projectID] = *config
+	m.infos[info.ProjectID] = info
 	m.Unlock()
 	return nil
 }
 
-func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error) {
+func (m *MemoryStore) GetProjectInfo(ctx context.Context, projectID uint64) (*proto.ProjectInfo, error) {
 	m.Lock()
-	limit, ok := m.limits[projectID]
+	info, ok := m.infos[projectID]
+	m.Unlock()
+	if !ok {
+		return nil, proto.ErrProjectNotFound
+	}
+	return &info, nil
+}
+
+func (m *MemoryStore) SetLimit(ctx context.Context, projectID uint64, service proto.Service, limit proto.Limit) error {
+	cycle, err := store.Cycle{}.GetAccessCycle(ctx, projectID, middleware.GetTime(ctx))
+	if err != nil {
+		return fmt.Errorf("get time: %w", err)
+	}
+
+	m.Lock()
+	if _, ok := m.infos[projectID]; !ok {
+		m.infos[projectID] = proto.ProjectInfo{ProjectID: projectID, Cycle: cycle}
+	}
+	if m.limits[projectID] == nil {
+		m.limits[projectID] = make(map[string]proto.Limit)
+	}
+	m.limits[projectID][service.String()] = limit
+	m.Unlock()
+	return nil
+}
+
+func (m *MemoryStore) GetLimit(ctx context.Context, projectID uint64, svc proto.Service) (*proto.Limit, error) {
+	m.Lock()
+	limits, ok := m.limits[projectID]
 	m.Unlock()
 	if !ok {
 		return nil, proto.ErrAccessKeyNotFound
 	}
+	limit, ok := limits[svc.String()]
+	if !ok {
+		return nil, proto.ErrInvalidService
+	}
 	return &limit, nil
-}
-
-func (m *MemoryStore) SetAccessCycle(ctx context.Context, projectID uint64, cycle *proto.Cycle) error {
-	m.Lock()
-	if cycle != nil {
-		m.cycles[projectID] = *cycle
-	} else {
-		delete(m.cycles, projectID)
-	}
-	m.Unlock()
-	return nil
-}
-
-func (m *MemoryStore) GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error) {
-	m.Lock()
-	cycle := m.cycles[projectID]
-	m.Unlock()
-	if cycle.Start.IsZero() && cycle.End.IsZero() {
-		return store.Cycle{}.GetAccessCycle(ctx, projectID, now)
-	}
-	return &cycle, nil
 }
 
 func (m *MemoryStore) InsertAccessKey(ctx context.Context, access *proto.AccessKey) error {

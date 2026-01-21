@@ -15,8 +15,12 @@ import (
 	"github.com/goware/validation"
 )
 
+type ProjectInfoStore interface {
+	GetProjectInfo(ctx context.Context, projectID uint64) (*proto.ProjectInfo, error)
+}
+
 type LimitStore interface {
-	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error)
+	GetLimit(ctx context.Context, projectID uint64, service proto.Service) (*proto.Limit, error)
 }
 
 type AccessKeyStore interface {
@@ -48,10 +52,10 @@ type Cache struct {
 }
 
 type Store struct {
+	ProjectInfoStore
 	LimitStore
 	AccessKeyStore
 	UsageStore
-	CycleStore
 	PermissionStore
 }
 
@@ -59,9 +63,6 @@ type Store struct {
 func NewServer(redis RedisConfig, log *slog.Logger, cache Cache, storage Store) proto.QuotaControlServer {
 	if log == nil {
 		log = slog.Default()
-	}
-	if storage.CycleStore == nil {
-		storage.CycleStore = store.Cycle{}
 	}
 
 	return &server{
@@ -89,7 +90,7 @@ func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *ti
 		return *from, *to, nil
 	}
 	now := middleware.GetTime(ctx)
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID)
 	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
@@ -98,7 +99,7 @@ func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *ti
 		return cycle.GetStart(now), cycle.GetEnd(now), nil
 	}
 
-	duration := cycle.GetDuration(now)
+	duration := info.Cycle.GetDuration(now)
 	if from == nil {
 		return to.Add(-duration), *to, nil
 	}
@@ -185,13 +186,13 @@ func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *pro
 }
 
 func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (bool, error) {
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID)
 	if err != nil {
-		return false, fmt.Errorf("get access cycle: %w", err)
+		return false, fmt.Errorf("get project info 1: %w", err)
 	}
 
 	if service != nil {
-		key := cacheKeyQuota(projectID, cycle, service, now)
+		key := cacheKeyQuota(projectID, info.Cycle, service, now)
 		ok, err := s.cache.UsageCache.ClearUsage(ctx, key)
 		if err != nil {
 			return false, fmt.Errorf("clear usage cache: %w", err)
@@ -201,7 +202,7 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
-		key := cacheKeyQuota(projectID, cycle, &svc, now)
+		key := cacheKeyQuota(projectID, info.Cycle, &svc, now)
 		if _, err := s.cache.UsageCache.ClearUsage(ctx, key); err != nil {
 			return false, fmt.Errorf("clear usage cache for service %s: %w", svc.String(), err)
 		}
@@ -209,20 +210,48 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 	return true, nil
 }
 
-func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+func (s server) getLegacyLimit(ctx context.Context, projectID uint64) (*proto.ProjectInfo, *proto.LegacyLimit, error) {
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("get access cycle: %w", err)
+		if errors.Is(err, proto.ErrProjectNotFound) {
+			return nil, nil, err
+		}
+		return nil, nil, fmt.Errorf("get project info 2: %w", err)
 	}
 
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
+	limit := proto.LegacyLimit{
+		ServiceLimit: map[string]proto.Limit{},
+	}
+
+	services := info.Services
+	if len(services) == 0 {
+		for i := range proto.Service_name {
+			services = append(services, proto.Service(i))
+		}
+	}
+
+	for _, svc := range services {
+		svcLimit, err := s.store.LimitStore.GetLimit(ctx, projectID, svc)
+		if err != nil {
+			if errors.Is(err, proto.ErrInvalidService) {
+				continue
+			}
+			return nil, nil, fmt.Errorf("get %s limit: %w", svc.GetName(), err)
+		}
+		limit.SetSetting(svc, *svcLimit)
+	}
+	return info, &limit, nil
+}
+
+func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
+	info, limit, err := s.getLegacyLimit(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("get access limit: %w", err)
+		return nil, fmt.Errorf("get legacy limit: %w", err)
 	}
 
 	record := proto.AccessQuota{
 		Limit:     limit,
-		Cycle:     cycle,
+		Cycle:     info.Cycle,
 		AccessKey: &proto.AccessKey{ProjectID: projectID},
 	}
 
@@ -242,18 +271,15 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 		}
 		return nil, fmt.Errorf("find access key: %w", err)
 	}
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, access.ProjectID, now)
+
+	info, limit, err := s.getLegacyLimit(ctx, access.ProjectID)
 	if err != nil {
-		return nil, fmt.Errorf("get access cycle: %w", err)
-	}
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, access.ProjectID, cycle)
-	if err != nil {
-		return nil, fmt.Errorf("get access limit: %w", err)
+		return nil, fmt.Errorf("get legacy limit: %w", err)
 	}
 
 	record := proto.AccessQuota{
 		Limit:     limit,
-		Cycle:     cycle,
+		Cycle:     info.Cycle,
 		AccessKey: access,
 	}
 
@@ -339,10 +365,6 @@ func (s server) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bo
 		}
 	}
 	return true, nil
-}
-
-func (s server) GetAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
-	return s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
 }
 
 func (s server) GetDefaultAccessKey(ctx context.Context, projectID uint64) (*proto.AccessKey, error) {
@@ -564,21 +586,17 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		ProjectID: projectID,
 	}
 
-	now := middleware.GetTime(ctx)
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	info, limit, err := s.getLegacyLimit(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("get access cycle: %w", err)
-	}
-
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
-	if err != nil {
-		return nil, fmt.Errorf("get access limit: %w", err)
+		return nil, fmt.Errorf("get legacy limit: %w", err)
 	}
 
 	status.Limit = limit
 
 	status.RateLimitCounter = make(map[string]int64)
 	status.UsageCounter = make(map[string]int64)
+
+	now := middleware.GetTime(ctx)
 
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
@@ -588,13 +606,13 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 			continue
 		}
 
-		cacheKey := cacheKeyQuota(projectID, cycle, &svc, now)
+		cacheKey := cacheKeyQuota(projectID, info.Cycle, &svc, now)
 		usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
 		if err != nil {
 			if !errors.Is(err, errCacheReady) {
 				return nil, fmt.Errorf("peek usage cache: %w", err)
 			}
-			if _, err := s.PrepareUsage(ctx, projectID, &svc, cycle, now); err != nil {
+			if _, err := s.PrepareUsage(ctx, projectID, &svc, info.Cycle, now); err != nil {
 				return nil, fmt.Errorf("prepare usage: %w", err)
 			}
 			if usage, err = s.cache.UsageCache.PeekUsage(ctx, cacheKey); err != nil {
@@ -614,4 +632,28 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	}
 
 	return &status, nil
+}
+
+func (s server) GetProjectInfo(ctx context.Context, projectId uint64) (*proto.ProjectInfo, error) {
+	panic("not implemented")
+}
+
+func (s server) ClearProjectInfoCache(ctx context.Context, projectID uint64) (bool, error) {
+	panic("not implemented")
+}
+
+func (s server) GetServiceLimit(ctx context.Context, projectId uint64, service proto.Service, now time.Time) (*proto.Limit, error) {
+	panic("not implemented")
+}
+
+func (s server) ClearServiceLimitCache(ctx context.Context, projectID uint64, service proto.Service) (bool, error) {
+	panic("not implemented")
+}
+
+func (s server) GetAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+	return s.store.AccessKeyStore.FindAccessKey(ctx, accessKey)
+}
+
+func (s server) ClearAccessKeyCache(ctx context.Context, accessKey string) (bool, error) {
+	panic("not implemented")
 }
