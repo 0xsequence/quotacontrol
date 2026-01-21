@@ -535,6 +535,7 @@ func (s server) GetUserPermission(ctx context.Context, projectID uint64, userID 
 		return proto.UserPermission_UNAUTHORIZED, nil, proto.ErrUnauthorizedUser
 	}
 
+	// deprecated: cache is set by the client side now
 	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
 		if err := s.cache.PermissionCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
 			s.log.Error("set user perm in cache", slog.Any("error", err))

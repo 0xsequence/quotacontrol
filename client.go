@@ -160,7 +160,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 			return nil, err
 		}
 		if err := c.cache.QuotaCache.SetAccessQuota(ctx, quota); err != nil {
-			logger.Error("failed to cache access quota", slog.Any("error", err))
+			logger.Warn("failed to cache access quota", slog.Any("error", err))
 		}
 	}
 	// validate access key
@@ -253,6 +253,11 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	if err != nil {
 		logger.Error("unexpected client error", slog.Any("error", err))
 		return proto.UserPermission_UNAUTHORIZED, nil, fmt.Errorf("get user permission from quotacontrol server: %w", err)
+	}
+	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
+		if err := c.cache.PermissionCache.SetUserPermission(ctx, projectID, userID, perm, access); err != nil {
+			c.logger.Warn("set user perm in cache", slog.Any("error", err))
+		}
 	}
 	return perm, access, nil
 }
