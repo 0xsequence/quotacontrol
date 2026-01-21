@@ -226,6 +226,7 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 		AccessKey: &proto.AccessKey{ProjectID: projectID},
 	}
 
+	// deprecated: cache is set by the client side now
 	if err := s.cache.QuotaCache.SetProjectQuota(ctx, &record); err != nil {
 		s.log.Error("set access quota in cache", slog.Any("error", err))
 	}
