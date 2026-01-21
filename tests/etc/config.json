@@ -1,0 +1,13 @@
+{
+    "Enabled":    true,
+    "URL":        "http://localhost:8087",
+    "UpdateFreq": 60000000000,
+    "Redis": {
+        "Enabled": true,
+        "Host":    "localhost",
+        "Port":    6379
+    },
+    "RateLimiter": {
+        "Enabled": true
+    }
+}
