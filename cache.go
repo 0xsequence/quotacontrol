@@ -224,7 +224,7 @@ func (s *RedisCache) PeekUsage(ctx context.Context, key string) (int64, error) {
 }
 
 func (s *RedisCache) SpendUsage(ctx context.Context, key string, amount, limit int64) (int64, error) {
-	// NOTE: skip redisKeyPrefix as it's already in PeekCost
+	// NOTE: don't use usageKey yet, PeekUsage is doing that
 	v, err := s.PeekUsage(ctx, key)
 	if err != nil {
 		return 0, fmt.Errorf("spend usage - peek: %w", err)
