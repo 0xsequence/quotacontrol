@@ -25,10 +25,10 @@ type QuotaCache interface {
 }
 
 type UsageCache interface {
-	SetUsage(ctx context.Context, redisKey string, amount int64) error
-	ClearUsage(ctx context.Context, redisKey string) (bool, error)
-	PeekUsage(ctx context.Context, redisKey string) (int64, error)
-	SpendUsage(ctx context.Context, redisKey string, amount, limit int64) (int64, error)
+	SetUsage(ctx context.Context, key string, amount int64) error
+	ClearUsage(ctx context.Context, key string) (bool, error)
+	PeekUsage(ctx context.Context, key string) (int64, error)
+	SpendUsage(ctx context.Context, key string, amount, limit int64) (int64, error)
 }
 
 type PermissionCache interface {
@@ -45,8 +45,7 @@ var (
 )
 
 const (
-	redisQuotaPrefix = "quota:"
-	redisRLPrefix    = "rl:"
+	redisRLPrefix = "rl:"
 )
 
 var (
@@ -92,7 +91,26 @@ func NewLimitCounter(svc Service, cfg RedisConfig, logger *slog.Logger) httprate
 const (
 	defaultExpRedis = time.Hour
 	defaultExpLRU   = time.Minute
+	cacheVersion    = 1
 )
+
+// usageKey returns the redis key for storing usage amount.
+// It does not include version because usage is just a number, and it's safe to share across versions.
+func usageKey(key string) string {
+	return fmt.Sprintf("usage:%s", key)
+}
+
+// quotaKey returns the redis key for storing AccessQuota.
+// It includes version because to avoid conflicts when the structure changes.
+func quotaKey(key string) string {
+	return fmt.Sprintf("quota:%v:%s", cacheVersion, key)
+}
+
+// permissionKey returns the redis key for storing user permission for a project.
+// It includes version because to avoid conflicts when the structure changes.
+func permissionKey(projectID uint64, userID string) string {
+	return fmt.Sprintf("perm:%d:project:%d:user:%s", cacheVersion, projectID, userID)
+}
 
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
 	if ttl <= 0 {
@@ -134,8 +152,7 @@ func (s *RedisCache) SetProjectQuota(ctx context.Context, quota *proto.AccessQuo
 }
 
 func (s *RedisCache) getQuota(ctx context.Context, key string) (*proto.AccessQuota, error) {
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, key)
-	raw, err := s.client.Get(ctx, cacheKey).Bytes()
+	raw, err := s.client.Get(ctx, quotaKey(key)).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, proto.ErrAccessKeyNotFound
@@ -150,8 +167,7 @@ func (s *RedisCache) getQuota(ctx context.Context, key string) (*proto.AccessQuo
 }
 
 func (s *RedisCache) deleteQuota(ctx context.Context, key string) error {
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, key)
-	if err := s.client.Del(ctx, cacheKey).Err(); err != nil {
+	if err := s.client.Del(ctx, quotaKey(key)).Err(); err != nil {
 		return fmt.Errorf("delete quota: %w", err)
 	}
 	return nil
@@ -162,33 +178,31 @@ func (s *RedisCache) setQuota(ctx context.Context, key string, quota *proto.Acce
 	if err != nil {
 		return fmt.Errorf("marshal quota: %w", err)
 	}
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, key)
-	if err := s.client.Set(ctx, cacheKey, raw, s.ttl).Err(); err != nil {
+	if err := s.client.Set(ctx, quotaKey(key), raw, s.ttl).Err(); err != nil {
 		return fmt.Errorf("set quota: %w", err)
 	}
 	return nil
 }
 
-func (s *RedisCache) SetUsage(ctx context.Context, redisKey string, amount int64) error {
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, redisKey)
-	if err := s.client.Set(ctx, cacheKey, amount, s.ttl).Err(); err != nil {
+func (s *RedisCache) SetUsage(ctx context.Context, key string, amount int64) error {
+	if err := s.client.Set(ctx, usageKey(key), amount, s.ttl).Err(); err != nil {
 		return fmt.Errorf("set usage: %w", err)
 	}
 	return nil
 }
 
-func (s *RedisCache) ClearUsage(ctx context.Context, redisKey string) (bool, error) {
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, redisKey)
-	count, err := s.client.Del(ctx, cacheKey).Result()
+func (s *RedisCache) ClearUsage(ctx context.Context, key string) (bool, error) {
+	count, err := s.client.Del(ctx, usageKey(key)).Result()
 	if err != nil {
 		return false, fmt.Errorf("clear usage: %w", err)
 	}
 	return count != 0, nil
 }
 
-func (s *RedisCache) PeekUsage(ctx context.Context, redisKey string) (int64, error) {
+func (s *RedisCache) PeekUsage(ctx context.Context, key string) (int64, error) {
 	const SpecialValue = -1
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, redisKey)
+	cacheKey := usageKey(key)
+
 	v, err := s.client.Get(ctx, cacheKey).Int64()
 	if err == nil {
 		if v == SpecialValue {
@@ -209,17 +223,17 @@ func (s *RedisCache) PeekUsage(ctx context.Context, redisKey string) (int64, err
 	return 0, errCacheReady
 }
 
-func (s *RedisCache) SpendUsage(ctx context.Context, redisKey string, amount, limit int64) (int64, error) {
+func (s *RedisCache) SpendUsage(ctx context.Context, key string, amount, limit int64) (int64, error) {
 	// NOTE: skip redisKeyPrefix as it's already in PeekCost
-	v, err := s.PeekUsage(ctx, redisKey)
+	v, err := s.PeekUsage(ctx, key)
 	if err != nil {
 		return 0, fmt.Errorf("spend usage - peek: %w", err)
 	}
 	if v >= limit {
 		return v, proto.ErrQuotaExceeded
 	}
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, redisKey)
-	value, err := s.client.IncrBy(ctx, cacheKey, amount).Result()
+
+	value, err := s.client.IncrBy(ctx, usageKey(key), amount).Result()
 	if err != nil {
 		return v, fmt.Errorf("spend usage - incrby: %w", err)
 	}
@@ -232,8 +246,7 @@ type cacheUserPermission struct {
 }
 
 func (s *RedisCache) GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error) {
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, getUserPermKey(projectID, userID))
-	raw, err := s.client.Get(ctx, cacheKey).Bytes()
+	raw, err := s.client.Get(ctx, permissionKey(projectID, userID)).Bytes()
 	if err != nil {
 		if err == redis.Nil {
 			return proto.UserPermission_UNAUTHORIZED, nil, nil // not found, without error
@@ -258,13 +271,11 @@ func (s *RedisCache) SetUserPermission(ctx context.Context, projectID uint64, us
 	}
 
 	// cache userPermissions for 10 seconds
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, getUserPermKey(projectID, userID))
-	return s.client.Set(ctx, cacheKey, raw, 10*time.Second).Err()
+	return s.client.Set(ctx, permissionKey(projectID, userID), raw, 10*time.Second).Err()
 }
 
 func (s *RedisCache) DeleteUserPermission(ctx context.Context, projectID uint64, userID string) error {
-	cacheKey := fmt.Sprintf("%s%s", redisQuotaPrefix, getUserPermKey(projectID, userID))
-	return s.client.Del(ctx, cacheKey).Err()
+	return s.client.Del(ctx, permissionKey(projectID, userID)).Err()
 }
 
 type LRU struct {
@@ -335,8 +346,4 @@ func (s *LRU) deleteQuota(ctx context.Context, key string) error {
 
 func getProjectKey(projectID uint64) string {
 	return fmt.Sprintf("project:%d", projectID)
-}
-
-func getUserPermKey(projectID uint64, userID string) string {
-	return fmt.Sprintf("project:%d:userPerm:%s", projectID, userID)
 }
