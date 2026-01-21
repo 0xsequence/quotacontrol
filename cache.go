@@ -101,13 +101,13 @@ func usageKey(key string) string {
 }
 
 // quotaKey returns the redis key for storing AccessQuota.
-// It includes version because to avoid conflicts when the structure changes.
+// It includes version to avoid conflicts when the structure changes.
 func quotaKey(key string) string {
 	return fmt.Sprintf("quota:%v:%s", cacheVersion, key)
 }
 
 // permissionKey returns the redis key for storing user permission for a project.
-// It includes version because to avoid conflicts when the structure changes.
+// It includes version to avoid conflicts when the structure changes.
 func permissionKey(projectID uint64, userID string) string {
 	return fmt.Sprintf("perm:%d:project:%d:user:%s", cacheVersion, projectID, userID)
 }
