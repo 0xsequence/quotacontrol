@@ -91,7 +91,7 @@ func NewLimitCounter(svc Service, cfg RedisConfig, logger *slog.Logger) httprate
 const (
 	defaultExpRedis = time.Hour
 	defaultExpLRU   = time.Minute
-	cacheVersion    = 1
+	cacheVersion    = "v1"
 )
 
 // usageKey returns the redis key for storing usage amount.
@@ -103,13 +103,13 @@ func usageKey(key string) string {
 // quotaKey returns the redis key for storing AccessQuota.
 // It includes version to avoid conflicts when the structure changes.
 func quotaKey(key string) string {
-	return fmt.Sprintf("quota:%v:%s", cacheVersion, key)
+	return fmt.Sprintf("quota:%s:%s", cacheVersion, key)
 }
 
 // permissionKey returns the redis key for storing user permission for a project.
 // It includes version to avoid conflicts when the structure changes.
 func permissionKey(projectID uint64, userID string) string {
-	return fmt.Sprintf("perm:%d:project:%d:user:%s", cacheVersion, projectID, userID)
+	return fmt.Sprintf("perm:%s:project:%d:user:%s", cacheVersion, projectID, userID)
 }
 
 func NewRedisCache(redisClient *redis.Client, ttl time.Duration) *RedisCache {
