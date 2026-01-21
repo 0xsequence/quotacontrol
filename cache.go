@@ -87,7 +87,7 @@ func NewLimitCounter(svc proto.Service, cfg RedisConfig, logger *slog.Logger) ht
 const (
 	defaultExpRedis = time.Hour
 	defaultExpLRU   = time.Minute
-	cacheVersion    = "v1"
+	cacheVersion    = "v2"
 )
 
 // usageKey returns the redis key for storing usage amount.
