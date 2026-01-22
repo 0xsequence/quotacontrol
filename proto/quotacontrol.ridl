@@ -14,6 +14,17 @@ enum Service: uint16
   - WaaS
   - Trails
 
+# ProjectInfo provides detailed information about a project.
+struct ProjectInfo
+  - id: uint64
+    + go.field.name = ID
+  - ecosystemId: uint64
+    + go.field.name = EcosystemID
+  - cycle: Cycle
+  - chainIds: []uint64
+    + go.field.name = ChainIDs
+  - features: []string
+
 # LimitSettings is used to define the limits for a project.
 struct Limit
   # The service-specific limits for the project.
@@ -47,9 +58,6 @@ struct AccessKey
   - projectId: uint64
     + go.field.name = ProjectID
     + go.tag.db = project_id
-  - chainIds: []uint64
-    + go.field.name = ChainIDs
-    + go.tag.db = chain_ids
   - displayName: string
     + go.tag.db = display_name
   - accessKey: string
@@ -83,6 +91,8 @@ struct Cycle
   - end: timestamp
 
 struct AccessQuota
+  - info: ProjectInfo
+  # deprecated: use info.cycle
   - cycle: Cycle
   - limit: Limit
   - accessKey: AccessKey

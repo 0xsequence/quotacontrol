@@ -54,17 +54,13 @@ var (
 	_ UsageCache = (*RedisCache)(nil)
 )
 
-type Service interface {
-	GetService() proto.Service
-}
-
-func NewLimitCounter(svc Service, cfg RedisConfig, logger *slog.Logger) httprate.LimitCounter {
+func NewLimitCounter(svc proto.Service, cfg RedisConfig, logger *slog.Logger) httprate.LimitCounter {
 	if !cfg.Enabled {
 		return nil
 	}
 
 	prefix := redisRLPrefix
-	if s := svc.GetService().String(); s != "" {
+	if s := svc.String(); s != "" {
 		prefix = fmt.Sprintf("%s%s:", redisRLPrefix, s)
 	}
 
@@ -91,7 +87,7 @@ func NewLimitCounter(svc Service, cfg RedisConfig, logger *slog.Logger) httprate
 const (
 	defaultExpRedis = time.Hour
 	defaultExpLRU   = time.Minute
-	cacheVersion    = "v1"
+	cacheVersion    = "v2"
 )
 
 // usageKey returns the redis key for storing usage amount.

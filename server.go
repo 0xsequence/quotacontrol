@@ -8,12 +8,15 @@ import (
 	"time"
 
 	"github.com/0xsequence/authcontrol"
-	"github.com/0xsequence/quotacontrol/internal/store"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	"github.com/goware/validation"
 )
+
+type ProjectInfoStore interface {
+	GetProjectInfo(ctx context.Context, projectID uint64, now time.Time) (*proto.ProjectInfo, error)
+}
 
 type LimitStore interface {
 	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.Limit, error)
@@ -32,10 +35,6 @@ type UsageStore interface {
 	InsertAccessUsage(ctx context.Context, projectID uint64, accessKey string, service proto.Service, time time.Time, usage int64) error
 }
 
-type CycleStore interface {
-	GetAccessCycle(ctx context.Context, projectID uint64, now time.Time) (*proto.Cycle, error)
-}
-
 // PermissionStore is the interface that wraps the GetUserPermission method.
 type PermissionStore interface {
 	GetUserPermission(ctx context.Context, projectID uint64, userID string) (proto.UserPermission, *proto.ResourceAccess, error)
@@ -48,26 +47,23 @@ type Cache struct {
 }
 
 type Store struct {
+	ProjectInfoStore
 	LimitStore
 	AccessKeyStore
 	UsageStore
-	CycleStore
 	PermissionStore
 }
 
 // NewServer returns server implementation for proto.QuotaControl.
-func NewServer(redis RedisConfig, log *slog.Logger, cache Cache, storage Store) proto.QuotaControlServer {
+func NewServer(redis RedisConfig, log *slog.Logger, cache Cache, store Store) proto.QuotaControlServer {
 	if log == nil {
 		log = slog.Default()
-	}
-	if storage.CycleStore == nil {
-		storage.CycleStore = store.Cycle{}
 	}
 
 	return &server{
 		log:        log.With("service", "quotacontrol"),
 		cache:      cache,
-		store:      storage,
+		store:      store,
 		keyVersion: authcontrol.DefaultEncoding.Version(),
 		redis:      redis,
 	}
@@ -83,27 +79,6 @@ type server struct {
 }
 
 var _ proto.QuotaControlServer = &server{}
-
-func (s server) GetTimeRange(ctx context.Context, projectID uint64, from, to *time.Time) (time.Time, time.Time, error) {
-	if from != nil && to != nil {
-		return *from, *to, nil
-	}
-	now := middleware.GetTime(ctx)
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
-	if err != nil {
-		return time.Time{}, time.Time{}, err
-	}
-	if from == nil && to == nil {
-		cycle, _ := store.Cycle{}.GetAccessCycle(ctx, projectID, now)
-		return cycle.GetStart(now), cycle.GetEnd(now), nil
-	}
-
-	duration := cycle.GetDuration(now)
-	if from == nil {
-		return to.Add(-duration), *to, nil
-	}
-	return *from, from.Add(duration), nil
-}
 
 // Deprecated: use GetUsage instead.
 func (s server) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
@@ -138,35 +113,39 @@ func (s server) GetAccessKeyUsage(ctx context.Context, accessKey string, service
 }
 
 func (s server) GetUsage(ctx context.Context, projectID uint64, accessKey *string, service *proto.Service, from *time.Time, to *time.Time) (int64, error) {
-	min, max, err := s.GetTimeRange(ctx, projectID, from, to)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID, middleware.GetTime(ctx))
 	if err != nil {
-		return 0, fmt.Errorf("get time range: %w", err)
+		if errors.Is(err, proto.ErrProjectNotFound) {
+			return 0, err
+		}
+		return 0, err
 	}
 
-	if accessKey == nil {
-		// Total usage
-		usage, err := s.store.UsageStore.GetAccountUsage(ctx, projectID, service, min, max)
+	info.Cycle.SetInterval(from, to, middleware.GetTime(ctx))
+
+	switch {
+	// Total usage
+	case accessKey == nil:
+		usage, err := s.store.UsageStore.GetAccountUsage(ctx, projectID, service, *from, *to)
 		if err != nil {
 			return 0, fmt.Errorf("get account usage: %w", err)
 		}
 		return usage, nil
-	}
-
-	if *accessKey == "" {
-		// Async usage
-		usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, min, max)
+	// Async usage
+	case *accessKey == "":
+		usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, "", service, *from, *to)
 		if err != nil {
 			return 0, fmt.Errorf("get async usage: %w", err)
 		}
 		return usage, nil
+		// Access key usage
+	default:
+		usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, *accessKey, service, *from, *to)
+		if err != nil {
+			return 0, fmt.Errorf("get access key usage: %w", err)
+		}
+		return usage, nil
 	}
-
-	// Access key usage
-	usage, err := s.store.UsageStore.GetAccessKeyUsage(ctx, projectID, *accessKey, service, min, max)
-	if err != nil {
-		return 0, fmt.Errorf("get access key usage: %w", err)
-	}
-	return usage, nil
 }
 
 // Deprecated: new version of client sets the usage cache directly. This is going to be removed in the future.
@@ -185,13 +164,16 @@ func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *pro
 }
 
 func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto.Service, now time.Time) (bool, error) {
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID, now)
 	if err != nil {
+		if errors.Is(err, proto.ErrProjectNotFound) {
+			return false, err
+		}
 		return false, fmt.Errorf("get access cycle: %w", err)
 	}
 
 	if service != nil {
-		key := cacheKeyQuota(projectID, cycle, service, now)
+		key := cacheKeyQuota(projectID, info.Cycle, service, now)
 		ok, err := s.cache.UsageCache.ClearUsage(ctx, key)
 		if err != nil {
 			return false, fmt.Errorf("clear usage cache: %w", err)
@@ -201,7 +183,7 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
-		key := cacheKeyQuota(projectID, cycle, &svc, now)
+		key := cacheKeyQuota(projectID, info.Cycle, &svc, now)
 		if _, err := s.cache.UsageCache.ClearUsage(ctx, key); err != nil {
 			return false, fmt.Errorf("clear usage cache for service %s: %w", svc.String(), err)
 		}
@@ -210,19 +192,23 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 }
 
 func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID, now)
 	if err != nil {
-		return nil, fmt.Errorf("get access cycle: %w", err)
+		if errors.Is(err, proto.ErrProjectNotFound) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("get project info: %w", err)
 	}
 
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
+	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, info.Cycle)
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
 
 	record := proto.AccessQuota{
+		Info:      info,
 		Limit:     limit,
-		Cycle:     cycle,
+		Cycle:     info.Cycle,
 		AccessKey: &proto.AccessKey{ProjectID: projectID},
 	}
 
@@ -242,18 +228,22 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 		}
 		return nil, fmt.Errorf("find access key: %w", err)
 	}
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, access.ProjectID, now)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, access.ProjectID, now)
 	if err != nil {
+		if errors.Is(err, proto.ErrProjectNotFound) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("get access cycle: %w", err)
 	}
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, access.ProjectID, cycle)
+	limit, err := s.store.LimitStore.GetAccessLimit(ctx, access.ProjectID, info.Cycle)
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
 
 	record := proto.AccessQuota{
+		Info:      info,
 		Limit:     limit,
-		Cycle:     cycle,
+		Cycle:     info.Cycle,
 		AccessKey: access,
 	}
 
@@ -565,12 +555,15 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 	}
 
 	now := middleware.GetTime(ctx)
-	cycle, err := s.store.CycleStore.GetAccessCycle(ctx, projectID, now)
+	info, err := s.store.ProjectInfoStore.GetProjectInfo(ctx, projectID, now)
 	if err != nil {
-		return nil, fmt.Errorf("get access cycle: %w", err)
+		if errors.Is(err, proto.ErrProjectNotFound) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("get project info: %w", err)
 	}
 
-	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, cycle)
+	limit, err := s.store.LimitStore.GetAccessLimit(ctx, projectID, info.Cycle)
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
@@ -588,13 +581,13 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 			continue
 		}
 
-		cacheKey := cacheKeyQuota(projectID, cycle, &svc, now)
+		cacheKey := cacheKeyQuota(projectID, info.Cycle, &svc, now)
 		usage, err := s.cache.UsageCache.PeekUsage(ctx, cacheKey)
 		if err != nil {
 			if !errors.Is(err, errCacheReady) {
 				return nil, fmt.Errorf("peek usage cache: %w", err)
 			}
-			if _, err := s.PrepareUsage(ctx, projectID, &svc, cycle, now); err != nil {
+			if _, err := s.PrepareUsage(ctx, projectID, &svc, info.Cycle, now); err != nil {
 				return nil, fmt.Errorf("prepare usage: %w", err)
 			}
 			if usage, err = s.cache.UsageCache.PeekUsage(ctx, cacheKey); err != nil {
