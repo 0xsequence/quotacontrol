@@ -132,6 +132,9 @@ import "authcontrol.errors.ridl"
 import "quotacontrol.errors.ridl"
 
 service QuotaControl
+  # Ping
+  - Ping() => (ok: bool)
+
   # Status
   - GetProjectStatus(projectId: uint64) => (projectStatus: ProjectStatus)
 

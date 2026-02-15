@@ -80,6 +80,10 @@ type server struct {
 
 var _ proto.QuotaControlServer = &server{}
 
+func (s server) Ping(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
 // Deprecated: use GetUsage instead.
 func (s server) GetAccountUsage(ctx context.Context, projectID uint64, service *proto.Service, from, to *time.Time) (*proto.AccessUsage, error) {
 	usage, err := s.GetUsage(ctx, projectID, nil, service, from, to)
