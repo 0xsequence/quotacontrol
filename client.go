@@ -63,7 +63,7 @@ func NewClient(log *slog.Logger, service proto.Service, cfg Config, qc proto.Quo
 		cache:       cache,
 		quotaClient: qc,
 		ticker:      time.NewTicker(tick),
-		logger:      log.With(slog.String("qc-version", Version)),
+		logger:      log.With(slog.String("qc-version", proto.WebRPCSchemaVersion())),
 	}
 }
 
