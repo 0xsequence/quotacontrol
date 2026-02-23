@@ -6,7 +6,7 @@ import (
 	"github.com/0xsequence/quotacontrol/middleware"
 )
 
-var Version = "0.23.0"
+var Version = "0.23.1"
 
 type Config struct {
 	Enabled       bool            `toml:"enabled"`
