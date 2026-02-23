@@ -28,7 +28,7 @@ type Notifier interface {
 // - service is the service name.
 // - cfg is the configuration.
 // - if qc is not nil, it will be used instead of the proto client.
-func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.QuotaControlClient) *Client {
+func NewClient(log *slog.Logger, service proto.Service, cfg Config, qc proto.QuotaControlClient) *Client {
 	backend := NewRedisCache(redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
@@ -63,7 +63,7 @@ func NewClient(logger *slog.Logger, service proto.Service, cfg Config, qc proto.
 		cache:       cache,
 		quotaClient: qc,
 		ticker:      time.NewTicker(tick),
-		logger:      logger.With(slog.String("service", "quotacontrol"), slog.String("version", Version)),
+		logger:      log.With(slog.String("qc-version", Version)),
 	}
 }
 
