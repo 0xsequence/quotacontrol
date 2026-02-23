@@ -57,16 +57,18 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 		PermissionStore:  store,
 	}
 
-	logger := qc.logger.With(slog.String("server", "server"))
+	logger := qc.logger.With(slog.Bool("mock", true))
 	qc.QuotaControlServer = quotacontrol.NewServer(cfg.Redis, logger, qcCache, qcStore)
 
 	go func() {
+		logger.Info("server starting...", slog.String("url", cfg.URL))
 		http.Serve(listener, proto.NewQuotaControlServer(&qc))
 	}()
 
 	return &qc, func() {
 		s.Close()
 		listener.Close()
+		logger.Info("server stopped")
 	}
 }
 

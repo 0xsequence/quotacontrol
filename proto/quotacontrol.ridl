@@ -134,6 +134,7 @@ import "quotacontrol.errors.ridl"
 service QuotaControl
   # Ping
   - Ping() => (ok: bool)
+  - Version() => (version: string)
 
   # Status
   - GetProjectStatus(projectId: uint64) => (projectStatus: ProjectStatus)

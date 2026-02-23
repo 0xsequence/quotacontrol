@@ -61,7 +61,7 @@ func NewServer(redis RedisConfig, log *slog.Logger, cache Cache, store Store) pr
 	}
 
 	return &server{
-		log:        log.With("service", "quotacontrol"),
+		log:        log.With(slog.String("service", "quotacontrol"), slog.String("version", Version)),
 		cache:      cache,
 		store:      store,
 		keyVersion: authcontrol.DefaultEncoding.Version(),
@@ -82,6 +82,10 @@ var _ proto.QuotaControlServer = &server{}
 
 func (s server) Ping(ctx context.Context) (bool, error) {
 	return true, nil
+}
+
+func (s server) Version(ctx context.Context) (string, error) {
+	return Version, nil
 }
 
 // Deprecated: use GetUsage instead.
