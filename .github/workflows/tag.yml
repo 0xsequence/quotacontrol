@@ -16,6 +16,14 @@ jobs:
       with:
         fetch-depth: 0  # Fetch all tags
 
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Build
+      run: go build -v ./...
+
     - name: Extract Version from config.go
       id: version
       run: |
