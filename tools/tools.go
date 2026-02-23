@@ -22,5 +22,6 @@ package tools
 
 import (
 	_ "github.com/goware/rerun"
+	_ "github.com/mfridman/tparse"
 	_ "github.com/webrpc/webrpc"
 )
