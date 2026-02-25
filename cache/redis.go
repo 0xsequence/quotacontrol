@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -22,18 +23,25 @@ type Backend struct {
 }
 
 func (r *Backend) Get(ctx context.Context, key string, dst any) (bool, error) {
-	if err := r.client.Get(ctx, key).Scan(dst); err != nil {
+	data, err := r.client.Get(ctx, key).Bytes()
+	if err != nil {
 		if err == redis.Nil {
 			return false, nil
 		}
 		return false, fmt.Errorf("get: %w", err)
 	}
-
+	if err := json.Unmarshal(data, dst); err != nil {
+		return false, fmt.Errorf("get unmarshal: %w", err)
+	}
 	return true, nil
 }
 
 func (r *Backend) Set(ctx context.Context, key string, value any) error {
-	if err := r.client.Set(ctx, key, value, r.ttl).Err(); err != nil {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("set marshal: %w", err)
+	}
+	if err := r.client.Set(ctx, key, data, r.ttl).Err(); err != nil {
 		return fmt.Errorf("set: %w", err)
 	}
 	return nil

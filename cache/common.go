@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 )
 
 type Provider string
@@ -11,8 +10,6 @@ const (
 	ProviderMemory Provider = "memory"
 	ProviderRedis  Provider = "redis"
 )
-
-type Key fmt.Stringer
 
 // Cache is a generic cache for objects.
 type Cache[K Key, T any] interface {

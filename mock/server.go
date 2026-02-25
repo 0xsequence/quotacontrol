@@ -44,11 +44,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 		notifications: make(map[uint64][]Event),
 	}
 
-	qcCache := quotacontrol.Cache{
-		QuotaCache:      quotacontrol.NewRedisCache(client, time.Minute),
-		UsageCache:      quotacontrol.NewRedisCache(client, time.Minute),
-		PermissionCache: quotacontrol.NewRedisCache(client, time.Minute),
-	}
+	qcCache := quotacontrol.NewCache(client, time.Minute)
 	qcStore := quotacontrol.Store{
 		ProjectInfoStore: store,
 		LimitStore:       store,
