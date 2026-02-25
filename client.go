@@ -38,10 +38,10 @@ func NewClient(log *slog.Logger, service proto.Service, cfg Config, qc proto.Quo
 	})
 	backend := cache.NewBackend(rdb, cfg.Redis.KeyTTL)
 	cch := Cache{
-		AccessKeys:      cache.NewRedisCache[cache.KeyAccessKey, *proto.AccessQuota](backend),
-		Projects:        cache.NewRedisCache[cache.KeyProject, *proto.AccessQuota](backend),
-		UsageCache:      cache.NewUsageCache[cache.KeyAccessKey](backend),
-		PermissionCache: cache.NewRedisCache[cache.KeyPermission, UserPermission](backend),
+		AccessKeys:      cache.NewRedisCache[KeyAccessKey, *proto.AccessQuota](backend),
+		Projects:        cache.NewRedisCache[KeyProject, *proto.AccessQuota](backend),
+		Usage:      cache.NewUsageCache[KeyAccessKey](backend),
+		Permissions: cache.NewRedisCache[KeyPermission, UserPermission](backend),
 	}
 	if cfg.LRUSize > 0 {
 		cch.AccessKeys = cache.NewMemory(cch.AccessKeys, cfg.LRUSize, cfg.LRUExpiration)
@@ -119,7 +119,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 		slog.Uint64("projectId", projectID),
 	)
 	// fetch access quota
-	quota, ok, err := c.cache.Projects.Get(ctx, cache.KeyProject{ProjectID: projectID})
+	quota, ok, err := c.cache.Projects.Get(ctx, KeyProject{ProjectID: projectID})
 	if err != nil {
 		logger.Warn("unexpected cache error", xlog.Error(err))
 		return nil, nil
@@ -132,7 +132,7 @@ func (c *Client) FetchProjectQuota(ctx context.Context, projectID uint64, chainI
 			}
 			return nil, err
 		}
-		if err := c.cache.Projects.Set(ctx, cache.KeyProject{ProjectID: quota.AccessKey.ProjectID}, quota); err != nil {
+		if err := c.cache.Projects.Set(ctx, KeyProject{ProjectID: quota.AccessKey.ProjectID}, quota); err != nil {
 			logger.Warn("failed to cache project quota", xlog.Error(err))
 		}
 	}
@@ -149,7 +149,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 		slog.String("access_key", accessKey),
 	)
 	// fetch access quota
-	quota, ok, err := c.cache.AccessKeys.Get(ctx, cache.KeyAccessKey{AccessKey: accessKey})
+	quota, ok, err := c.cache.AccessKeys.Get(ctx, KeyAccessKey{AccessKey: accessKey})
 	if err != nil {
 		logger.Error("unexpected cache error", xlog.Error(err))
 		return nil, nil
@@ -162,7 +162,7 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 			}
 			return nil, err
 		}
-		if err := c.cache.AccessKeys.Set(ctx, cache.KeyAccessKey{AccessKey: quota.AccessKey.AccessKey}, quota); err != nil {
+		if err := c.cache.AccessKeys.Set(ctx, KeyAccessKey{AccessKey: quota.AccessKey.AccessKey}, quota); err != nil {
 			logger.Warn("failed to cache access quota", xlog.Error(err))
 		}
 	}
@@ -194,11 +194,11 @@ func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now t
 
 func (c *Client) EnsureUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error) {
 	key := cacheKeyQuota(projectID, cycle, &c.service, now)
-	fetcher := func(ctx context.Context, key cache.KeyAccessKey) (int64, error) {
+	fetcher := func(ctx context.Context, key KeyAccessKey) (int64, error) {
 		min, max := cycle.GetStart(now), cycle.GetEnd(now)
 		return c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
 	}
-	return c.cache.UsageCache.Ensure(ctx, fetcher, key)
+	return c.cache.Usage.Ensure(ctx, fetcher, key)
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
@@ -222,7 +222,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 		slog.String("user_id", userID),
 	)
 	// Check short-lived cache if requested. Note using the cache TTL from config (default 1m).
-	v, ok, err := c.cache.PermissionCache.Get(ctx, cache.KeyPermission{ProjectID: projectID, UserID: userID})
+	v, ok, err := c.cache.Permissions.Get(ctx, KeyPermission{ProjectID: projectID, UserID: userID})
 	if err != nil {
 		// log the error, but don't stop
 		logger.Error("unexpected cache error", xlog.Error(err))
@@ -238,7 +238,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 		return proto.UserPermission_UNAUTHORIZED, nil, fmt.Errorf("get user permission from quotacontrol server: %w", err)
 	}
 	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
-		if err := c.cache.PermissionCache.Set(ctx, cache.KeyPermission{ProjectID: projectID, UserID: userID}, UserPermission{UserPermission: perm, ResourceAccess: access}); err != nil {
+		if err := c.cache.Permissions.Set(ctx, KeyPermission{ProjectID: projectID, UserID: userID}, UserPermission{UserPermission: perm, ResourceAccess: access}); err != nil {
 			c.logger.Warn("set user perm in cache", xlog.Error(err))
 		}
 	}
@@ -267,13 +267,13 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 	}
 
 	key := cacheKeyQuota(projectID, quota.Cycle, &c.service, now)
-	fetcher := func(ctx context.Context, _ cache.KeyAccessKey) (int64, error) {
+	fetcher := func(ctx context.Context, _ KeyAccessKey) (int64, error) {
 		min, max := quota.Cycle.GetStart(now), quota.Cycle.GetEnd(now)
 		return c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
 	}
 
 	// spend compute units
-	total, delta, err := c.cache.UsageCache.Spend(ctx, fetcher, key, cost, cfg.OverMax)
+	total, delta, err := c.cache.Usage.Spend(ctx, fetcher, key, cost, cfg.OverMax)
 	if err != nil {
 		logger.Error("unexpected cache error", xlog.Error(err))
 		return false, 0, err
@@ -297,12 +297,12 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 }
 
 func (c *Client) ClearQuotaCacheByProjectID(ctx context.Context, projectID uint64) error {
-	_, err := c.cache.Projects.Clear(ctx, cache.KeyProject{ProjectID: projectID})
+	_, err := c.cache.Projects.Clear(ctx, KeyProject{ProjectID: projectID})
 	return err
 }
 
 func (c *Client) ClearQuotaCacheByAccessKey(ctx context.Context, accessKey string) error {
-	_, err := c.cache.AccessKeys.Clear(ctx, cache.KeyAccessKey{AccessKey: accessKey})
+	_, err := c.cache.AccessKeys.Clear(ctx, KeyAccessKey{AccessKey: accessKey})
 	return err
 }
 
@@ -380,10 +380,10 @@ func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, service *proto.Service, now time.Time) cache.KeyAccessKey {
+func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, service *proto.Service, now time.Time) KeyAccessKey {
 	start, end := cycle.GetStart(now), cycle.GetEnd(now)
 	if service == nil {
-		return cache.KeyAccessKey{AccessKey: fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))}
+		return KeyAccessKey{AccessKey: fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))}
 	}
-	return cache.KeyAccessKey{AccessKey: fmt.Sprintf("project:%v:%s:%s:%s", projectID, service.GetName(), start.Format("2006-01-02"), end.Format("2006-01-02"))}
+	return KeyAccessKey{AccessKey: fmt.Sprintf("project:%v:%s:%s:%s", projectID, service.GetName(), start.Format("2006-01-02"), end.Format("2006-01-02"))}
 }

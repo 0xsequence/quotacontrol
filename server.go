@@ -43,10 +43,10 @@ type PermissionStore interface {
 }
 
 type Cache struct {
-	AccessKeys      cache.Cache[cache.KeyAccessKey, *proto.AccessQuota]
-	Projects        cache.Cache[cache.KeyProject, *proto.AccessQuota]
-	UsageCache      cache.UsageCache[cache.KeyAccessKey]
-	PermissionCache cache.Cache[cache.KeyPermission, UserPermission]
+	AccessKeys  cache.Cache[KeyAccessKey, *proto.AccessQuota]
+	Projects    cache.Cache[KeyProject, *proto.AccessQuota]
+	Permissions cache.Cache[KeyPermission, UserPermission]
+	Usage       cache.UsageCache[KeyAccessKey]
 }
 
 type Store struct {
@@ -164,7 +164,7 @@ func (s server) PrepareUsage(ctx context.Context, projectID uint64, service *pro
 	}
 
 	key := cacheKeyQuota(projectID, cycle, service, now)
-	if err := s.cache.UsageCache.Set(ctx, key, usage); err != nil {
+	if err := s.cache.Usage.Set(ctx, key, usage); err != nil {
 		return false, fmt.Errorf("set usage cache: %w", err)
 	}
 	return true, nil
@@ -181,7 +181,7 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 
 	if service != nil {
 		key := cacheKeyQuota(projectID, info.Cycle, service, now)
-		ok, err := s.cache.UsageCache.Clear(ctx, key)
+		ok, err := s.cache.Usage.Clear(ctx, key)
 		if err != nil {
 			return false, fmt.Errorf("clear usage cache: %w", err)
 		}
@@ -191,7 +191,7 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 	for i := range proto.Service_name {
 		svc := proto.Service(i)
 		key := cacheKeyQuota(projectID, info.Cycle, &svc, now)
-		if _, err := s.cache.UsageCache.Clear(ctx, key); err != nil {
+		if _, err := s.cache.Usage.Clear(ctx, key); err != nil {
 			return false, fmt.Errorf("clear usage cache for service %s: %w", svc.String(), err)
 		}
 	}
@@ -220,7 +220,7 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 	}
 
 	// deprecated: cache is set by the client side now
-	if err := s.cache.Projects.Set(ctx, cache.KeyProject{ProjectID: projectID}, &record); err != nil {
+	if err := s.cache.Projects.Set(ctx, KeyProject{ProjectID: projectID}, &record); err != nil {
 		s.log.Error("set access quota in cache", xlog.Error(err))
 	}
 
@@ -254,7 +254,7 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 		AccessKey: access,
 	}
 
-	if err := s.cache.AccessKeys.Set(ctx, cache.KeyAccessKey{AccessKey: record.AccessKey.AccessKey}, &record); err != nil {
+	if err := s.cache.AccessKeys.Set(ctx, KeyAccessKey{AccessKey: record.AccessKey.AccessKey}, &record); err != nil {
 		s.log.Error("set access quota in cache", xlog.Error(err))
 	}
 
@@ -327,11 +327,11 @@ func (s server) ClearAccessQuotaCache(ctx context.Context, projectID uint64) (bo
 		s.log.Error("list access keys", xlog.Error(err))
 		return true, nil
 	}
-	if _, err := s.cache.Projects.Clear(ctx, cache.KeyProject{ProjectID: projectID}); err != nil {
+	if _, err := s.cache.Projects.Clear(ctx, KeyProject{ProjectID: projectID}); err != nil {
 		s.log.Error("delete access quota from cache", xlog.Error(err))
 	}
 	for _, access := range accessKeys {
-		if _, err := s.cache.AccessKeys.Clear(ctx, cache.KeyAccessKey{AccessKey: access.AccessKey}); err != nil {
+		if _, err := s.cache.AccessKeys.Clear(ctx, KeyAccessKey{AccessKey: access.AccessKey}); err != nil {
 			s.log.Error("delete access quota from cache", xlog.Error(err))
 		}
 	}
@@ -535,7 +535,7 @@ func (s server) GetUserPermission(ctx context.Context, projectID uint64, userID 
 
 	// deprecated: cache is set by the client side now
 	if !perm.Is(proto.UserPermission_UNAUTHORIZED) {
-		if err := s.cache.PermissionCache.Set(ctx, cache.KeyPermission{ProjectID: projectID, UserID: userID}, UserPermission{UserPermission: perm, ResourceAccess: access}); err != nil {
+		if err := s.cache.Permissions.Set(ctx, KeyPermission{ProjectID: projectID, UserID: userID}, UserPermission{UserPermission: perm, ResourceAccess: access}); err != nil {
 			s.log.Error("set user perm in cache", xlog.Error(err))
 		}
 	}
@@ -549,7 +549,7 @@ func (s server) updateAccessKey(ctx context.Context, k *proto.AccessKey) (*proto
 		return nil, err
 	}
 
-	if _, err := s.cache.AccessKeys.Clear(ctx, cache.KeyAccessKey{AccessKey: k.AccessKey}); err != nil {
+	if _, err := s.cache.AccessKeys.Clear(ctx, KeyAccessKey{AccessKey: k.AccessKey}); err != nil {
 		s.log.Error("delete access quota from cache", xlog.Error(err))
 	}
 
@@ -590,11 +590,11 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 
 		cacheKey := cacheKeyQuota(projectID, info.Cycle, &svc, now)
 		svcCopy := svc
-		fetcher := func(ctx context.Context, _ cache.KeyAccessKey) (int64, error) {
+		fetcher := func(ctx context.Context, _ KeyAccessKey) (int64, error) {
 			min, max := info.Cycle.GetStart(now), info.Cycle.GetEnd(now)
 			return s.GetUsage(ctx, projectID, nil, &svcCopy, &min, &max)
 		}
-		usage, err := s.cache.UsageCache.Ensure(ctx, fetcher, cacheKey)
+		usage, err := s.cache.Usage.Ensure(ctx, fetcher, cacheKey)
 		if err != nil {
 			return nil, fmt.Errorf("peek usage cache: %w", err)
 		}
