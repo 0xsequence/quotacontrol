@@ -49,7 +49,7 @@ func TestRateLimiter(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		ipAddress := makeIP(false).String()
 		for i := 0; i < 20; i++ {
-			req, _ := http.NewRequest("GET", "/", nil)
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = ipAddress
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
@@ -67,7 +67,7 @@ func TestRateLimiter(t *testing.T) {
 	for i := 0; i < 80; i++ {
 		ipAddress := makeIP(true).String()
 		for i := 0; i < 20; i++ {
-			req, _ := http.NewRequest("GET", "/", nil)
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
 			req.RemoteAddr = ipAddress
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)

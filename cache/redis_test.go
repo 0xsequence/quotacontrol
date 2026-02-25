@@ -41,7 +41,7 @@ func TestRedis(t *testing.T) {
 	require.NotNil(t, backend)
 
 	// Test basic Set and Get operations
-	obj := cache.NewRedisCache[Key, string](backend)
+	obj := cache.RedisCache[Key, string]{Backend: backend}
 	require.NotNil(t, obj)
 
 	err := obj.Set(ctx, "key1", "value1")
@@ -85,7 +85,7 @@ func TestRedis(t *testing.T) {
 	// Test TTL functionality
 	backend = cache.NewBackend(client, 100*time.Millisecond)
 
-	cacheWithTTL := cache.NewRedisCache[Key, string](backend)
+	cacheWithTTL := cache.RedisCache[Key, string]{Backend: backend}
 	require.NotNil(t, cacheWithTTL)
 
 	err = cacheWithTTL.Set(ctx, "expiring", "value")
@@ -105,7 +105,7 @@ func TestRedis(t *testing.T) {
 	assert.NoError(t, err)
 	assert.False(t, ok)
 
-	cacheWithKeyFn := cache.NewRedisCache[UserKey, string](backend)
+	cacheWithKeyFn := cache.RedisCache[UserKey, string]{Backend: backend}
 	require.NotNil(t, cacheWithKeyFn)
 
 	err = cacheWithKeyFn.Set(ctx, 123, "user123data")
@@ -128,7 +128,7 @@ func TestRedisWithLRU(t *testing.T) {
 	// Create Redis backend with longer TTL (10 seconds)
 	backend := cache.NewBackend(client, 10*time.Second)
 
-	redisCache := cache.NewRedisCache[Key, string](backend)
+	redisCache := cache.RedisCache[Key, string]{Backend: backend}
 	require.NotNil(t, redisCache)
 
 	// Create LRU cache on top with very short TTL (100ms)
@@ -188,7 +188,7 @@ func TestRedisBackendBasic(t *testing.T) {
 
 	backend := cache.NewBackend(client, 10*time.Second)
 
-	redisCache := cache.NewRedisCache[Key, string](backend)
+	redisCache := cache.RedisCache[Key, string]{Backend: backend}
 
 	// Test basic set/get
 	err := redisCache.Set(ctx, "key1", "value1")
@@ -261,7 +261,8 @@ func TestUsageConcurrency(t *testing.T) {
 	// Test 1: Concurrent Peek operations
 	t.Run("concurrent peek", func(t *testing.T) {
 		// Clear the key first
-		usage.Clear(ctx, key)
+		_, err := usage.Clear(ctx, key)
+		assert.NoError(t, err)
 
 		var wg sync.WaitGroup
 		errs := make(chan error, numGoroutines)
@@ -293,7 +294,8 @@ func TestUsageConcurrency(t *testing.T) {
 	// Test 2: Concurrent Spend operations
 	t.Run("concurrent spend", func(t *testing.T) {
 		// Reset by clearing the key
-		usage.Clear(ctx, key)
+		_, err := usage.Clear(ctx, key)
+		assert.NoError(t, err)
 
 		var wg sync.WaitGroup
 		successCount := int64(0)
@@ -345,7 +347,8 @@ func TestUsageConcurrency(t *testing.T) {
 	// Test 3: Mixed Peek and Spend operations
 	t.Run("mixed peek and spend", func(t *testing.T) {
 		// Reset by clearing the key
-		usage.Clear(ctx, key)
+		_, err := usage.Clear(ctx, key)
+		assert.NoError(t, err)
 
 		var wg sync.WaitGroup
 		errs := make(chan error, numGoroutines*2)
@@ -431,7 +434,8 @@ func TestUsageConcurrency(t *testing.T) {
 		limit := int64(100)
 		preloadValue := int64(85)
 
-		usage.Set(ctx, key, preloadValue)
+		err := usage.Set(ctx, key, preloadValue)
+		assert.NoError(t, err)
 
 		var wg sync.WaitGroup
 		successCount := int64(0)

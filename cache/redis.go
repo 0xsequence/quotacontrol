@@ -25,7 +25,7 @@ type Backend struct {
 func (r *Backend) Get(ctx context.Context, key string, dst any) (bool, error) {
 	data, err := r.client.Get(ctx, key).Bytes()
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			return false, nil
 		}
 		return false, fmt.Errorf("get: %w", err)
@@ -55,17 +55,11 @@ func (r *Backend) Clear(ctx context.Context, key string) (bool, error) {
 	return count != 0, nil
 }
 
-func NewRedisCache[K Key, T any](backend *Backend) *RedisCache[K, T] {
-	return &RedisCache[K, T]{
-		Backend: backend,
-	}
-}
-
 type RedisCache[K Key, T any] struct {
 	*Backend
 }
 
-func (r *RedisCache[K, T]) Get(ctx context.Context, key K) (v T, ok bool, err error) {
+func (r RedisCache[K, T]) Get(ctx context.Context, key K) (v T, ok bool, err error) {
 	ok, err = r.Backend.Get(ctx, key.String(), &v)
 	if err != nil {
 		return v, false, fmt.Errorf("redis cache get: %w", err)
@@ -73,7 +67,7 @@ func (r *RedisCache[K, T]) Get(ctx context.Context, key K) (v T, ok bool, err er
 	return v, ok, nil
 }
 
-func (r *RedisCache[K, T]) Set(ctx context.Context, key K, value T) (err error) {
+func (r RedisCache[K, T]) Set(ctx context.Context, key K, value T) (err error) {
 	cacheKey := key.String()
 	if err = r.Backend.Set(ctx, cacheKey, value); err != nil {
 		return fmt.Errorf("redis cache set: %w", err)
@@ -81,7 +75,7 @@ func (r *RedisCache[K, T]) Set(ctx context.Context, key K, value T) (err error) 
 	return nil
 }
 
-func (r *RedisCache[K, T]) Clear(ctx context.Context, key K) (ok bool, err error) {
+func (r RedisCache[K, T]) Clear(ctx context.Context, key K) (ok bool, err error) {
 	cacheKey := key.String()
 	ok, err = r.Backend.Clear(ctx, cacheKey)
 	if err != nil {
@@ -91,14 +85,12 @@ func (r *RedisCache[K, T]) Clear(ctx context.Context, key K) (ok bool, err error
 }
 
 type redisUsage[K Key] struct {
-	*RedisCache[K, int64]
+	RedisCache[K, int64]
 }
 
 // NewUsageCache creates a new usage cache for tracking usage counters
-func NewUsageCache[K Key](backend *Backend) UsageCache[K] {
-	return &redisUsage[K]{
-		RedisCache: NewRedisCache[K, int64](backend),
-	}
+func NewUsageCache[K Key](backend *Backend) Usage[K] {
+	return &redisUsage[K]{RedisCache: RedisCache[K, int64]{Backend: backend}}
 }
 
 var (

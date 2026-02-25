@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0xsequence/go-libs/xlog"
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
@@ -22,7 +23,10 @@ type Event struct {
 
 func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 	s := miniredis.NewMiniRedis()
-	s.Start()
+	if err := s.Start(); err != nil {
+		log.Fatal(err)
+	}
+
 	cfg.Redis.Host = s.Host()
 	cfg.Redis.Port = uint16(s.Server().Addr().Port)
 	client := redisclient.NewClient(&redisclient.Options{Addr: s.Addr()})
@@ -44,7 +48,7 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 		notifications: make(map[uint64][]Event),
 	}
 
-	qcCache := quotacontrol.NewCache(client, time.Minute)
+	qcCache := quotacontrol.NewCache(client, time.Minute, 0, 0)
 	qcStore := quotacontrol.Store{
 		ProjectInfoStore: store,
 		LimitStore:       store,
@@ -58,7 +62,10 @@ func NewServer(cfg *quotacontrol.Config) (server *Server, cleanup func()) {
 
 	go func() {
 		logger.Info("server starting...", slog.String("url", cfg.URL))
-		http.Serve(listener, proto.NewQuotaControlServer(&qc))
+
+		if err := http.Serve(listener, proto.NewQuotaControlServer(&qc)); err != nil && err != http.ErrServerClosed {
+			logger.Error("server error", xlog.Error(err))
+		}
 	}()
 
 	return &qc, func() {

@@ -10,15 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/0xsequence/authcontrol"
+	authproto "github.com/0xsequence/authcontrol/proto"
 	"github.com/0xsequence/go-libs/xlog"
 	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/redis/go-redis/v9"
-
-	"github.com/0xsequence/authcontrol"
-	authproto "github.com/0xsequence/authcontrol/proto"
 )
 
 type Notifier interface {
@@ -31,22 +30,11 @@ type Notifier interface {
 // - cfg is the configuration.
 // - if qc is not nil, it will be used instead of the proto client.
 func NewClient(log *slog.Logger, service proto.Service, cfg Config, qc proto.QuotaControlClient) *Client {
-	rdb := redis.NewClient(&redis.Options{
+	redisClient := redis.NewClient(&redis.Options{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		DB:           cfg.Redis.DBIndex,
 		MaxIdleConns: cfg.Redis.MaxIdle,
 	})
-	backend := cache.NewBackend(rdb, cfg.Redis.KeyTTL)
-	cch := Cache{
-		AccessKeys:      cache.NewRedisCache[KeyAccessKey, *proto.AccessQuota](backend),
-		Projects:        cache.NewRedisCache[KeyProject, *proto.AccessQuota](backend),
-		Usage:      cache.NewUsageCache[KeyAccessKey](backend),
-		Permissions: cache.NewRedisCache[KeyPermission, UserPermission](backend),
-	}
-	if cfg.LRUSize > 0 {
-		cch.AccessKeys = cache.NewMemory(cch.AccessKeys, cfg.LRUSize, cfg.LRUExpiration)
-		cch.Projects = cache.NewMemory(cch.Projects, cfg.LRUSize, cfg.LRUExpiration)
-	}
 
 	if qc == nil {
 		qc = proto.NewQuotaControlClient(cfg.URL, &http.Client{
@@ -63,7 +51,7 @@ func NewClient(log *slog.Logger, service proto.Service, cfg Config, qc proto.Quo
 		cfg:         cfg,
 		service:     service,
 		usage:       usage.NewTracker(),
-		cache:       cch,
+		cache:       NewCache(redisClient, cfg.Redis.KeyTTL, cfg.LRUSize, cfg.LRUExpiration),
 		quotaClient: qc,
 		ticker:      time.NewTicker(tick),
 		logger:      log.With(slog.String("qc-version", proto.WebRPCSchemaVersion())),
@@ -74,9 +62,14 @@ type Client struct {
 	cfg    Config
 	logger *slog.Logger
 
-	service     proto.Service
-	usage       *usage.Tracker
-	cache       Cache
+	service proto.Service
+	usage   *usage.Tracker
+	cache   struct {
+		AccessKeys  cache.Simple[KeyAccessKey, *proto.AccessQuota]
+		Projects    cache.Simple[KeyProject, *proto.AccessQuota]
+		Permissions cache.Simple[KeyPermission, UserPermission]
+		Usage       cache.Usage[KeyUsage]
+	}
 	quotaClient proto.QuotaControlClient
 
 	running int32
@@ -176,29 +169,15 @@ func (c *Client) FetchKeyQuota(ctx context.Context, accessKey, origin string, ch
 	return quota, nil
 }
 
-// FetchUsage fetches the current usage of the access key.
-func (c *Client) FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error) {
-	logger := c.logger.With(
-		slog.String("op", "fetch_usage"),
-		slog.Uint64("projectId", quota.AccessKey.ProjectID),
-		slog.String("access_key", quota.AccessKey.AccessKey),
-	)
-
-	usage, err := c.EnsureUsage(ctx, quota.AccessKey.ProjectID, quota.Cycle, now)
-	if err != nil {
-		logger.Error("unexpected error", xlog.Error(err))
-		return 0, err
+func (c *Client) getFetcher() func(ctx context.Context, key KeyUsage) (int64, error) {
+	return func(ctx context.Context, key KeyUsage) (int64, error) {
+		return c.quotaClient.GetUsage(ctx, key.ProjectID, nil, &c.service, &key.Start, &key.End)
 	}
-	return usage, nil
 }
 
-func (c *Client) EnsureUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error) {
-	key := cacheKeyQuota(projectID, cycle, &c.service, now)
-	fetcher := func(ctx context.Context, key KeyAccessKey) (int64, error) {
-		min, max := cycle.GetStart(now), cycle.GetEnd(now)
-		return c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
-	}
-	return c.cache.Usage.Ensure(ctx, fetcher, key)
+// FetchUsage fetches the current usage of project from cache or from the quota server.
+func (c *Client) FetchUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error) {
+	return c.cache.Usage.Ensure(ctx, c.getFetcher(), newKeyUsage(projectID, c.service, cycle, now))
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
@@ -245,7 +224,7 @@ func (c *Client) FetchPermission(ctx context.Context, projectID uint64) (proto.U
 	return perm, access, nil
 }
 
-func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (spent bool, total int64, err error) {
+func (c *Client) SpendUsage(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (spent bool, total int64, err error) {
 	// quota is nil only on unexpected errors from quota fetch
 	if quota == nil || cost == 0 {
 		return false, 0, nil
@@ -266,14 +245,8 @@ func (c *Client) SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost 
 		return false, 0, nil
 	}
 
-	key := cacheKeyQuota(projectID, quota.Cycle, &c.service, now)
-	fetcher := func(ctx context.Context, _ KeyAccessKey) (int64, error) {
-		min, max := quota.Cycle.GetStart(now), quota.Cycle.GetEnd(now)
-		return c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
-	}
-
 	// spend compute units
-	total, delta, err := c.cache.Usage.Spend(ctx, fetcher, key, cost, cfg.OverMax)
+	total, delta, err := c.cache.Usage.Spend(ctx, c.getFetcher(), newKeyUsage(projectID, c.service, quota.Cycle, now), cost, cfg.OverMax)
 	if err != nil {
 		logger.Error("unexpected cache error", xlog.Error(err))
 		return false, 0, err
@@ -378,12 +351,4 @@ type bearerToken string
 func (t bearerToken) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("BEARER %s", t))
 	return http.DefaultTransport.RoundTrip(req)
-}
-
-func cacheKeyQuota(projectID uint64, cycle *proto.Cycle, service *proto.Service, now time.Time) KeyAccessKey {
-	start, end := cycle.GetStart(now), cycle.GetEnd(now)
-	if service == nil {
-		return KeyAccessKey{AccessKey: fmt.Sprintf("project:%v:%s:%s", projectID, start.Format("2006-01-02"), end.Format("2006-01-02"))}
-	}
-	return KeyAccessKey{AccessKey: fmt.Sprintf("project:%v:%s:%s:%s", projectID, service.GetName(), start.Format("2006-01-02"), end.Format("2006-01-02"))}
 }

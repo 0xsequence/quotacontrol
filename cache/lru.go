@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 )
 
-func NewMemory[K Key, T any](backend Cache[K, T], size int, ttl time.Duration) *Memory[K, T] {
+func NewMemory[K Key, T any](backend Simple[K, T], size int, ttl time.Duration) *Memory[K, T] {
 	if ttl <= 0 {
 		ttl = time.Minute
 	}
@@ -25,7 +25,7 @@ type Memory[K Key, T any] struct {
 	// mem is in-memory lru cache layer
 	mem *expirable.LRU[string, T]
 	// backend is pluggable layer, which usually is redis
-	backend Cache[K, T]
+	backend Simple[K, T]
 }
 
 func (s *Memory[K, T]) Get(ctx context.Context, key K) (v T, ok bool, err error) {

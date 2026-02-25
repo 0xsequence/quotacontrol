@@ -11,7 +11,7 @@ test-clean:
 	go clean -testcache
 
 test: test-clean
-	go test -run=$(TEST) $(TEST_FLAGS) -json ./... | go run github.com/mfridman/tparse --all --follow
+	go test -timeout 10s -run=$(TEST) $(TEST_FLAGS) -json ./... | go run github.com/mfridman/tparse --all --follow
 
 test-rerun: test-clean
 	go run github.com/goware/rerun/cmd/rerun -watch ./ -run 'make test'
@@ -29,4 +29,4 @@ generate:
 proto: generate
 
 lint:
-	golangci-lint run ./... --fix -c .golangci.yml
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./... --fix -c .golangci.yml
