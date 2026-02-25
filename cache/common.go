@@ -26,6 +26,6 @@ type Fetcher[K Key] func(ctx context.Context, key K) (counter int64, err error)
 // UsageCache is a cache for usage, that allows peek and spend operations.
 type UsageCache[K Key] interface {
 	Cache[K, int64]
-	Peek(ctx context.Context, fetcher Fetcher[K], key K) (counter int64, err error)
+	Ensure(ctx context.Context, fetcher Fetcher[K], key K) (counter int64, err error)
 	Spend(ctx context.Context, fetcher Fetcher[K], key K, amount, limit int64) (counter int64, spent int64, err error)
 }

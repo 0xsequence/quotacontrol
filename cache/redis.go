@@ -107,7 +107,7 @@ var (
 	ErrCacheTimeout = errors.New("cache: timeout")
 )
 
-func (r *redisUsage[K]) Peek(ctx context.Context, fetcher Fetcher[K], key K) (int64, error) {
+func (r *redisUsage[K]) Ensure(ctx context.Context, fetcher Fetcher[K], key K) (int64, error) {
 	cacheKey := key.String()
 	for i := range 3 {
 		usage, err := r.peek(ctx, cacheKey)
@@ -160,7 +160,9 @@ func (r *redisUsage[K]) peek(ctx context.Context, cacheKey string) (int64, error
 	return 0, ErrCacheReady
 }
 
-var script = redis.NewScript(`
+// spendScript is a Lua script that atomically increments the usage counter by a given amount, but not exceeding the limit.
+// It returns the new counter value and the actual amount spent (which may be less than the requested amount if it hits the limit).
+var spendScript = redis.NewScript(`
 local current = tonumber(redis.call("GET", KEYS[1]) or 0)
 local incr = tonumber(ARGV[1]) or 0
 local limit = tonumber(ARGV[2]) or 0
@@ -170,9 +172,9 @@ return {newValue, newValue - current}
 `)
 
 func (r *redisUsage[K]) Spend(ctx context.Context, fetcher Fetcher[K], key K, amount, limit int64) (counter int64, spent int64, err error) {
-	v, err := r.Peek(ctx, fetcher, key)
+	v, err := r.Ensure(ctx, fetcher, key)
 	if err != nil {
-		return 0, 0, fmt.Errorf("spend - peek: %w", err)
+		return 0, 0, fmt.Errorf("spend - ensure: %w", err)
 	}
 	if v >= limit {
 		return v, 0, nil
@@ -180,20 +182,20 @@ func (r *redisUsage[K]) Spend(ctx context.Context, fetcher Fetcher[K], key K, am
 
 	cacheKey := key.String()
 
-	res, err := script.Run(ctx, r.client, []string{cacheKey}, amount, limit).Result()
+	res, err := spendScript.Run(ctx, r.client, []string{cacheKey}, amount, limit).Result()
 	if err != nil {
 		return v, 0, fmt.Errorf("spend - script: %w", err)
 	}
-	values, ok := res.([]interface{})
+
+	values, ok := res.([]any)
 	if !ok || len(values) != 2 {
 		return 0, 0, fmt.Errorf("spend - script: unexpected result type")
 	}
-	counter, ok = values[0].(int64)
-	if !ok {
+
+	if counter, ok = values[0].(int64); !ok {
 		return 0, 0, fmt.Errorf("spend - script: unexpected result type")
 	}
-	spent, ok = values[1].(int64)
-	if !ok {
+	if spent, ok = values[1].(int64); !ok {
 		return 0, 0, fmt.Errorf("spend - script: unexpected result type")
 	}
 

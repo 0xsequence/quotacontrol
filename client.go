@@ -198,7 +198,7 @@ func (c *Client) EnsureUsage(ctx context.Context, projectID uint64, cycle *proto
 		min, max := cycle.GetStart(now), cycle.GetEnd(now)
 		return c.quotaClient.GetUsage(ctx, projectID, nil, &c.service, &min, &max)
 	}
-	return c.cache.UsageCache.Peek(ctx, fetcher, key)
+	return c.cache.UsageCache.Ensure(ctx, fetcher, key)
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {

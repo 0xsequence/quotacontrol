@@ -594,7 +594,7 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 			min, max := info.Cycle.GetStart(now), info.Cycle.GetEnd(now)
 			return s.GetUsage(ctx, projectID, nil, &svcCopy, &min, &max)
 		}
-		usage, err := s.cache.UsageCache.Peek(ctx, fetcher, cacheKey)
+		usage, err := s.cache.UsageCache.Ensure(ctx, fetcher, cacheKey)
 		if err != nil {
 			return nil, fmt.Errorf("peek usage cache: %w", err)
 		}

@@ -270,7 +270,7 @@ func TestUsageConcurrency(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				counter, err := usage.Peek(ctx, fetcher, key)
+				counter, err := usage.Ensure(ctx, fetcher, key)
 				if err != nil && !errors.Is(err, cache.ErrCacheReady) && !errors.Is(err, cache.ErrCacheWait) {
 					errs <- err
 					return
@@ -391,7 +391,7 @@ func TestUsageConcurrency(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				counter, err := usage.Peek(ctx, fetcher, key)
+				counter, err := usage.Ensure(ctx, fetcher, key)
 				if err != nil && err.Error() != "cache ready for initialization" &&
 					err.Error() != "cache wait" {
 					errs <- err
