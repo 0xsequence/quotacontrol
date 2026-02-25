@@ -5,13 +5,6 @@ import (
 	"fmt"
 )
 
-type Provider string
-
-const (
-	ProviderMemory Provider = "memory"
-	ProviderRedis  Provider = "redis"
-)
-
 // Key is a type that can be used as a key in the cache. It must implement the fmt.Stringer interface.
 type Key fmt.Stringer
 
