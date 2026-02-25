@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	cachelib "github.com/0xsequence/quotacontrol/cache"
+	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	httprateredis "github.com/go-chi/httprate-redis"
@@ -22,22 +22,13 @@ const (
 )
 
 func NewLimitCounter(svc proto.Service, cfg RedisConfig, logger *slog.Logger) httprate.LimitCounter {
-	if !cfg.Enabled {
-		return nil
-	}
-
-	prefix := redisRLPrefix
-	if s := svc.String(); s != "" {
-		prefix = fmt.Sprintf("%s%s:", redisRLPrefix, s)
-	}
-
 	return httprateredis.NewCounter(&httprateredis.Config{
 		Host:      cfg.Host,
 		Port:      cfg.Port,
 		MaxIdle:   cfg.MaxIdle,
 		MaxActive: cfg.MaxActive,
 		DBIndex:   cfg.DBIndex,
-		PrefixKey: prefix,
+		PrefixKey: fmt.Sprintf("%s%s:", redisRLPrefix, svc),
 		OnError: func(err error) {
 			if logger != nil {
 				logger.Error("redis counter error", slog.Any("error", err))
@@ -53,11 +44,11 @@ func NewLimitCounter(svc proto.Service, cfg RedisConfig, logger *slog.Logger) ht
 
 // NewCache creates a Cache backed by Redis using the new generic cache package.
 func NewCache(client *redis.Client, ttl time.Duration) Cache {
-	backend := cachelib.NewBackend(client, ttl)
+	backend := cache.NewBackend(client, ttl)
 	return Cache{
-		AccessKeys:      cachelib.NewRedisCache[cachelib.KeyAccessKey, *proto.AccessQuota](backend),
-		Projects:        cachelib.NewRedisCache[cachelib.KeyProject, *proto.AccessQuota](backend),
-		UsageCache:      cachelib.NewUsageCache[cachelib.KeyAccessKey](backend),
-		PermissionCache: cachelib.NewRedisCache[cachelib.KeyPermission, UserPermission](backend),
+		AccessKeys:      cache.NewRedisCache[cache.KeyAccessKey, *proto.AccessQuota](backend),
+		Projects:        cache.NewRedisCache[cache.KeyProject, *proto.AccessQuota](backend),
+		UsageCache:      cache.NewUsageCache[cache.KeyAccessKey](backend),
+		PermissionCache: cache.NewRedisCache[cache.KeyPermission, UserPermission](backend),
 	}
 }

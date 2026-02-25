@@ -18,6 +18,7 @@ require (
 )
 
 require (
+	github.com/0xsequence/go-libs v0.17.3 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
