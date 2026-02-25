@@ -22,8 +22,8 @@ type Backend struct {
 	ttl    time.Duration
 }
 
-func (r *Backend) Get(ctx context.Context, key string, dst any) (bool, error) {
-	data, err := r.client.Get(ctx, key).Bytes()
+func (r *Backend) Get(ctx context.Context, key Key, dst any) (bool, error) {
+	data, err := r.client.Get(ctx, key.String()).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return false, nil
@@ -36,19 +36,19 @@ func (r *Backend) Get(ctx context.Context, key string, dst any) (bool, error) {
 	return true, nil
 }
 
-func (r *Backend) Set(ctx context.Context, key string, value any) error {
+func (r *Backend) Set(ctx context.Context, key Key, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("set marshal: %w", err)
 	}
-	if err := r.client.Set(ctx, key, data, r.ttl).Err(); err != nil {
+	if err := r.client.Set(ctx, key.String(), data, r.ttl).Err(); err != nil {
 		return fmt.Errorf("set: %w", err)
 	}
 	return nil
 }
 
-func (r *Backend) Clear(ctx context.Context, key string) (bool, error) {
-	count, err := r.client.Del(ctx, key).Result()
+func (r *Backend) Clear(ctx context.Context, key Key) (bool, error) {
+	count, err := r.client.Del(ctx, key.String()).Result()
 	if err != nil {
 		return false, fmt.Errorf("clear: %w", err)
 	}
@@ -60,7 +60,7 @@ type RedisCache[K Key, T any] struct {
 }
 
 func (r RedisCache[K, T]) Get(ctx context.Context, key K) (v T, ok bool, err error) {
-	ok, err = r.Backend.Get(ctx, key.String(), &v)
+	ok, err = r.Backend.Get(ctx, key, &v)
 	if err != nil {
 		return v, false, fmt.Errorf("redis cache get: %w", err)
 	}
@@ -68,16 +68,14 @@ func (r RedisCache[K, T]) Get(ctx context.Context, key K) (v T, ok bool, err err
 }
 
 func (r RedisCache[K, T]) Set(ctx context.Context, key K, value T) (err error) {
-	cacheKey := key.String()
-	if err = r.Backend.Set(ctx, cacheKey, value); err != nil {
+	if err = r.Backend.Set(ctx, key, value); err != nil {
 		return fmt.Errorf("redis cache set: %w", err)
 	}
 	return nil
 }
 
 func (r RedisCache[K, T]) Clear(ctx context.Context, key K) (ok bool, err error) {
-	cacheKey := key.String()
-	ok, err = r.Backend.Clear(ctx, cacheKey)
+	ok, err = r.Backend.Clear(ctx, key)
 	if err != nil {
 		return false, fmt.Errorf("redis cache clear: %w", err)
 	}
@@ -100,9 +98,8 @@ var (
 )
 
 func (r *redisUsage[K]) Ensure(ctx context.Context, fetcher Fetcher[K], key K) (int64, error) {
-	cacheKey := key.String()
 	for i := range 3 {
-		usage, err := r.peek(ctx, cacheKey)
+		usage, err := r.peek(ctx, key)
 		if err != nil {
 			// Some other client is updating the cache, wait and retry.
 			if errors.Is(err, ErrCacheWait) {
@@ -129,10 +126,10 @@ func (r *redisUsage[K]) Ensure(ctx context.Context, fetcher Fetcher[K], key K) (
 	return 0, ErrCacheTimeout
 }
 
-func (r *redisUsage[K]) peek(ctx context.Context, cacheKey string) (int64, error) {
+func (r *redisUsage[K]) peek(ctx context.Context, key K) (int64, error) {
 	const SpecialValue = -1
 
-	v, err := r.client.Get(ctx, cacheKey).Int64()
+	v, err := r.client.Get(ctx, key.String()).Int64()
 	if err == nil {
 		if v == SpecialValue {
 			return 0, ErrCacheWait
@@ -142,7 +139,7 @@ func (r *redisUsage[K]) peek(ctx context.Context, cacheKey string) (int64, error
 	if !errors.Is(err, redis.Nil) {
 		return 0, fmt.Errorf("peek usage - get: %w", err)
 	}
-	ok, err := r.client.SetNX(ctx, cacheKey, SpecialValue, time.Second*2).Result()
+	ok, err := r.client.SetNX(ctx, key.String(), SpecialValue, time.Second*2).Result()
 	if err != nil {
 		return 0, fmt.Errorf("peek usage - setnx: %w", err)
 	}
@@ -172,9 +169,7 @@ func (r *redisUsage[K]) Spend(ctx context.Context, fetcher Fetcher[K], key K, am
 		return v, 0, nil
 	}
 
-	cacheKey := key.String()
-
-	res, err := spendScript.Run(ctx, r.client, []string{cacheKey}, amount, limit).Result()
+	res, err := spendScript.Run(ctx, r.client, []string{key.String()}, amount, limit).Result()
 	if err != nil {
 		return v, 0, fmt.Errorf("spend - script: %w", err)
 	}
