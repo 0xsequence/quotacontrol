@@ -73,7 +73,7 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/0xsequence/trails-api)
+        - prefix(github.com/0xsequence/quotacontrol)
       custom-order: true
       no-lex-order: false
   exclusions:
