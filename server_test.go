@@ -95,7 +95,10 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	var expectedUsage int64
 
 	t.Run("WithAccessKey", func(t *testing.T) {
-		go client.Run(context.Background())
+		go func() {
+			err := client.Run(context.Background())
+			assert.NoError(t, err)
+		}()
 
 		ctx := middleware.WithTime(context.Background(), now)
 		server.FlushNotifications()
@@ -167,7 +170,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		expectedUsage += _credits
 
 		// Denied
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			ok, headers, err := executeRequest(ctx, r, "", key, "")
 			assert.ErrorIs(t, err, proto.ErrQuotaExceeded)
 			assert.False(t, ok)
@@ -197,7 +200,10 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		err = client.ClearQuotaCacheByAccessKey(ctx, key)
 		assert.NoError(t, err)
 
-		go client.Run(context.Background())
+		go func() {
+			err := client.Run(context.Background())
+			assert.NoError(t, err)
+		}()
 
 		ctx := middleware.WithTime(context.Background(), now)
 		server.FlushNotifications()
@@ -216,7 +222,10 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 	})
 
 	t.Run("PublicRateLimit", func(t *testing.T) {
-		go client.Run(context.Background())
+		go func() {
+			err := client.Run(context.Background())
+			assert.NoError(t, err)
+		}()
 
 		ctx := middleware.WithTime(context.Background(), now)
 
@@ -239,38 +248,97 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		assert.Equal(t, expectedUsage, _credits*counter.GetValue())
 		assert.Equal(t, expectedUsage, usage)
 	})
+}
 
-	t.Run("ServerErrors", func(t *testing.T) {
-		server.FlushCache(ctx)
+func TestServerErrors(t *testing.T) {
+	cfg := newConfig()
+	server, cleanup := mock.NewServer(&cfg)
+	t.Cleanup(cleanup)
 
-		go client.Run(context.Background())
+	now := time.Now()
+	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID)
 
-		errList := []error{
-			errors.New("unexpected error"),
-			proto.ErrWebrpcBadRoute,
-			proto.ErrTimeout,
-		}
+	const _credits = middleware.DefaultPublicRate / 10
 
-		ctx := middleware.WithTime(context.Background(), now)
+	svcLimit := proto.ServiceLimit{
+		RateLimit: _credits * 100,
+		FreeWarn:  _credits * 5,
+		FreeMax:   _credits * 5,
+		OverWarn:  _credits * 7,
+		OverMax:   _credits * 10,
+	}
+	limit := proto.Limit{}
+	limit.SetSetting(Service, svcLimit)
 
-		for _, err := range errList {
-			server.FlushCache(ctx)
-			t.Run(fmt.Sprintf("GetAccessQuotaError: %s", err), func(t *testing.T) {
-				server.ErrGetAccessQuota = err
-				ok, headers, err := executeRequest(ctx, r, "", key, "")
-				assert.True(t, ok)
-				assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
-				assert.NoError(t, err)
+	ctx := context.Background()
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
+	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
+	require.NoError(t, err)
+
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+
+	counter := spendingCounter(0)
+
+	addCost := func(i int64) func(http.Handler) http.Handler {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r.WithContext(middleware.AddCost(r.Context(), int64(i))))
 			})
 		}
-		server.ErrGetAccessQuota = nil
+	}
 
-		client.Stop(context.Background())
-		usage, err := server.Store.GetAccountUsage(ctx, ProjectID, &Service, now.Add(-time.Hour), now.Add(time.Hour))
+	authOptions := authcontrol.Options{
+		JWTSecret: Secret,
+	}
+	quotaOptions := middleware.Options{}
+
+	limitCounter := quotacontrol.NewLimitCounter(client.GetService(), cfg.Redis, logger)
+
+	r := chi.NewRouter()
+	r.Use(authcontrol.VerifyToken(authOptions))
+	r.Use(authcontrol.Session(authOptions))
+	r.Use(middleware.VerifyQuota(client, quotaOptions))
+	r.Use(addCost(_credits * 2))
+	r.Use(addCost(_credits * -1))
+	r.Use(middleware.RateLimit(client, cfg.RateLimiter, limitCounter, quotaOptions))
+	r.Use(middleware.SpendUsage(client, quotaOptions))
+
+	r.Handle("/*", &counter)
+
+	var expectedUsage int64
+
+	go func() {
+		err := client.Run(context.Background())
 		assert.NoError(t, err)
-		assert.Equal(t, expectedUsage, _credits*counter.GetValue())
-		assert.Equal(t, expectedUsage, usage)
-	})
+	}()
+
+	errList := []error{
+		errors.New("unexpected error"),
+		proto.ErrWebrpcBadRoute,
+		proto.ErrTimeout,
+	}
+
+	ctx = middleware.WithTime(context.Background(), now)
+
+	for _, err := range errList {
+		server.FlushCache(ctx)
+		t.Run(fmt.Sprintf("GetAccessQuotaError: %s", err), func(t *testing.T) {
+			server.ErrGetAccessQuota = err
+			ok, headers, err := executeRequest(ctx, r, "", key, "")
+			assert.True(t, ok)
+			assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
+			assert.NoError(t, err)
+		})
+	}
+	server.ErrGetAccessQuota = nil
+
+	client.Stop(context.Background())
+	usage, err := server.Store.GetAccountUsage(ctx, ProjectID, &Service, now.Add(-time.Hour), now.Add(time.Hour))
+	assert.NoError(t, err)
+	assert.Equal(t, expectedUsage, _credits*counter.GetValue())
+	assert.Equal(t, expectedUsage, usage)
 }
 
 func TestDefaultKey(t *testing.T) {
@@ -382,7 +450,8 @@ func TestJWT(t *testing.T) {
 	}
 	limit := proto.Limit{}
 	limit.SetSetting(Service, svcLimit)
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"project": ProjectID, "account": WalletAddress})
 
@@ -394,7 +463,8 @@ func TestJWT(t *testing.T) {
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 	})
-	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: ProjectID})
+	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
 	t.Run("AuthorizedUser", func(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.NoError(t, err)
@@ -408,7 +478,8 @@ func TestJWT(t *testing.T) {
 		assert.False(t, ok)
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 	})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
+	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
+	require.NoError(t, err)
 	t.Run("AccessKeyFound", func(t *testing.T) {
 		ok, _, err := executeRequest(ctx, r, "", key, token)
 		require.NoError(t, err)
@@ -464,7 +535,8 @@ func TestJWTAccess(t *testing.T) {
 	}
 	limit := proto.Limit{}
 	limit.SetSetting(Service, svcLimit)
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"account": account, "project": ProjectID})
 
@@ -477,7 +549,8 @@ func TestJWTAccess(t *testing.T) {
 		assert.Equal(t, "", headers.Get(middleware.HeaderQuotaLimit))
 	})
 
-	server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	err = server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
 	t.Run("LowPermission", func(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
 		require.ErrorIs(t, err, proto.ErrUnauthorizedUser)
@@ -486,7 +559,8 @@ func TestJWTAccess(t *testing.T) {
 		assert.Equal(t, strconv.FormatInt(svcLimit.RateLimit, 10), headers.Get(middleware.HeaderRateLimit))
 	})
 
-	server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: ProjectID})
+	err = server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_READ_WRITE, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
 	server.FlushCache(ctx)
 	t.Run("EnoughPermission", func(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
@@ -497,7 +571,8 @@ func TestJWTAccess(t *testing.T) {
 		expectedHits++
 	})
 
-	server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_ADMIN, proto.ResourceAccess{ProjectID: ProjectID})
+	err = server.Store.SetUserPermission(ctx, ProjectID, account, proto.UserPermission_ADMIN, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
 	server.FlushCache(ctx)
 	t.Run("MorePermission", func(t *testing.T) {
 		ok, headers, err := executeRequest(ctx, r, "", "", token)
@@ -574,11 +649,16 @@ func TestSession(t *testing.T) {
 	limit := proto.Limit{}
 	limit.SetSetting(Service, svcLimit)
 
-	server.Store.AddUser(ctx, UserAddress, false)
-	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
-	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+	err := server.Store.AddUser(ctx, UserAddress, false)
+	require.NoError(t, err)
+	err = server.Store.AddProject(ctx, ProjectID, nil)
+	require.NoError(t, err)
+	err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
+	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
+	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		AccessKey string
@@ -715,11 +795,16 @@ func TestSessionDisabled(t *testing.T) {
 	limit := proto.Limit{}
 	limit.SetSetting(Service, svcLimit)
 
-	server.Store.AddUser(ctx, UserAddress, false)
-	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
-	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+	err := server.Store.AddUser(ctx, UserAddress, false)
+	require.NoError(t, err)
+	err = server.Store.AddProject(ctx, ProjectID, nil)
+	require.NoError(t, err)
+	err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
+	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
+	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		AccessKey string
@@ -842,12 +927,18 @@ func TestChainID(t *testing.T) {
 		OverMax:   10,
 	})
 
-	server.Store.AddUser(ctx, UserAddress, false)
-	server.Store.AddProject(ctx, ProjectID, nil)
-	server.Store.SetProjectInfo(ctx, ProjectID, &proto.ProjectInfo{ChainIDs: []uint64{1, 2}})
-	server.Store.SetAccessLimit(ctx, ProjectID, &limit)
-	server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
-	server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+	err := server.Store.AddUser(ctx, UserAddress, false)
+	require.NoError(t, err)
+	err = server.Store.AddProject(ctx, ProjectID, nil)
+	require.NoError(t, err)
+	err = server.Store.SetProjectInfo(ctx, ProjectID, &proto.ProjectInfo{ChainIDs: []uint64{1, 2}})
+	require.NoError(t, err)
+	err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	require.NoError(t, err)
+	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
+	require.NoError(t, err)
+	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: AccessKey, ProjectID: ProjectID})
+	require.NoError(t, err)
 
 	path := "rpc/Service/MethodAccessKey"
 
@@ -956,7 +1047,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 		{Service: svc2, Handler: r2},
 		{Service: svc3, Handler: r3},
 	} {
-		t.Run(svc.Service.String(), func(t *testing.T) {
+		t.Run(svc.String(), func(t *testing.T) {
 			cfg, ok := limit.GetSettings(svc.Service)
 			require.True(t, ok, "service limit not found for %s", svc.Service)
 			rl := int(cfg.RateLimit)
@@ -1026,7 +1117,7 @@ func (c *spendingCounter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, jwt string) (bool, http.Header, error) {
-	req, err := http.NewRequest("POST", path, nil)
+	req, err := http.NewRequest(http.MethodPost, path, nil)
 	if err != nil {
 		return false, nil, err
 	}
@@ -1043,7 +1134,9 @@ func executeRequest(ctx context.Context, handler http.Handler, path, accessKey, 
 
 	if status := rr.Result().StatusCode; status < http.StatusOK || status >= http.StatusBadRequest {
 		w := proto.WebRPCError{}
-		json.Unmarshal(rr.Body.Bytes(), &w)
+		if err := json.Unmarshal(rr.Body.Bytes(), &w); err != nil {
+			return false, rr.Header(), err
+		}
 		return false, rr.Header(), w
 	}
 

@@ -65,16 +65,16 @@ func (o *Options) ApplyDefaults() {
 	}
 }
 
-// Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendQuota methods.
+// Client is the interface that wraps the basic FetchKeyQuota, GetUsage and SpendUsage methods.
 type Client interface {
 	IsEnabled() bool
 	GetDefaultUsage() int64
 	GetService() proto.Service
 	FetchProjectQuota(ctx context.Context, projectID uint64, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
 	FetchKeyQuota(ctx context.Context, accessKey, origin string, chainIDs []uint64, now time.Time) (*proto.AccessQuota, error)
-	FetchUsage(ctx context.Context, quota *proto.AccessQuota, now time.Time) (int64, error)
+	FetchUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error)
 	CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error)
-	SpendQuota(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (bool, int64, error)
+	SpendUsage(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (bool, int64, error)
 }
 
 func VerifyChains(ctx context.Context, chainIDs ...uint64) error {
