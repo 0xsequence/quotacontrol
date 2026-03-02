@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -170,6 +171,18 @@ func (q *AccessQuota) GetProjectID() uint64 {
 	} else {
 		return q.AccessKey.ProjectID
 	}
+}
+
+func (q *AccessQuota) HasFeature(feature string) bool {
+	if q == nil || q.Info == nil {
+		return false
+	}
+	for _, f := range q.Info.Features {
+		if strings.EqualFold(f, feature) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Cycle) GetStart(now time.Time) time.Time {
