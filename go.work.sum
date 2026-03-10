@@ -19,6 +19,8 @@ github.com/0xsequence/authcontrol v0.3.8 h1:iAqKLtuKbfW2IJ8N0pBYCbS8HsOawMxtvKxl
 github.com/0xsequence/authcontrol v0.3.8/go.mod h1:X7e89OY2PBhELWjvXs9Gz2H1eBYpl0YGE/0bd107eLw=
 github.com/0xsequence/authcontrol v0.4.9 h1:eielxyUOCUttPKayrh9d3nGSO7inaARleWMUnMPKrUs=
 github.com/0xsequence/authcontrol v0.4.9/go.mod h1:Yec+rjPmbmXtGJoZCk6I9Liq50blsbnlFEJgbagrEt0=
+github.com/0xsequence/authcontrol v0.4.13 h1:PS/bvukgCRq3fVWFk9Mb9YMl//8GMbYxhf00QlwWUkY=
+github.com/0xsequence/authcontrol v0.4.13/go.mod h1:Yec+rjPmbmXtGJoZCk6I9Liq50blsbnlFEJgbagrEt0=
 github.com/0xsequence/go-ethauth v0.14.0/go.mod h1:AX6zc0LNxzRHXW+i+IPyuLLgj+AdLl7KjLNRXB/10r0=
 github.com/4meepo/tagalign v1.4.3 h1:Bnu7jGWwbfpAie2vyl63Zup5KuRv21olsPIha53BJr8=
 github.com/4meepo/tagalign v1.4.3/go.mod h1:00WwRjiuSbrRJnSVeGWPLp2epS5Q/l4UEy0apLLS37c=

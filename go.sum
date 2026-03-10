@@ -1,5 +1,5 @@
-github.com/0xsequence/authcontrol v0.4.12 h1:8ZskSBavBlKbMNVRjVhMaYzi7FZ7GClrc3FVMLD/kNg=
-github.com/0xsequence/authcontrol v0.4.12/go.mod h1:Yec+rjPmbmXtGJoZCk6I9Liq50blsbnlFEJgbagrEt0=
+github.com/0xsequence/authcontrol v0.4.13 h1:PS/bvukgCRq3fVWFk9Mb9YMl//8GMbYxhf00QlwWUkY=
+github.com/0xsequence/authcontrol v0.4.13/go.mod h1:Yec+rjPmbmXtGJoZCk6I9Liq50blsbnlFEJgbagrEt0=
 github.com/0xsequence/go-libs v0.17.3 h1:bGnaP/DgKlTwOSL+0vkMO64bX71GsID8592G3IrM/0E=
 github.com/0xsequence/go-libs v0.17.3/go.mod h1:W2w+hsHAivXR2ME5ojKUE34A3LuKvsJELglvLlbZeHw=
 github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 h1:uvdUDbHQHO85qeSydJtItA4T55Pw6BtAejd0APRJOCE=
@@ -102,6 +102,8 @@ github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+github.com/test-go/testify v1.1.4 h1:Tf9lntrKUMHiXQ07qBScBTSA0dhYQlu83hswqelv1iE=
+github.com/test-go/testify v1.1.4/go.mod h1:rH7cfJo/47vWGdi4GPj16x3/t1xGOj2YxzmNQzk2ghU=
 github.com/yuin/gopher-lua v1.1.1 h1:kYKnWBjvbNP4XLT3+bPEwAXJx262OhaHDWDVOPjL46M=
 github.com/yuin/gopher-lua v1.1.1/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=

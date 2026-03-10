@@ -5,7 +5,8 @@ go 1.23.12
 // replace github.com/0xsequence/authcontrol => ../authcontrol
 
 require (
-	github.com/0xsequence/authcontrol v0.4.12
+	github.com/0xsequence/authcontrol v0.4.13
+	github.com/0xsequence/go-libs v0.17.3
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/getsentry/sentry-go v0.36.2
 	github.com/go-chi/chi/v5 v5.2.2
@@ -18,7 +19,6 @@ require (
 )
 
 require (
-	github.com/0xsequence/go-libs v0.17.3 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
