@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -114,34 +115,34 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 }
 
 // GetSpendResult calculates the spend result and event type based on the service limit and usage
-func (l *ServiceLimit) GetSpendResult(v, total int64) (int64, *EventType) {
+func (l *ServiceLimit) GetSpendResult(spent, total int64) (int64, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert
-		if _, ok := getOverThreshold(v, total, l.FreeWarn); ok {
-			return v, Ptr(EventType_FreeWarn)
+		if _, ok := getOverThreshold(spent, total, l.FreeWarn); ok {
+			return spent, Ptr(EventType_FreeWarn)
 		}
 		// normal valid usage
-		return v, nil
+		return spent, nil
 	}
 
 	// overage usage
 	if total < l.OverMax {
 		// threshold of included limit
-		if _, ok := getOverThreshold(v, total, l.FreeMax); ok {
-			return v, Ptr(EventType_FreeMax)
+		if _, ok := getOverThreshold(spent, total, l.FreeMax); ok {
+			return spent, Ptr(EventType_FreeMax)
 		}
 		// threshold of overage alert
-		if _, ok := getOverThreshold(v, total, l.OverWarn); ok {
-			return v, Ptr(EventType_OverWarn)
+		if _, ok := getOverThreshold(spent, total, l.OverWarn); ok {
+			return spent, Ptr(EventType_OverWarn)
 		}
 		// normal overage usage
-		return v, nil
+		return spent, nil
 	}
 
 	// limited usage
-	if over, ok := getOverThreshold(v, total, l.OverMax); ok {
-		return v - over, Ptr(EventType_OverMax)
+	if over, ok := getOverThreshold(spent, total, l.OverMax); ok {
+		return spent - over, Ptr(EventType_OverMax)
 	}
 	return 0, nil
 }
@@ -170,6 +171,18 @@ func (q *AccessQuota) GetProjectID() uint64 {
 	} else {
 		return q.AccessKey.ProjectID
 	}
+}
+
+func (q *AccessQuota) HasFeature(feature string) bool {
+	if q == nil || q.Info == nil {
+		return false
+	}
+	for _, f := range q.Info.Features {
+		if strings.EqualFold(f, feature) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Cycle) GetStart(now time.Time) time.Time {

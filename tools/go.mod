@@ -8,6 +8,7 @@ require (
 	github.com/goware/rerun v0.1.0
 	github.com/mfridman/tparse v0.18.0
 	github.com/webrpc/webrpc v0.31.1
+	
 )
 
 require (

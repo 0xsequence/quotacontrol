@@ -164,16 +164,3 @@ service QuotaControl
   # User permissions for a projectId
   - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: ResourceAccess)
 
-  # Deprecated: use GetUsage
-  - GetAccountUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
-  # Deprecated: use GetUsage
-  - GetAccessKeyUsage(accessKey: string, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
-  # Deprecated: use GetUsage
-  - GetAsyncUsage(projectID: uint64, service?: Service, from?: timestamp, to?: timestamp) => (usage: AccessUsage)
-  # Deprecated: use SyncProjectUsage
-  - UpdateProjectUsage(service: Service, now: timestamp, usage: map<uint64,AccessUsage>) => (ok: map<uint64,bool>)
-  # Deprecated: use SyncAccessKeyUsage
-  - UpdateKeyUsage(service: Service, now: timestamp, usage: map<string,AccessUsage>) => (ok: map<string,bool>)
-  # Deprecated: client handles caching directly now, this will be removed in the future
-  - PrepareUsage(projectID: uint64, service?: Service, cycle: Cycle, now: timestamp) => (ok: bool)
-

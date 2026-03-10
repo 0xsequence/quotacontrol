@@ -1,0 +1,10 @@
+*.gen.go linguist-generated
+*.gen.ts linguist-generated
+*.gen.yaml linguist-generated
+go.sum linguist-generated
+go.work.sum linguist-generated
+vendor/** linguist-vendored
+
+# translations
+webapp/src/locales/**/messages.js linguist-generated
+webapp/src/locales/**/messages.po linguist-generated
