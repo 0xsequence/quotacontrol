@@ -50,9 +50,9 @@ func EnsureUsage(client Client, o Options) func(next http.Handler) http.Handler 
 				return
 			}
 
-			limit, ok := quota.Limit.GetSettings(client.GetService())
+			limit, ok := GetServiceLimit(ctx)
 			if !ok {
-				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found for %s", client.GetService().GetName()))
+				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found"))
 				return
 			}
 
@@ -99,9 +99,9 @@ func SpendUsage(client Client, o Options) func(next http.Handler) http.Handler {
 			}
 			w.Header().Set(HeaderQuotaCost, strconv.FormatInt(cu, 10))
 
-			limit, ok := quota.Limit.GetSettings(client.GetService())
+			limit, ok := GetServiceLimit(ctx)
 			if !ok {
-				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found for %s", client.GetService().GetName()))
+				o.ErrHandler(r, w, proto.ErrAborted.WithCausef("verify quota: service limit not found"))
 				return
 			}
 

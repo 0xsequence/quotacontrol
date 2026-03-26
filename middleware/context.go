@@ -19,10 +19,11 @@ func (k *contextKey) String() string {
 }
 
 var (
-	ctxKeyAccessQuota = &contextKey{"AccessQuota"}
-	ctxKeyCost        = &contextKey{"Cost"}
-	ctxKeyTime        = &contextKey{"Time"}
-	ctxKeySpending    = &contextKey{"Spending"}
+	ctxKeyAccessQuota  = &contextKey{"AccessQuota"}
+	ctxKeyServiceLimit = &contextKey{"ServiceLimit"}
+	ctxKeyCost         = &contextKey{"Cost"}
+	ctxKeyTime         = &contextKey{"Time"}
+	ctxKeySpending     = &contextKey{"Spending"}
 )
 
 // withAccessQuota adds the quota to the context.
@@ -33,6 +34,16 @@ func withAccessQuota(ctx context.Context, quota *proto.AccessQuota) context.Cont
 // GetAccessQuota returns the access quota from the context.
 func GetAccessQuota(ctx context.Context) (*proto.AccessQuota, bool) {
 	v, ok := ctx.Value(ctxKeyAccessQuota).(*proto.AccessQuota)
+	return v, ok
+}
+
+func withServiceLimit(ctx context.Context, limit *proto.Limit) context.Context {
+	return context.WithValue(ctx, ctxKeyServiceLimit, limit)
+}
+
+// GetServiceLimit returns the per-service limit from the context.
+func GetServiceLimit(ctx context.Context) (*proto.Limit, bool) {
+	v, ok := ctx.Value(ctxKeyServiceLimit).(*proto.Limit)
 	return v, ok
 }
 

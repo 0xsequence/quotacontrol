@@ -118,6 +118,7 @@ func VerifyQuota(client Client, o Options) func(next http.Handler) http.Handler 
 				}
 
 				ctx = withAccessQuota(ctx, quota)
+				ctx = withServiceLimit(ctx, &cfg)
 				w.Header().Set(HeaderQuotaLimit, strconv.FormatInt(cfg.FreeMax, 10))
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
