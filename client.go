@@ -15,7 +15,6 @@ import (
 	"github.com/0xsequence/go-libs/xlog"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -65,12 +64,7 @@ type Client struct {
 
 	service proto.Service
 	usage   *usage.Tracker
-	cache   struct {
-		AccessKeys  cache.Simple[KeyAccessKey, *proto.AccessQuota]
-		Projects    cache.Simple[KeyProject, *proto.AccessQuota]
-		Permissions cache.Simple[KeyPermission, UserPermission]
-		Usage       cache.Usage[KeyUsage]
-	}
+	cache Cache
 	quotaClient proto.QuotaControlClient
 
 	running int32
