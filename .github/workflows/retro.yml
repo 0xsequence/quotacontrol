@@ -24,7 +24,10 @@ jobs:
       run: cd tests && make server-start
 
     - name: Run latest client tests
-      run: cd tests && make client-run
+      run: cd tests && make client-run-latest
+
+    - name: Run v0.23 client tests
+      run: cd tests && make client-run-v0.23
 
     - name: Stop server
       run: cd tests && make server-stop
