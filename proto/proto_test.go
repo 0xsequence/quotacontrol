@@ -74,7 +74,7 @@ func TestGetSpendResult(t *testing.T) {
 	const (
 		_CU = 5
 	)
-	limit := proto.ServiceLimit{
+	limit := proto.Limit{
 		FreeWarn: 10,
 		FreeMax:  20,
 		OverWarn: 30,
@@ -231,16 +231,16 @@ func TestGetSpendResult(t *testing.T) {
 }
 
 func TestValidateLimit(t *testing.T) {
-	assert.NoError(t, proto.ServiceLimit{RateLimit: 1, FreeMax: 2, OverMax: 2}.Validate())
-	assert.NoError(t, proto.ServiceLimit{RateLimit: 1, FreeMax: 2, OverMax: 4}.Validate())
-	assert.NoError(t, proto.ServiceLimit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 3, OverMax: 4}.Validate())
+	assert.NoError(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 2}.Validate())
+	assert.NoError(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 4}.Validate())
+	assert.NoError(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 3, OverMax: 4}.Validate())
 
-	assert.Error(t, proto.ServiceLimit{}.Validate())
-	assert.Error(t, proto.ServiceLimit{RateLimit: 1}.Validate())
-	assert.Error(t, proto.ServiceLimit{RateLimit: 1, FreeMax: 1}.Validate())
-	assert.Error(t, proto.ServiceLimit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
-	assert.Error(t, proto.ServiceLimit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
-	assert.Error(t, proto.ServiceLimit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
+	assert.Error(t, proto.Limit{}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 1}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeMax: 2, OverMax: 1}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 3, FreeMax: 2, OverMax: 4}.Validate())
+	assert.Error(t, proto.Limit{RateLimit: 1, FreeWarn: 1, FreeMax: 2, OverWarn: 5, OverMax: 4}.Validate())
 }
 
 func TestServiceName(t *testing.T) {
@@ -271,7 +271,7 @@ func TestUnknownService(t *testing.T) {
     "overMax": 72057694037927940
 }
 	`
-	var l proto.Limit
+	var l proto.LegacyLimit
 	if err := json.Unmarshal([]byte(input), &l); err != nil {
 		t.Fatal(err)
 	}
