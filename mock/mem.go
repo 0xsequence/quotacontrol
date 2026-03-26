@@ -75,7 +75,7 @@ func (m *MemoryStore) GetLimit(ctx context.Context, projectID uint64, service pr
 	limits, ok := m.limits[projectID]
 	m.Unlock()
 	if !ok {
-		return nil, proto.ErrAccessKeyNotFound
+		return nil, proto.ErrInvalidService
 	}
 	limit, ok := limits[service.String()]
 	if !ok {
