@@ -528,6 +528,9 @@ func (s server) ClearServiceLimitCache(ctx context.Context, projectID uint64, se
 }
 
 func (s server) ClearAccessKeyCache(ctx context.Context, accessKey string) (bool, error) {
+	if _, err := s.cache.AccessKeys.Clear(ctx, KeyAccessKey{AccessKey: accessKey}); err != nil {
+		return false, fmt.Errorf("clear access key cache: %w", err)
+	}
 	if _, err := s.cache.Keys.Clear(ctx, KeyAccessKeyV2{AccessKey: accessKey}); err != nil {
 		return false, fmt.Errorf("clear access key cache: %w", err)
 	}
