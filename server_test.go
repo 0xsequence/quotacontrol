@@ -38,7 +38,7 @@ var (
 
 func TestMiddlewareUseAccessKey(t *testing.T) {
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	now := time.Now()
@@ -248,7 +248,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 func TestServerErrors(t *testing.T) {
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	now := time.Now()
@@ -336,7 +336,7 @@ func TestServerErrors(t *testing.T) {
 
 func TestDefaultKey(t *testing.T) {
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	now := time.Now()
@@ -414,7 +414,7 @@ func TestJWT(t *testing.T) {
 	counter := spendingCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
@@ -497,7 +497,7 @@ func TestJWTAccess(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
@@ -606,7 +606,7 @@ func TestSession(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
@@ -749,7 +749,7 @@ func TestSessionDisabled(t *testing.T) {
 
 	cfg := newConfig()
 	cfg.Enabled = false
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
@@ -876,7 +876,7 @@ func TestChainID(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	logger := slog.Default()
@@ -945,7 +945,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 	counter := hitCounter(0)
 
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	authOptions := authcontrol.Options{
@@ -1044,7 +1044,7 @@ func TestPerServiceRateLimit(t *testing.T) {
 
 func TestV2Endpoints(t *testing.T) {
 	cfg := newConfig()
-	server, cleanup := mock.NewServer(&cfg)
+	server, cleanup := mock.NewServer(&cfg, nil)
 	t.Cleanup(cleanup)
 
 	ctx := context.Background()
