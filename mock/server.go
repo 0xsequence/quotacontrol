@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"github.com/0xsequence/go-libs/xlog"
-	"github.com/0xsequence/quotacontrol"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/alicebob/miniredis/v2"
 	redisclient "github.com/redis/go-redis/v9"
+
+	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 type Event struct {

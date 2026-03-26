@@ -15,14 +15,15 @@ import (
 
 	"github.com/0xsequence/authcontrol"
 	authproto "github.com/0xsequence/authcontrol/proto"
-	"github.com/0xsequence/quotacontrol"
-	"github.com/0xsequence/quotacontrol/middleware"
-	"github.com/0xsequence/quotacontrol/mock"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/middleware"
+	"github.com/0xsequence/quotacontrol/mock"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 var (

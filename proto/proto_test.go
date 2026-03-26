@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/goware/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 func TestAccessKeyValidateOrigin(t *testing.T) {

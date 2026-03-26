@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/0xsequence/authcontrol"
+
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/proto"
 )

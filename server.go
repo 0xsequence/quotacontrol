@@ -9,10 +9,11 @@ import (
 
 	"github.com/0xsequence/authcontrol"
 	"github.com/0xsequence/go-libs/xlog"
-	"github.com/0xsequence/quotacontrol/middleware"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	"github.com/goware/validation"
+
+	"github.com/0xsequence/quotacontrol/middleware"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 type ProjectInfoStore interface {

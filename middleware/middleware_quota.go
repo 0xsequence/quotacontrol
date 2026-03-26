@@ -6,8 +6,9 @@ import (
 
 	"github.com/0xsequence/authcontrol"
 	authproto "github.com/0xsequence/authcontrol/proto"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/getsentry/sentry-go"
+
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 // VerifyQuota middleware fetches and verify the quota from access key or project ID.

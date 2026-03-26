@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/0xsequence/go-libs/xlog"
-	"github.com/0xsequence/quotacontrol/cache"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/httprate"
 	httprateredis "github.com/go-chi/httprate-redis"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/0xsequence/quotacontrol/cache"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 type Cache struct {
