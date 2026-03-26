@@ -175,6 +175,62 @@ func (c *Client) FetchUsage(ctx context.Context, projectID uint64, cycle *proto.
 	return c.cache.Usage.Ensure(ctx, c.getFetcher(), newKeyUsage(projectID, c.service, cycle, now))
 }
 
+func (c *Client) FetchProjectInfo(ctx context.Context, projectID uint64) (*proto.ProjectInfo, error) {
+	info, ok, err := c.cache.ProjectInfo.Get(ctx, KeyProjectInfo{ProjectID: projectID})
+	if err != nil {
+		c.logger.Warn("project info cache error", xlog.Error(err))
+	}
+	if ok {
+		return info, nil
+	}
+	info, err = c.quotaClient.GetProjectInfo(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.cache.ProjectInfo.Set(ctx, KeyProjectInfo{ProjectID: projectID}, info); err != nil {
+		c.logger.Warn("failed to cache project info", xlog.Error(err))
+	}
+	return info, nil
+}
+
+func (c *Client) FetchServiceLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
+	key := KeyLimit{ProjectID: projectID, Service: c.service}
+	limit, ok, err := c.cache.Limits.Get(ctx, key)
+	if err != nil {
+		c.logger.Warn("limit cache error", xlog.Error(err))
+	}
+	if ok {
+		return limit, nil
+	}
+	limit, err = c.quotaClient.GetServiceLimit(ctx, projectID, c.service)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.cache.Limits.Set(ctx, key, limit); err != nil {
+		c.logger.Warn("failed to cache service limit", xlog.Error(err))
+	}
+	return limit, nil
+}
+
+func (c *Client) FetchAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+	key := KeyAccessKeyV2{AccessKey: accessKey}
+	ak, ok, err := c.cache.Keys.Get(ctx, key)
+	if err != nil {
+		c.logger.Warn("access key cache error", xlog.Error(err))
+	}
+	if ok {
+		return ak, nil
+	}
+	ak, err = c.quotaClient.GetAccessKey(ctx, accessKey)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.cache.Keys.Set(ctx, key, ak); err != nil {
+		c.logger.Warn("failed to cache access key", xlog.Error(err))
+	}
+	return ak, nil
+}
+
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {
 	if sessionType, _ := authcontrol.GetSessionType(ctx); sessionType >= authproto.SessionType_Admin {
 		return true, nil
