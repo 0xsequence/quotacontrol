@@ -21,7 +21,7 @@ type ProjectInfoStore interface {
 }
 
 type LimitStore interface {
-	GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.LegacyLimit, error)
+	GetLimit(ctx context.Context, projectID uint64, service proto.Service) (*proto.Limit, error)
 }
 
 type AccessKeyStore interface {
@@ -144,6 +144,22 @@ func (s server) ClearUsage(ctx context.Context, projectID uint64, service *proto
 	return true, nil
 }
 
+func (s server) getLegacyLimit(ctx context.Context, projectID uint64) (*proto.LegacyLimit, error) {
+	limit := proto.LegacyLimit{ServiceLimit: map[string]proto.Limit{}}
+	for i := range proto.Service_name {
+		svc := proto.Service(i)
+		svcLimit, err := s.store.GetLimit(ctx, projectID, svc)
+		if err != nil {
+			if errors.Is(err, proto.ErrInvalidService) {
+				continue
+			}
+			return nil, fmt.Errorf("get %s limit: %w", svc.GetName(), err)
+		}
+		limit.SetSetting(svc, *svcLimit)
+	}
+	return &limit, nil
+}
+
 func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.Time) (*proto.AccessQuota, error) {
 	info, err := s.store.GetProjectInfo(ctx, projectID, now)
 	if err != nil {
@@ -153,7 +169,7 @@ func (s server) GetProjectQuota(ctx context.Context, projectID uint64, now time.
 		return nil, fmt.Errorf("get project info: %w", err)
 	}
 
-	limit, err := s.store.GetAccessLimit(ctx, projectID, info.Cycle)
+	limit, err := s.getLegacyLimit(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
@@ -188,7 +204,7 @@ func (s server) GetAccessQuota(ctx context.Context, accessKey string, now time.T
 		}
 		return nil, fmt.Errorf("get access cycle: %w", err)
 	}
-	limit, err := s.store.GetAccessLimit(ctx, access.ProjectID, info.Cycle)
+	limit, err := s.getLegacyLimit(ctx, access.ProjectID)
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}
@@ -516,7 +532,7 @@ func (s server) GetProjectStatus(ctx context.Context, projectID uint64) (*proto.
 		return nil, fmt.Errorf("get project info: %w", err)
 	}
 
-	limit, err := s.store.GetAccessLimit(ctx, projectID, info.Cycle)
+	limit, err := s.getLegacyLimit(ctx, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("get access limit: %w", err)
 	}

@@ -15,7 +15,7 @@ import (
 func NewMemoryStore() *MemoryStore {
 	ms := MemoryStore{
 		infos:       map[uint64]proto.ProjectInfo{},
-		limits:      map[uint64]proto.LegacyLimit{},
+		limits:      map[uint64]map[string]proto.Limit{},
 		accessKeys:  map[string]proto.AccessKey{},
 		usage:       map[proto.Service]usage.Record{},
 		users:       map[string]bool{},
@@ -37,7 +37,7 @@ type userPermission struct {
 // MemoryStore is an in-memory store, used for testing and prototype.
 type MemoryStore struct {
 	sync.Mutex
-	limits      map[uint64]proto.LegacyLimit
+	limits      map[uint64]map[string]proto.Limit
 	infos       map[uint64]proto.ProjectInfo
 	accessKeys  map[string]proto.AccessKey
 	usage       map[proto.Service]usage.Record
@@ -57,22 +57,29 @@ func (m *MemoryStore) SetProjectInfo(ctx context.Context, projectID uint64, info
 	return nil
 }
 
-func (m *MemoryStore) SetAccessLimit(ctx context.Context, projectID uint64, config *proto.LegacyLimit) error {
+func (m *MemoryStore) SetLimit(ctx context.Context, projectID uint64, service proto.Service, limit proto.Limit) error {
 	m.Lock()
 	if _, ok := m.infos[projectID]; !ok {
 		m.infos[projectID] = proto.ProjectInfo{ID: projectID}
 	}
-	m.limits[projectID] = *config
+	if m.limits[projectID] == nil {
+		m.limits[projectID] = make(map[string]proto.Limit)
+	}
+	m.limits[projectID][service.String()] = limit
 	m.Unlock()
 	return nil
 }
 
-func (m *MemoryStore) GetAccessLimit(ctx context.Context, projectID uint64, cycle *proto.Cycle) (*proto.LegacyLimit, error) {
+func (m *MemoryStore) GetLimit(ctx context.Context, projectID uint64, service proto.Service) (*proto.Limit, error) {
 	m.Lock()
-	limit, ok := m.limits[projectID]
+	limits, ok := m.limits[projectID]
 	m.Unlock()
 	if !ok {
 		return nil, proto.ErrAccessKeyNotFound
+	}
+	limit, ok := limits[service.String()]
+	if !ok {
+		return nil, proto.ErrInvalidService
 	}
 	return &limit, nil
 }
