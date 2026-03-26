@@ -164,3 +164,10 @@ service QuotaControl
   # User permissions for a projectId
   - GetUserPermission(projectId: uint64, userId: string) => (permission: UserPermission, resourceAccess: ResourceAccess)
 
+  # Quota V2
+  - GetProjectInfo(projectId: uint64) => (info: ProjectInfo)
+  - ClearProjectInfoCache(projectID: uint64) => (ok: bool)
+  - GetServiceLimit(projectId: uint64, service: Service) => (limit: Limit)
+  - ClearServiceLimitCache(projectID: uint64, service: Service) => (ok: bool)
+  - ClearAccessKeyCache(accessKey: string) => (ok: bool)
+

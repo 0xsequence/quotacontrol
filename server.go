@@ -505,6 +505,26 @@ func (s server) GetUserPermission(ctx context.Context, projectID uint64, userID 
 	return perm, access, nil
 }
 
+func (s server) GetProjectInfo(ctx context.Context, projectID uint64) (*proto.ProjectInfo, error) {
+	return s.store.GetProjectInfo(ctx, projectID, middleware.GetTime(ctx))
+}
+
+func (s server) ClearProjectInfoCache(ctx context.Context, projectID uint64) (bool, error) {
+	return true, nil
+}
+
+func (s server) GetServiceLimit(ctx context.Context, projectID uint64, service proto.Service) (*proto.Limit, error) {
+	return s.store.GetLimit(ctx, projectID, service)
+}
+
+func (s server) ClearServiceLimitCache(ctx context.Context, projectID uint64, service proto.Service) (bool, error) {
+	return true, nil
+}
+
+func (s server) ClearAccessKeyCache(ctx context.Context, accessKey string) (bool, error) {
+	return true, nil
+}
+
 func (s server) updateAccessKey(ctx context.Context, k *proto.AccessKey) (*proto.AccessKey, error) {
 	k, err := s.store.UpdateAccessKey(ctx, k)
 	if err != nil {
