@@ -30,15 +30,15 @@ struct LegacyLimit
   # The service-specific limits for the project.
   - serviceLimit: map<string,Limit>
     + go.field.type = map[string]Limit
-  # Deprecated: use base.rateLimit instead
+  # Deprecated: use serviceLimit[service].rateLimit instead
   - rateLimit: int64
-  # Deprecated: use base.freeWarn instead
+  # Deprecated: use serviceLimit[service].freeWarn instead
   - freeWarn: int64
-  # Deprecated: use base.freeMax instead
+  # Deprecated: use serviceLimit[service].freeMax instead
   - freeMax: int64
-  # Deprecated: use base.overWarn instead
+  # Deprecated: use serviceLimit[service].overWarn instead
   - overWarn: int64
-  # Deprecated: use base.overMax instead
+  # Deprecated: use serviceLimit[service].overMax instead
   - overMax: int64
 
 # Limit defines the limits for a service.
