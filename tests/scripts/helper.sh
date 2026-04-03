@@ -34,7 +34,13 @@ server-start() {
   echo -e "${BLUE}QuotaControl:${NC} starting server on port ${PORT}..."
   mkdir -p "$(dirname "${LOGS}")"
   PID=$(bin/server > $LOGS 2>&1 & echo $!)
-  sleep 0.5
+  for i in $(seq 1 20); do
+    if curl -sf "http://localhost:${PORT}/rpc/QuotaControl/Ping" -d '{}' -H 'Content-Type: application/json' > /dev/null 2>&1; then
+      break
+    fi
+    [ $i -eq 20 ] && { echo -e "${RED}QuotaControl:${NC} server did not become ready.\n\n$LOGS\n---"; cat $LOGS; exit 1; }
+    sleep 0.5
+  done
   server-status $PID || { echo -e "${RED}QuotaControl:${NC} failed to start server.\n\n$LOGS\n---"; cat $LOGS; exit 1; }
   echo "${PID}" > "${PID_FILE}"
 }
