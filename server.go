@@ -89,6 +89,12 @@ func (s server) GetUsage(ctx context.Context, projectID uint64, accessKey *strin
 		return 0, err
 	}
 
+	if from == nil {
+		from = &time.Time{}
+	}
+	if to == nil {
+		to = &time.Time{}
+	}
 	info.Cycle.SetInterval(from, to, middleware.GetTime(ctx))
 
 	switch {
