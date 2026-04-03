@@ -33,7 +33,7 @@ server-start() {
   server-status "" quiet && { echo -e "${RED}QuotaControl:${NC} server is already running."; exit 1; }
   echo -e "${BLUE}QuotaControl:${NC} starting server on port ${PORT}..."
   mkdir -p "$(dirname "${LOGS}")"
-  PID=$(bin/server > $LOGS 2>&1 & echo $!)
+  PID=$(nohup bin/server > $LOGS 2>&1 & echo $!)
   for i in $(seq 1 20); do
     if curl -sf "http://localhost:${PORT}/rpc/QuotaControl/Ping" -d '{}' -H 'Content-Type: application/json' > /dev/null 2>&1; then
       break
