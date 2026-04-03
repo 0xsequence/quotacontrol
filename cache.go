@@ -19,6 +19,10 @@ type Cache struct {
 	Projects    cache.Simple[KeyProject, *proto.AccessQuota]
 	Permissions cache.Simple[KeyPermission, UserPermission]
 	Usage       cache.Usage[KeyUsage]
+
+	ProjectInfo cache.Simple[KeyProjectInfo, *proto.ProjectInfo]
+	Limits      cache.Simple[KeyLimit, *proto.Limit]
+	Keys        cache.Simple[KeyAccessKeyV2, *proto.AccessKey]
 }
 
 // NewCache creates a Cache backed by Redis using the new generic cache package.
@@ -29,11 +33,17 @@ func NewCache(client *redis.Client, ttl time.Duration, lruSize int, lruExpiratio
 		Projects:    cache.RedisCache[KeyProject, *proto.AccessQuota]{Backend: backend},
 		Permissions: cache.RedisCache[KeyPermission, UserPermission]{Backend: backend},
 		Usage:       cache.NewUsageCache[KeyUsage](backend),
+		ProjectInfo: cache.RedisCache[KeyProjectInfo, *proto.ProjectInfo]{Backend: backend},
+		Limits:      cache.RedisCache[KeyLimit, *proto.Limit]{Backend: backend},
+		Keys:        cache.RedisCache[KeyAccessKeyV2, *proto.AccessKey]{Backend: backend},
 	}
 	if lruSize > 0 {
 		c.AccessKeys = cache.NewMemory(c.AccessKeys, lruSize, lruExpiration)
 		c.Projects = cache.NewMemory(c.Projects, lruSize, lruExpiration)
 		c.Permissions = cache.NewMemory(c.Permissions, lruSize, lruExpiration)
+		c.ProjectInfo = cache.NewMemory(c.ProjectInfo, lruSize, lruExpiration)
+		c.Limits = cache.NewMemory(c.Limits, lruSize, lruExpiration)
+		c.Keys = cache.NewMemory(c.Keys, lruSize, lruExpiration)
 	}
 	return c
 }

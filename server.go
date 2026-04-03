@@ -510,6 +510,9 @@ func (s server) GetProjectInfo(ctx context.Context, projectID uint64) (*proto.Pr
 }
 
 func (s server) ClearProjectInfoCache(ctx context.Context, projectID uint64) (bool, error) {
+	if _, err := s.cache.ProjectInfo.Clear(ctx, KeyProjectInfo{ProjectID: projectID}); err != nil {
+		return false, fmt.Errorf("clear project info cache: %w", err)
+	}
 	return true, nil
 }
 
@@ -518,10 +521,19 @@ func (s server) GetServiceLimit(ctx context.Context, projectID uint64, service p
 }
 
 func (s server) ClearServiceLimitCache(ctx context.Context, projectID uint64, service proto.Service) (bool, error) {
+	if _, err := s.cache.Limits.Clear(ctx, KeyLimit{ProjectID: projectID, Service: service}); err != nil {
+		return false, fmt.Errorf("clear service limit cache: %w", err)
+	}
 	return true, nil
 }
 
 func (s server) ClearAccessKeyCache(ctx context.Context, accessKey string) (bool, error) {
+	if _, err := s.cache.AccessKeys.Clear(ctx, KeyAccessKey{AccessKey: accessKey}); err != nil {
+		return false, fmt.Errorf("clear access key cache: %w", err)
+	}
+	if _, err := s.cache.Keys.Clear(ctx, KeyAccessKeyV2{AccessKey: accessKey}); err != nil {
+		return false, fmt.Errorf("clear access key cache: %w", err)
+	}
 	return true, nil
 }
 
@@ -533,6 +545,9 @@ func (s server) updateAccessKey(ctx context.Context, k *proto.AccessKey) (*proto
 
 	if _, err := s.cache.AccessKeys.Clear(ctx, KeyAccessKey{AccessKey: k.AccessKey}); err != nil {
 		s.log.Error("delete access quota from cache", xlog.Error(err))
+	}
+	if _, err := s.cache.Keys.Clear(ctx, KeyAccessKeyV2{AccessKey: k.AccessKey}); err != nil {
+		s.log.Error("delete access key from cache", xlog.Error(err))
 	}
 
 	return k, nil

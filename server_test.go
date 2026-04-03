@@ -1042,6 +1042,142 @@ func TestPerServiceRateLimit(t *testing.T) {
 
 }
 
+func TestV2Endpoints(t *testing.T) {
+	cfg := newConfig()
+	server, cleanup := mock.NewServer(&cfg)
+	t.Cleanup(cleanup)
+
+	ctx := context.Background()
+	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(ctx, 1), ProjectID)
+
+	svcLimit := proto.Limit{RateLimit: 100, FreeWarn: 500, FreeMax: 500, OverWarn: 700, OverMax: 1000}
+	require.NoError(t, server.Store.SetLimit(ctx, ProjectID, Service, svcLimit))
+	require.NoError(t, server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID}))
+
+	logger := slog.Default()
+	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+
+	now := time.Now()
+
+	t.Run("FetchProjectInfo", func(t *testing.T) {
+		info, err := client.FetchProjectInfo(ctx, ProjectID)
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, ProjectID, info.ID)
+
+		// second call should hit cache
+		info2, err := client.FetchProjectInfo(ctx, ProjectID)
+		require.NoError(t, err)
+		assert.Equal(t, info.ID, info2.ID)
+	})
+
+	t.Run("FetchServiceLimit", func(t *testing.T) {
+		limit, err := client.FetchServiceLimit(ctx, ProjectID)
+		require.NoError(t, err)
+		require.NotNil(t, limit)
+		assert.Equal(t, svcLimit.FreeMax, limit.FreeMax)
+		assert.Equal(t, svcLimit.OverMax, limit.OverMax)
+		assert.Equal(t, svcLimit.RateLimit, limit.RateLimit)
+
+		// second call should hit cache
+		limit2, err := client.FetchServiceLimit(ctx, ProjectID)
+		require.NoError(t, err)
+		assert.Equal(t, limit.FreeMax, limit2.FreeMax)
+	})
+
+	t.Run("FetchAccessKey", func(t *testing.T) {
+		ak, err := client.FetchAccessKey(ctx, key)
+		require.NoError(t, err)
+		require.NotNil(t, ak)
+		assert.Equal(t, key, ak.AccessKey)
+		assert.Equal(t, ProjectID, ak.ProjectID)
+		assert.True(t, ak.Active)
+
+		// second call should hit cache
+		ak2, err := client.FetchAccessKey(ctx, key)
+		require.NoError(t, err)
+		assert.Equal(t, ak.AccessKey, ak2.AccessKey)
+	})
+
+	t.Run("V2MatchesLegacy", func(t *testing.T) {
+		server.FlushCache(ctx)
+
+		// legacy path
+		quota, err := client.FetchKeyQuota(ctx, key, "", nil, now)
+		require.NoError(t, err)
+		require.NotNil(t, quota)
+
+		server.FlushCache(ctx)
+
+		// v2 paths
+		info, err := client.FetchProjectInfo(ctx, ProjectID)
+		require.NoError(t, err)
+		assert.Equal(t, quota.Info.ID, info.ID)
+
+		limit, err := client.FetchServiceLimit(ctx, ProjectID)
+		require.NoError(t, err)
+		legacyCfg, ok := quota.Limit.GetSettings(Service)
+		require.True(t, ok)
+		assert.Equal(t, legacyCfg.FreeMax, limit.FreeMax)
+		assert.Equal(t, legacyCfg.OverMax, limit.OverMax)
+		assert.Equal(t, legacyCfg.RateLimit, limit.RateLimit)
+
+		ak, err := client.FetchAccessKey(ctx, key)
+		require.NoError(t, err)
+		assert.Equal(t, quota.AccessKey.AccessKey, ak.AccessKey)
+		assert.Equal(t, quota.AccessKey.ProjectID, ak.ProjectID)
+	})
+
+	t.Run("CacheInvalidation", func(t *testing.T) {
+		server.FlushCache(ctx)
+
+		// populate v2 caches
+		_, err := client.FetchProjectInfo(ctx, ProjectID)
+		require.NoError(t, err)
+		_, err = client.FetchServiceLimit(ctx, ProjectID)
+		require.NoError(t, err)
+
+		// update the limit in the store
+		newLimit := proto.Limit{RateLimit: 200, FreeWarn: 1000, FreeMax: 1000, OverWarn: 1400, OverMax: 2000}
+		require.NoError(t, server.Store.SetLimit(ctx, ProjectID, Service, newLimit))
+
+		// cached value should still be old
+		limit, err := client.FetchServiceLimit(ctx, ProjectID)
+		require.NoError(t, err)
+		assert.Equal(t, svcLimit.FreeMax, limit.FreeMax)
+
+		// flush redis cache, forcing re-fetch from server
+		server.FlushCache(ctx)
+
+		// now should get fresh data
+		limit, err = client.FetchServiceLimit(ctx, ProjectID)
+		require.NoError(t, err)
+		assert.Equal(t, newLimit.FreeMax, limit.FreeMax)
+
+		// restore original limit
+		require.NoError(t, server.Store.SetLimit(ctx, ProjectID, Service, svcLimit))
+	})
+
+	t.Run("ClearLegacyCache", func(t *testing.T) {
+		server.FlushCache(ctx)
+
+		// populate legacy cache
+		_, err := client.FetchKeyQuota(ctx, key, "", nil, now)
+		require.NoError(t, err)
+
+		// clear legacy project cache
+		require.NoError(t, client.ClearQuotaCacheByProjectID(ctx, ProjectID))
+
+		// clear legacy access key cache
+		require.NoError(t, client.ClearQuotaCacheByAccessKey(ctx, key))
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		_, err := client.FetchAccessKey(ctx, "nonexistent")
+		assert.ErrorIs(t, err, proto.ErrAccessKeyNotFound)
+	})
+}
+
 func newConfig() quotacontrol.Config {
 	return quotacontrol.Config{
 		Enabled:    true,

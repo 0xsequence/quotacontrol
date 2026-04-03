@@ -75,6 +75,9 @@ type Client interface {
 	FetchUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error)
 	CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error)
 	SpendUsage(ctx context.Context, quota *proto.AccessQuota, cost int64, now time.Time) (bool, int64, error)
+	FetchProjectInfo(ctx context.Context, projectID uint64) (*proto.ProjectInfo, error)
+	FetchServiceLimit(ctx context.Context, projectID uint64) (*proto.Limit, error)
+	FetchAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error)
 }
 
 func VerifyChains(ctx context.Context, chainIDs ...uint64) error {

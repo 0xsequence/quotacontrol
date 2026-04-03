@@ -15,7 +15,6 @@ import (
 	"github.com/0xsequence/go-libs/xlog"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
@@ -65,12 +64,7 @@ type Client struct {
 
 	service proto.Service
 	usage   *usage.Tracker
-	cache   struct {
-		AccessKeys  cache.Simple[KeyAccessKey, *proto.AccessQuota]
-		Projects    cache.Simple[KeyProject, *proto.AccessQuota]
-		Permissions cache.Simple[KeyPermission, UserPermission]
-		Usage       cache.Usage[KeyUsage]
-	}
+	cache Cache
 	quotaClient proto.QuotaControlClient
 
 	running int32
@@ -179,6 +173,62 @@ func (c *Client) getFetcher() func(ctx context.Context, key KeyUsage) (int64, er
 // FetchUsage fetches the current usage of project from cache or from the quota server.
 func (c *Client) FetchUsage(ctx context.Context, projectID uint64, cycle *proto.Cycle, now time.Time) (int64, error) {
 	return c.cache.Usage.Ensure(ctx, c.getFetcher(), newKeyUsage(projectID, c.service, cycle, now))
+}
+
+func (c *Client) FetchProjectInfo(ctx context.Context, projectID uint64) (*proto.ProjectInfo, error) {
+	info, ok, err := c.cache.ProjectInfo.Get(ctx, KeyProjectInfo{ProjectID: projectID})
+	if err != nil {
+		c.logger.Warn("project info cache error", xlog.Error(err))
+	}
+	if ok {
+		return info, nil
+	}
+	info, err = c.quotaClient.GetProjectInfo(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.cache.ProjectInfo.Set(ctx, KeyProjectInfo{ProjectID: projectID}, info); err != nil {
+		c.logger.Warn("failed to cache project info", xlog.Error(err))
+	}
+	return info, nil
+}
+
+func (c *Client) FetchServiceLimit(ctx context.Context, projectID uint64) (*proto.Limit, error) {
+	key := KeyLimit{ProjectID: projectID, Service: c.service}
+	limit, ok, err := c.cache.Limits.Get(ctx, key)
+	if err != nil {
+		c.logger.Warn("limit cache error", xlog.Error(err))
+	}
+	if ok {
+		return limit, nil
+	}
+	limit, err = c.quotaClient.GetServiceLimit(ctx, projectID, c.service)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.cache.Limits.Set(ctx, key, limit); err != nil {
+		c.logger.Warn("failed to cache service limit", xlog.Error(err))
+	}
+	return limit, nil
+}
+
+func (c *Client) FetchAccessKey(ctx context.Context, accessKey string) (*proto.AccessKey, error) {
+	key := KeyAccessKeyV2{AccessKey: accessKey}
+	ak, ok, err := c.cache.Keys.Get(ctx, key)
+	if err != nil {
+		c.logger.Warn("access key cache error", xlog.Error(err))
+	}
+	if ok {
+		return ak, nil
+	}
+	ak, err = c.quotaClient.GetAccessKey(ctx, accessKey)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.cache.Keys.Set(ctx, key, ak); err != nil {
+		c.logger.Warn("failed to cache access key", xlog.Error(err))
+	}
+	return ak, nil
 }
 
 func (c *Client) CheckPermission(ctx context.Context, projectID uint64, minPermission proto.UserPermission) (bool, error) {

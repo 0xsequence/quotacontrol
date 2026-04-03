@@ -62,6 +62,27 @@ func (k KeyPermission) String() string {
 	return fmt.Sprintf("perm:%s:%d:%s", Version, k.ProjectID, k.UserID)
 }
 
+type KeyProjectInfo struct{ ProjectID uint64 }
+
+func (k KeyProjectInfo) String() string {
+	return fmt.Sprintf("info:%s:%d", Version, k.ProjectID)
+}
+
+type KeyLimit struct {
+	ProjectID uint64
+	Service   proto.Service
+}
+
+func (k KeyLimit) String() string {
+	return fmt.Sprintf("limit:%s:%d:%s", Version, k.ProjectID, k.Service.String())
+}
+
+type KeyAccessKeyV2 struct{ AccessKey string }
+
+func (k KeyAccessKeyV2) String() string {
+	return fmt.Sprintf("ak:%s:%s", Version, k.AccessKey)
+}
+
 type UserPermission struct {
 	UserPermission proto.UserPermission  `json:"userPerm"`
 	ResourceAccess *proto.ResourceAccess `json:"resourceAccess"`
