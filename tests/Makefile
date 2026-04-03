@@ -22,4 +22,4 @@ client-run-latest:
 	@CONFIG_FILE=$(CONFIG_FILE) GOWORK=off go run ./client/latest/client.go
 
 client-run-v0.23:
-	@CONFIG_FILE=$(CONFIG_FILE) GOWORK=off go run ./client/v0.23/client.go
+	@cd client/v0.23 && CONFIG_FILE=../../$(CONFIG_FILE) GOWORK=off go run .
