@@ -60,7 +60,7 @@ func (m *MemoryStore) SetProjectInfo(ctx context.Context, projectID uint64, info
 func (m *MemoryStore) SetLimit(ctx context.Context, projectID uint64, service proto.Service, limit proto.Limit) error {
 	m.Lock()
 	if _, ok := m.infos[projectID]; !ok {
-		m.infos[projectID] = proto.ProjectInfo{ID: projectID}
+		m.infos[projectID] = proto.ProjectInfo{ID: projectID, Cycle: &proto.Cycle{}}
 	}
 	if m.limits[projectID] == nil {
 		m.limits[projectID] = make(map[string]proto.Limit)

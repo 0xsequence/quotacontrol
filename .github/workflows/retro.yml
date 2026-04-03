@@ -26,11 +26,22 @@ jobs:
     - name: Run server
       run: cd tests && make server-start
 
+    - name: Check server is alive
+      run: |
+        cd tests
+        make server-status
+        echo "--- server logs ---"
+        cat logs/server.log || true
+
     - name: Run latest client tests
       run: cd tests && make client-run-latest
 
     - name: Run v0.23 client tests
       run: cd tests && make client-run-v0.23
+
+    - name: Server logs
+      run: cat tests/logs/server.log || true
+      if: always()
 
     - name: Stop server
       run: cd tests && make server-stop
