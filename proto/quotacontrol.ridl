@@ -25,24 +25,24 @@ struct ProjectInfo
     + go.field.name = ChainIDs
   - features: []string
 
-# LimitSettings is used to define the limits for a project.
-struct Limit
+# LegacyLimit is used to define the limits for a project. Deprecated.
+struct LegacyLimit
   # The service-specific limits for the project.
-  - serviceLimit: map<string,ServiceLimit>
-    + go.field.type = map[string]ServiceLimit
-  # Deprecated: use base.rateLimit instead
+  - serviceLimit: map<string,Limit>
+    + go.field.type = map[string]Limit
+  # Deprecated: use serviceLimit[service].rateLimit instead
   - rateLimit: int64
-  # Deprecated: use base.freeWarn instead
+  # Deprecated: use serviceLimit[service].freeWarn instead
   - freeWarn: int64
-  # Deprecated: use base.freeMax instead
+  # Deprecated: use serviceLimit[service].freeMax instead
   - freeMax: int64
-  # Deprecated: use base.overWarn instead
+  # Deprecated: use serviceLimit[service].overWarn instead
   - overWarn: int64
-  # Deprecated: use base.overMax instead
+  # Deprecated: use serviceLimit[service].overMax instead
   - overMax: int64
 
-# ServiceLimit defines the limits for a service.
-struct ServiceLimit
+# Limit defines the limits for a service.
+struct Limit
   # Requests/minute limit for the project.
   - rateLimit: int64
   # Free usage warning threshold.
@@ -94,7 +94,7 @@ struct AccessQuota
   - info: ProjectInfo
   # deprecated: use info.cycle
   - cycle: Cycle
-  - limit: Limit
+  - limit: LegacyLimit
   - accessKey: AccessKey
 
 enum EventType: uint16
@@ -112,7 +112,7 @@ enum UserPermission: uint16
 struct ProjectStatus
   - projectId: uint64
     + go.field.name = ProjectID
-  - limit: Limit
+  - limit: LegacyLimit
   - usageCounter: map<string,int64>
   - rateLimitCounter: map<string,int64>
 

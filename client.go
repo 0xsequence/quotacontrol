@@ -13,11 +13,12 @@ import (
 	"github.com/0xsequence/authcontrol"
 	authproto "github.com/0xsequence/authcontrol/proto"
 	"github.com/0xsequence/go-libs/xlog"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/0xsequence/quotacontrol/internal/usage"
 	"github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
-	"github.com/redis/go-redis/v9"
 )
 
 type Notifier interface {

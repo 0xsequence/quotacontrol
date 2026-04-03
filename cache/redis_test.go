@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/quotacontrol/cache"
 )
 
 // newRedisTestConfig creates a miniredis instance and returns it with a cache config

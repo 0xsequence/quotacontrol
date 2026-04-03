@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/0xsequence/quotacontrol/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/quotacontrol/cache"
 )
 
 // TestLRU tests LRU cache operations

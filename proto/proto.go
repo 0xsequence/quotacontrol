@@ -56,7 +56,7 @@ func (i *ProjectInfo) ValidateChains(chainIDs []uint64) error {
 }
 
 // Validate checks if the limit configuration is valid.
-func (l Limit) Validate() error {
+func (l LegacyLimit) Validate() error {
 	for name, cfg := range l.ServiceLimit {
 		svc, ok := ParseService(name)
 		if !ok {
@@ -70,21 +70,21 @@ func (l Limit) Validate() error {
 }
 
 // GetSettings returns the service limit settings for the given service.
-func (l Limit) GetSettings(svc Service) (ServiceLimit, bool) {
+func (l LegacyLimit) GetSettings(svc Service) (Limit, bool) {
 	settings, ok := l.ServiceLimit[svc.String()]
 	return settings, ok
 }
 
 // SetSetting sets the service limit settings for the given service.
-func (l *Limit) SetSetting(svc Service, limits ServiceLimit) {
+func (l *LegacyLimit) SetSetting(svc Service, limits Limit) {
 	if l.ServiceLimit == nil {
-		l.ServiceLimit = make(map[string]ServiceLimit)
+		l.ServiceLimit = make(map[string]Limit)
 	}
 	l.ServiceLimit[svc.String()] = limits
 }
 
 // Validate checks if the service limit configuration is valid.
-func (l ServiceLimit) Validate() error {
+func (l Limit) Validate() error {
 	if l.RateLimit < 1 {
 		return fmt.Errorf("rateLimit must be > 0")
 	}
@@ -115,7 +115,7 @@ func getOverThreshold(v, total, threshold int64) (int64, bool) {
 }
 
 // GetSpendResult calculates the spend result and event type based on the service limit and usage
-func (l *ServiceLimit) GetSpendResult(spent, total int64) (int64, *EventType) {
+func (l *Limit) GetSpendResult(spent, total int64) (int64, *EventType) {
 	// valid usage
 	if total < l.FreeMax {
 		// threshold of included alert

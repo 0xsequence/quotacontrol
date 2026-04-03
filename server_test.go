@@ -15,14 +15,15 @@ import (
 
 	"github.com/0xsequence/authcontrol"
 	authproto "github.com/0xsequence/authcontrol/proto"
-	"github.com/0xsequence/quotacontrol"
-	"github.com/0xsequence/quotacontrol/middleware"
-	"github.com/0xsequence/quotacontrol/mock"
-	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httprate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/0xsequence/quotacontrol"
+	"github.com/0xsequence/quotacontrol/middleware"
+	"github.com/0xsequence/quotacontrol/mock"
+	"github.com/0xsequence/quotacontrol/proto"
 )
 
 var (
@@ -45,14 +46,14 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 
 	const _credits = middleware.DefaultPublicRate / 10
 
-	svcLimit := proto.ServiceLimit{
+	svcLimit := proto.Limit{
 		RateLimit: _credits * 100,
 		FreeWarn:  _credits * 5,
 		FreeMax:   _credits * 5,
 		OverWarn:  _credits * 7,
 		OverMax:   _credits * 10,
 	}
-	limit := proto.Limit{}
+	limit := proto.LegacyLimit{}
 	limit.SetSetting(Service, svcLimit)
 
 	ctx := context.Background()
@@ -193,7 +194,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		svcLimit.RateLimit = _credits * 100
 		svcLimit.OverWarn = _credits * 5
 		svcLimit.OverMax = _credits * 110
-		limit := proto.Limit{}
+		limit := proto.LegacyLimit{}
 		limit.SetSetting(Service, svcLimit)
 		err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 		assert.NoError(t, err)
@@ -260,14 +261,14 @@ func TestServerErrors(t *testing.T) {
 
 	const _credits = middleware.DefaultPublicRate / 10
 
-	svcLimit := proto.ServiceLimit{
+	svcLimit := proto.Limit{
 		RateLimit: _credits * 100,
 		FreeWarn:  _credits * 5,
 		FreeMax:   _credits * 5,
 		OverWarn:  _credits * 7,
 		OverMax:   _credits * 10,
 	}
-	limit := proto.Limit{}
+	limit := proto.LegacyLimit{}
 	limit.SetSetting(Service, svcLimit)
 
 	ctx := context.Background()
@@ -352,7 +353,7 @@ func TestDefaultKey(t *testing.T) {
 		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
-	limit := proto.Limit{
+	limit := proto.LegacyLimit{
 		RateLimit: 100,
 		FreeMax:   5,
 		OverWarn:  7,
@@ -441,14 +442,14 @@ func TestJWT(t *testing.T) {
 
 	ctx := context.Background()
 
-	svcLimit := proto.ServiceLimit{
+	svcLimit := proto.Limit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{}
+	limit := proto.LegacyLimit{}
 	limit.SetSetting(Service, svcLimit)
 	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	require.NoError(t, err)
@@ -526,14 +527,14 @@ func TestJWTAccess(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	svcLimit := proto.ServiceLimit{
+	svcLimit := proto.Limit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{}
+	limit := proto.LegacyLimit{}
 	limit.SetSetting(Service, svcLimit)
 	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
 	require.NoError(t, err)
@@ -639,14 +640,14 @@ func TestSession(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	svcLimit := proto.ServiceLimit{
+	svcLimit := proto.Limit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{}
+	limit := proto.LegacyLimit{}
 	limit.SetSetting(Service, svcLimit)
 
 	err := server.Store.AddUser(ctx, UserAddress, false)
@@ -785,14 +786,14 @@ func TestSessionDisabled(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	svcLimit := proto.ServiceLimit{
+	svcLimit := proto.Limit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.Limit{}
+	limit := proto.LegacyLimit{}
 	limit.SetSetting(Service, svcLimit)
 
 	err := server.Store.AddUser(ctx, UserAddress, false)
@@ -918,8 +919,8 @@ func TestChainID(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.Limit{}
-	limit.SetSetting(Service, proto.ServiceLimit{
+	limit := proto.LegacyLimit{}
+	limit.SetSetting(Service, proto.Limit{
 		RateLimit: 100,
 		FreeWarn:  5,
 		FreeMax:   5,
@@ -1008,22 +1009,22 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r2 := newRouter(client2, rlCounter2)
 	r3 := newRouter(client3, rlCounter3)
 
-	limit := proto.Limit{}
-	limit.SetSetting(svc1, proto.ServiceLimit{
+	limit := proto.LegacyLimit{}
+	limit.SetSetting(svc1, proto.Limit{
 		RateLimit: 10,
 		FreeWarn:  100,
 		FreeMax:   100,
 		OverWarn:  100,
 		OverMax:   100,
 	})
-	limit.SetSetting(svc2, proto.ServiceLimit{
+	limit.SetSetting(svc2, proto.Limit{
 		RateLimit: 20,
 		FreeWarn:  200,
 		FreeMax:   200,
 		OverWarn:  200,
 		OverMax:   200,
 	})
-	limit.SetSetting(svc3, proto.ServiceLimit{
+	limit.SetSetting(svc3, proto.Limit{
 		RateLimit: 30,
 		FreeWarn:  300,
 		FreeMax:   300,
