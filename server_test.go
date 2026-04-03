@@ -53,11 +53,8 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		OverWarn:  _credits * 7,
 		OverMax:   _credits * 10,
 	}
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, svcLimit)
-
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -194,9 +191,7 @@ func TestMiddlewareUseAccessKey(t *testing.T) {
 		svcLimit.RateLimit = _credits * 100
 		svcLimit.OverWarn = _credits * 5
 		svcLimit.OverMax = _credits * 110
-		limit := proto.LegacyLimit{}
-		limit.SetSetting(Service, svcLimit)
-		err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+		err = server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 		assert.NoError(t, err)
 		err = client.ClearQuotaCacheByAccessKey(ctx, key)
 		assert.NoError(t, err)
@@ -268,11 +263,8 @@ func TestServerErrors(t *testing.T) {
 		OverWarn:  _credits * 7,
 		OverMax:   _credits * 10,
 	}
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, svcLimit)
-
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -353,7 +345,7 @@ func TestDefaultKey(t *testing.T) {
 		authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID),
 	}
 
-	limit := proto.LegacyLimit{
+	svcLimit := proto.Limit{
 		RateLimit: 100,
 		FreeMax:   5,
 		OverWarn:  7,
@@ -367,7 +359,7 @@ func TestDefaultKey(t *testing.T) {
 
 	// populate store
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: keys[0], ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -375,15 +367,18 @@ func TestDefaultKey(t *testing.T) {
 	logger := slog.Default()
 	client := quotacontrol.NewClient(logger, Service, cfg, nil)
 
+	expectedLimit := proto.LegacyLimit{}
+	expectedLimit.SetSetting(Service, svcLimit)
+
 	quota, err := client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, access, quota.AccessKey)
-	assert.Equal(t, &limit, quota.Limit)
+	assert.Equal(t, &expectedLimit, quota.Limit)
 
 	quota, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, access, quota.AccessKey)
-	assert.Equal(t, &limit, quota.Limit)
+	assert.Equal(t, &expectedLimit, quota.Limit)
 
 	access, err = server.UpdateAccessKey(ctx, keys[0], proto.Ptr("new name"), nil, nil, []proto.Service{Service})
 	require.NoError(t, err)
@@ -391,7 +386,7 @@ func TestDefaultKey(t *testing.T) {
 	quota, err = client.FetchKeyQuota(ctx, keys[0], "", nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, access, quota.AccessKey)
-	assert.Equal(t, &limit, quota.Limit)
+	assert.Equal(t, &expectedLimit, quota.Limit)
 
 	ok, err := server.DisableAccessKey(ctx, keys[0])
 	require.ErrorIs(t, err, proto.ErrAtLeastOneKey)
@@ -449,9 +444,7 @@ func TestJWT(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, svcLimit)
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"project": ProjectID, "account": WalletAddress})
@@ -534,9 +527,7 @@ func TestJWTAccess(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, svcLimit)
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 
 	token := authcontrol.S2SToken(Secret, map[string]any{"account": account, "project": ProjectID})
@@ -647,14 +638,11 @@ func TestSession(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, svcLimit)
-
 	err := server.Store.AddUser(ctx, UserAddress, false)
 	require.NoError(t, err)
 	err = server.Store.AddProject(ctx, ProjectID, nil)
 	require.NoError(t, err)
-	err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err = server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -793,14 +781,11 @@ func TestSessionDisabled(t *testing.T) {
 		OverWarn:  7,
 		OverMax:   10,
 	}
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, svcLimit)
-
 	err := server.Store.AddUser(ctx, UserAddress, false)
 	require.NoError(t, err)
 	err = server.Store.AddProject(ctx, ProjectID, nil)
 	require.NoError(t, err)
-	err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err = server.Store.SetLimit(ctx, ProjectID, Service, svcLimit)
 	require.NoError(t, err)
 	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -919,22 +904,13 @@ func TestChainID(t *testing.T) {
 	r.Handle("/*", &counter)
 
 	ctx := context.Background()
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(Service, proto.Limit{
-		RateLimit: 100,
-		FreeWarn:  5,
-		FreeMax:   5,
-		OverWarn:  7,
-		OverMax:   10,
-	})
-
 	err := server.Store.AddUser(ctx, UserAddress, false)
 	require.NoError(t, err)
 	err = server.Store.AddProject(ctx, ProjectID, nil)
 	require.NoError(t, err)
 	err = server.Store.SetProjectInfo(ctx, ProjectID, &proto.ProjectInfo{ChainIDs: []uint64{1, 2}})
 	require.NoError(t, err)
-	err = server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err = server.Store.SetLimit(ctx, ProjectID, Service, proto.Limit{RateLimit: 100, FreeWarn: 5, FreeMax: 5, OverWarn: 7, OverMax: 10})
 	require.NoError(t, err)
 	err = server.Store.SetUserPermission(ctx, ProjectID, WalletAddress, proto.UserPermission_READ, proto.ResourceAccess{ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -1009,33 +985,14 @@ func TestPerServiceRateLimit(t *testing.T) {
 	r2 := newRouter(client2, rlCounter2)
 	r3 := newRouter(client3, rlCounter3)
 
-	limit := proto.LegacyLimit{}
-	limit.SetSetting(svc1, proto.Limit{
-		RateLimit: 10,
-		FreeWarn:  100,
-		FreeMax:   100,
-		OverWarn:  100,
-		OverMax:   100,
-	})
-	limit.SetSetting(svc2, proto.Limit{
-		RateLimit: 20,
-		FreeWarn:  200,
-		FreeMax:   200,
-		OverWarn:  200,
-		OverMax:   200,
-	})
-	limit.SetSetting(svc3, proto.Limit{
-		RateLimit: 30,
-		FreeWarn:  300,
-		FreeMax:   300,
-		OverWarn:  300,
-		OverMax:   300,
-	})
-
 	key := authcontrol.GenerateAccessKey(authcontrol.WithVersion(context.Background(), 1), ProjectID)
 
 	ctx := context.Background()
-	err := server.Store.SetAccessLimit(ctx, ProjectID, &limit)
+	err := server.Store.SetLimit(ctx, ProjectID, svc1, proto.Limit{RateLimit: 10, FreeWarn: 100, FreeMax: 100, OverWarn: 100, OverMax: 100})
+	require.NoError(t, err)
+	err = server.Store.SetLimit(ctx, ProjectID, svc2, proto.Limit{RateLimit: 20, FreeWarn: 200, FreeMax: 200, OverWarn: 200, OverMax: 200})
+	require.NoError(t, err)
+	err = server.Store.SetLimit(ctx, ProjectID, svc3, proto.Limit{RateLimit: 30, FreeWarn: 300, FreeMax: 300, OverWarn: 300, OverMax: 300})
 	require.NoError(t, err)
 	err = server.Store.InsertAccessKey(ctx, &proto.AccessKey{Active: true, AccessKey: key, ProjectID: ProjectID})
 	require.NoError(t, err)
@@ -1049,8 +1006,8 @@ func TestPerServiceRateLimit(t *testing.T) {
 		{Service: svc3, Handler: r3},
 	} {
 		t.Run(svc.String(), func(t *testing.T) {
-			cfg, ok := limit.GetSettings(svc.Service)
-			require.True(t, ok, "service limit not found for %s", svc.Service)
+			cfg, err := server.Store.GetLimit(ctx, ProjectID, svc.Service)
+			require.NoError(t, err)
 			rl := int(cfg.RateLimit)
 			for i := 0; i < (rl * 2); i++ {
 				ok, headers, err := executeRequest(ctx, svc.Handler, "/rpc/Service/MethodAccessKey", key, "")
