@@ -8,16 +8,20 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/0xsequence/quotacontrol"
 	"github.com/0xsequence/quotacontrol/mock"
 	"github.com/0xsequence/quotacontrol/tests/common"
-	"github.com/redis/go-redis/v9"
 )
 
 var logger = slog.Default().With(slog.String("app", "quotacontrol-server"))
 
 func main() {
-	cfg := common.LoadConfig[quotacontrol.Config](logger)
+	cfg, err := common.LoadConfig[quotacontrol.Config]()
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()

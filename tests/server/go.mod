@@ -4,6 +4,7 @@ go 1.23.12
 
 require (
 	github.com/0xsequence/quotacontrol v0.0.0
+	github.com/0xsequence/quotacontrol/tests/common v0.0.0
 	github.com/redis/go-redis/v9 v9.7.3
 )
 
@@ -51,3 +52,5 @@ require (
 )
 
 replace github.com/0xsequence/quotacontrol => ../..
+
+replace github.com/0xsequence/quotacontrol/tests/common => ../common

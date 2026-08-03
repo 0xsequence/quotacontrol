@@ -5,8 +5,11 @@ go 1.23.12
 require (
 	github.com/0xsequence/authcontrol v0.4.13
 	github.com/0xsequence/quotacontrol v0.23.3
+	github.com/0xsequence/quotacontrol/tests/common v0.0.0
 	github.com/go-chi/chi/v5 v5.2.2
 )
+
+replace github.com/0xsequence/quotacontrol/tests/common => ../../common
 
 require (
 	github.com/0xsequence/go-libs v0.17.3 // indirect

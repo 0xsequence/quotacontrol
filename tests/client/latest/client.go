@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"github.com/0xsequence/authcontrol"
+	"github.com/go-chi/chi/v5"
+
 	"github.com/0xsequence/quotacontrol"
 	qcmw "github.com/0xsequence/quotacontrol/middleware"
 	"github.com/0xsequence/quotacontrol/proto"
 	"github.com/0xsequence/quotacontrol/tests/common"
-	"github.com/go-chi/chi/v5"
 )
 
 var logger = slog.Default().With(slog.String("app", "quotacontrol-client"), slog.String("version", "latest"))
@@ -27,17 +28,22 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
 
-	cfg := common.LoadConfig[quotacontrol.Config](logger)
+	cfg, err := common.LoadConfig[quotacontrol.Config]()
+	if err != nil {
+		logger.Error("failed to load config", slog.Any("err", err))
+		os.Exit(1)
+	}
+	httpClient := common.NewHTTPClient(cfg.AuthToken)
 
 	// Set up a per-service limit via the mock server HTTP endpoint
 	limit := proto.Limit{RateLimit: 100, FreeMax: 1000, OverMax: 1000}
-	if err := common.SetProjectLimit(ctx, cfg.URL, ProjectID, Service, limit); err != nil {
+	if err := common.SetProjectLimit(ctx, httpClient, cfg.URL, ProjectID, Service.String(), limit); err != nil {
 		logger.Error("failed to set project limit", slog.Any("err", err))
 		os.Exit(1)
 	}
 	logger.Info("set project limit", slog.Uint64("projectID", ProjectID))
 
-	baseClient := proto.NewQuotaControlClient(cfg.URL, http.DefaultClient)
+	baseClient := proto.NewQuotaControlClient(cfg.URL, httpClient)
 
 	accessKey, err := baseClient.CreateAccessKey(ctx, ProjectID, "Test Key", false, nil, nil)
 	if err != nil {
@@ -46,7 +52,7 @@ func main() {
 	}
 	logger.Info("created access key", slog.String("accessKey", accessKey.AccessKey))
 
-	client := quotacontrol.NewClient(logger, Service, cfg, nil)
+	client := quotacontrol.NewClient(logger, Service, cfg, baseClient)
 	go func() {
 		if err := client.Run(ctx); err != nil {
 			logger.Error("client run error", slog.Any("err", err))
@@ -76,8 +82,12 @@ func main() {
 	// Test legacy middleware path: send requests through the full chain
 	count := int64(10)
 	logger.Info("testing legacy middleware path", slog.Int64("count", count))
+	headers := http.Header{
+		"X-Real-IP":                 {"127.0.0.1"},
+		authcontrol.HeaderAccessKey: {accessKey.AccessKey},
+	}
 	for i := int64(0); i < count; i++ {
-		status, _, reqErr := common.ExecuteRequest(ctx, r, "/", accessKey.AccessKey, "")
+		status, _, reqErr := common.ExecuteRequest(ctx, r, "/", headers)
 		if reqErr != nil {
 			logger.Error("request error", slog.Int64("request", i+1), slog.Any("err", reqErr))
 			os.Exit(1)
@@ -110,7 +120,7 @@ func main() {
 	// Test V2 paths: individual fetch methods
 	logger.Info("testing V2 fetch paths")
 
-	client2 := quotacontrol.NewClient(logger, Service, cfg, nil)
+	client2 := quotacontrol.NewClient(logger, Service, cfg, baseClient)
 
 	info, err := client2.FetchProjectInfo(ctx, ProjectID)
 	if err != nil {
