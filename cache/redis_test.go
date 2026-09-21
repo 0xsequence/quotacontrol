@@ -486,3 +486,69 @@ func TestUsageConcurrency(t *testing.T) {
 		assert.LessOrEqual(t, finalCounter, limit, "final counter must not exceed limit")
 	})
 }
+
+func TestUsageCounterDurability(t *testing.T) {
+	mr, client := newRedisTestConfig(t)
+	defer mr.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+
+	const key = UsageKey(50116)
+	const limit = int64(1_000_000_000_000)
+
+	t.Run("spend keeps the key expiry", func(t *testing.T) {
+		usage := cache.NewUsageCache[UsageKey](cache.NewBackend(client, 10*time.Second))
+		_, err := usage.Clear(ctx, key)
+		require.NoError(t, err)
+
+		fetcher := func(ctx context.Context, key UsageKey) (int64, error) { return 10, nil }
+		_, _, err = usage.Spend(ctx, fetcher, key, 1, limit)
+		require.NoError(t, err)
+
+		ttl, err := client.TTL(ctx, key.String()).Result()
+		require.NoError(t, err)
+		assert.Positive(t, ttl, "spend dropped the expiry, so a bad counter can never be evicted")
+	})
+
+	t.Run("caps at the limit without dropping the expiry", func(t *testing.T) {
+		usage := cache.NewUsageCache[UsageKey](cache.NewBackend(client, 10*time.Second))
+		_, err := usage.Clear(ctx, key)
+		require.NoError(t, err)
+
+		fetcher := func(ctx context.Context, key UsageKey) (int64, error) { return 95, nil }
+		counter, spent, err := usage.Spend(ctx, fetcher, key, 10, 100)
+		require.NoError(t, err)
+		assert.Equal(t, int64(100), counter)
+		assert.Equal(t, int64(5), spent)
+
+		stored, err := client.Get(ctx, key.String()).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "100", stored)
+
+		ttl, err := client.TTL(ctx, key.String()).Result()
+		require.NoError(t, err)
+		assert.Positive(t, ttl, "the capped write dropped the expiry")
+	})
+
+	// Redis 7.2.0 to 7.2.4 stores any multiple of 1e8 handed to a script as a lua number in
+	// scientific notation (redis/redis#13113), which ParseInt cannot read back.
+	t.Run("reseeds a counter it cannot read", func(t *testing.T) {
+		for _, stored := range []string{"1e+8", "1.2e+9", "not-a-number"} {
+			t.Run(stored, func(t *testing.T) {
+				usage := cache.NewUsageCache[UsageKey](cache.NewBackend(client, 10*time.Second))
+				require.NoError(t, client.Set(ctx, key.String(), stored, 10*time.Second).Err())
+
+				fetcher := func(ctx context.Context, key UsageKey) (int64, error) { return 500, nil }
+				counter, spent, err := usage.Spend(ctx, fetcher, key, 1, limit)
+				require.NoError(t, err)
+				assert.Equal(t, int64(501), counter)
+				assert.Equal(t, int64(1), spent)
+
+				ttl, err := client.TTL(ctx, key.String()).Result()
+				require.NoError(t, err)
+				assert.Positive(t, ttl)
+			})
+		}
+	})
+}
