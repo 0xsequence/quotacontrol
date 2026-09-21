@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -137,7 +138,14 @@ func (r *redisUsage[K]) peek(ctx context.Context, key K) (int64, error) {
 		return v, nil
 	}
 	if !errors.Is(err, redis.Nil) {
-		return 0, fmt.Errorf("peek usage - get: %w", err)
+		if numErr := (&strconv.NumError{}); !errors.As(err, &numErr) {
+			return 0, fmt.Errorf("peek usage - get: %w", err)
+		}
+		// Delete the invalid value and let the next call reinitialize it.
+		if err := r.client.Del(ctx, key.String()).Err(); err != nil {
+			return 0, fmt.Errorf("peek usage - drop: %w", err)
+		}
+		return 0, ErrCacheWait
 	}
 	ok, err := r.client.SetNX(ctx, key.String(), SpecialValue, time.Second*2).Result()
 	if err != nil {
@@ -151,12 +159,21 @@ func (r *redisUsage[K]) peek(ctx context.Context, key K) (int64, error) {
 
 // spendScript is a Lua script that atomically increments the usage counter by a given amount, but not exceeding the limit.
 // It returns the new counter value and the actual amount spent (which may be less than the requested amount if it hits the limit).
+//
+// Both writes pass their value through as a string and let redis do the arithmetic. Handing
+// redis a lua number instead makes it format a double, which renders any multiple of 1e8 as
+// "1e+8" on redis 7.2.0 to 7.2.4 (redis/redis#13113) and poisons the counter for good.
 var spendScript = redis.NewScript(`
-local current = tonumber(redis.call("GET", KEYS[1]) or 0)
-local incr = tonumber(ARGV[1]) or 0
 local limit = tonumber(ARGV[2]) or 0
-local newValue = math.min(limit, current + incr)
-redis.call("SET", KEYS[1], newValue)
+local current = tonumber(redis.call("GET", KEYS[1]) or 0)
+if current >= limit then
+	return {current, 0}
+end
+local newValue = redis.call("INCRBY", KEYS[1], ARGV[1])
+if newValue > limit then
+	redis.call("SET", KEYS[1], ARGV[2], "KEEPTTL")
+	newValue = limit
+end
 return {newValue, newValue - current}
 `)
 
