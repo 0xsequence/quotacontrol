@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -137,7 +139,15 @@ func (r *redisUsage[K]) peek(ctx context.Context, key K) (int64, error) {
 		return v, nil
 	}
 	if !errors.Is(err, redis.Nil) {
-		return 0, fmt.Errorf("peek usage - get: %w", err)
+		var numErr *strconv.NumError
+		if !errors.As(err, &numErr) {
+			return 0, fmt.Errorf("peek usage - get: %w", err)
+		}
+		counter, err := r.repair(ctx, key, numErr.Num)
+		if err != nil {
+			return 0, fmt.Errorf("peek usage - repair: %w", err)
+		}
+		return counter, nil
 	}
 	ok, err := r.client.SetNX(ctx, key.String(), SpecialValue, time.Second*2).Result()
 	if err != nil {
@@ -149,14 +159,50 @@ func (r *redisUsage[K]) peek(ctx context.Context, key K) (int64, error) {
 	return 0, ErrCacheReady
 }
 
+// repairScript rewrites the counter only while it still holds the exact value the caller
+// read, so a client slow to notice the bad value cannot undo a repair another one has
+// already made, and the sentinel keeps its meaning as the initialization lock.
+var repairScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	redis.call("SET", KEYS[1], ARGV[2], "KEEPTTL")
+	return 1
+end
+return 0
+`)
+
+// repair recovers a counter that redis wrote in scientific notation. Redis 7.2.0 to 7.2.4
+// formats any multiple of 1e8 that way when a script hands it a lua number
+// (redis/redis#13113), which leaves the amount intact but unreadable by ParseInt. Reading it
+// back beats reseeding from the store, which would drop everything spent since the last sync.
+func (r *redisUsage[K]) repair(ctx context.Context, key K, raw string) (int64, error) {
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil || f != math.Trunc(f) || math.Abs(f) > 1<<53 {
+		return 0, fmt.Errorf("counter %q is not an integer", raw)
+	}
+	counter := int64(f)
+	if err := repairScript.Run(ctx, r.client, []string{key.String()}, raw, counter).Err(); err != nil {
+		return 0, err
+	}
+	return counter, nil
+}
+
 // spendScript is a Lua script that atomically increments the usage counter by a given amount, but not exceeding the limit.
 // It returns the new counter value and the actual amount spent (which may be less than the requested amount if it hits the limit).
+//
+// Both writes pass their value through as a string and let redis do the arithmetic. Handing
+// redis a lua number instead makes it format a double, which renders any multiple of 1e8 as
+// "1e+8" on redis 7.2.0 to 7.2.4 (redis/redis#13113) and poisons the counter for good.
 var spendScript = redis.NewScript(`
-local current = tonumber(redis.call("GET", KEYS[1]) or 0)
-local incr = tonumber(ARGV[1]) or 0
 local limit = tonumber(ARGV[2]) or 0
-local newValue = math.min(limit, current + incr)
-redis.call("SET", KEYS[1], newValue)
+local current = tonumber(redis.call("GET", KEYS[1]) or 0)
+if current >= limit then
+	return {current, 0}
+end
+local newValue = redis.call("INCRBY", KEYS[1], ARGV[1])
+if newValue > limit then
+	redis.call("SET", KEYS[1], ARGV[2], "KEEPTTL")
+	newValue = limit
+end
 return {newValue, newValue - current}
 `)
 
