@@ -7,7 +7,9 @@ updates:
       - "/"
       - "/tests/client/latest"
       - "/tests/client/v0.23"
+      - "/tests/common"
       - "/tests/server"
+      - "/tools"
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
