@@ -1,6 +1,6 @@
 module github.com/0xsequence/quotacontrol
 
-go 1.23.12
+go 1.25.0
 
 // replace github.com/0xsequence/authcontrol => ../authcontrol
 
@@ -9,7 +9,7 @@ require (
 	github.com/0xsequence/go-libs v0.17.3
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/getsentry/sentry-go v0.36.2
-	github.com/go-chi/chi/v5 v5.2.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/go-chi/httprate v0.14.1
 	github.com/go-chi/httprate-redis v0.5.4
 	github.com/goware/validation v0.1.3
@@ -48,9 +48,9 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
